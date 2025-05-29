@@ -1,0 +1,12 @@
+// Placeholder for instance configuration (e.g., VNC URLs, container info)
+[
+  { "id": "instance-0", "streamUrl": "http://localhost:6080/vnc0" },
+  { "id": "instance-1", "streamUrl": "http://localhost:6080/vnc1" },
+  { "id": "instance-2", "streamUrl": "http://localhost:6080/vnc2" },
+  { "id": "instance-3", "streamUrl": "http://localhost:6080/vnc3" },
+  { "id": "instance-4", "streamUrl": "http://localhost:6080/vnc4" },
+  { "id": "instance-5", "streamUrl": "http://localhost:6080/vnc5" },
+  { "id": "instance-6", "streamUrl": "http://localhost:6080/vnc6" },
+  { "id": "instance-7", "streamUrl": "http://localhost:6080/vnc7" },
+  { "id": "instance-8", "streamUrl": "http://localhost:6080/vnc8" }
+]
