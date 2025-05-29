@@ -1,0 +1,12 @@
+{
+  "name": "lego-loco-backend",
+  "version": "0.1.0",
+  "main": "server.js",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}

@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.lego-style {
+  box-shadow: 0 4px 0 #eab308, 0 8px 0 #facc15;
+  border-style: solid;
+  border-color: #eab308;
+}
