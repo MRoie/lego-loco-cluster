@@ -66,6 +66,15 @@ kubectl apply -f helm/loco-chart/
 # Run connectivity and game-level tests
 bash k8s-tests/test-network.sh
 
+# Configure the shared TAP bridge
+bash scripts/setup_bridge.sh
+
+# Launch a QEMU-based instance
+docker run --rm --network host --cap-add=NET_ADMIN \
+  -e TAP_IF=tap0 -e BRIDGE=loco-br \
+  -v /path/to/win98.qcow2:/images/win98.qcow2 \
+  yourrepo/qemu-loco
+
 
 ---
 
