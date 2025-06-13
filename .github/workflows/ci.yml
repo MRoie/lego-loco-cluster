@@ -23,7 +23,7 @@ jobs:
           # Frontend packages and production build
           cd frontend && npm install && npm run build && cd ..
 
-  # Spin up a kind cluster and run connectivity tests
+  # Spin up a Talos cluster and run connectivity tests
   integration:
     needs: build
     runs-on: ubuntu-latest
@@ -36,9 +36,15 @@ jobs:
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
-      - uses: helm/kind-action@v1.9.0
-        with:
-          version: v0.22.0
+      - name: Install talosctl
+        run: |
+          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
+          sudo install -m 0755 talosctl /usr/local/bin/talosctl
+      - name: Create Talos cluster
+        run: |
+          talosctl cluster create --name loco --workers 3
+          talosctl kubeconfig .
+          echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
       - name: Deploy cluster
         run: kubectl apply -k kustomize/base
       - name: Wait for cluster
@@ -54,6 +60,9 @@ jobs:
         with:
           name: integration-logs
           path: k8s-tests/logs
+      - name: Destroy Talos cluster
+        if: always()
+        run: talosctl cluster destroy loco
 
   # Run end-to-end tests against local services
   e2e:
@@ -82,7 +91,7 @@ jobs:
           name: e2e-logs
           path: k8s-tests/logs
 
-  # Deploy services in kind and run live end-to-end tests
+  # Deploy services in Talos and run live end-to-end tests
   e2e-live:
     needs: build
     runs-on: ubuntu-latest
@@ -96,9 +105,15 @@ jobs:
         run: |
           cd backend && npm install && cd ..
           cd frontend && npm install && npm run build && cd ..
-      - uses: helm/kind-action@v1.9.0
-        with:
-          version: v0.22.0
+      - name: Install talosctl
+        run: |
+          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
+          sudo install -m 0755 talosctl /usr/local/bin/talosctl
+      - name: Create Talos cluster
+        run: |
+          talosctl cluster create --name loco --workers 3
+          talosctl kubeconfig .
+          echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
       - name: Deploy cluster
         run: kubectl apply -k kustomize/base
       - name: Wait for cluster
@@ -117,3 +132,6 @@ jobs:
         with:
           name: live-e2e-logs
           path: k8s-tests/logs
+      - name: Destroy Talos cluster
+        if: always()
+        run: talosctl cluster destroy loco
