@@ -32,7 +32,7 @@ Welcome to Loco LAN — a LAN-based Kubernetes system that runs 9 instances of L
    cd backend && npm install && cd ..
    cd frontend && npm install && cd ..
    ```
-3. Ensure Docker and a Kubernetes distribution (k3s or kubeadm) are installed.
+3. Ensure Docker and Talos are installed. Use `talosctl cluster create` to provision the Kubernetes cluster.
 4. Build the Docker images and deploy the Helm chart as described below.
 
 ---
@@ -44,7 +44,7 @@ Layer   Tech
 Emulation       QEMU, PCem, Wine
 Streaming       GStreamer, PulseAudio
 Web UI  React, Tailwind, WebRTC
-Infra   Helm, Kubernetes (k3s)
+Infra   Helm, Kubernetes (Talos)
 CI/CD   GitHub Actions, Docker
 Testing Bash, kubectl, tcpdump
 
@@ -69,7 +69,10 @@ loco-lan/
 export LOCO_REPO=myrepo
 docker buildx build --platform linux/amd64,linux/arm64 -t $LOCO_REPO/loco:latest --push .
 
-# Create K8s cluster (k3s or kubeadm)
+# Create K8s cluster using Talos
+talosctl cluster create --name loco --workers=3
+talosctl kubeconfig .
+export KUBECONFIG=$PWD/kubeconfig
 helm install loco helm/loco-chart --set imageRepo=$LOCO_REPO
 
 # Run connectivity and game-level tests

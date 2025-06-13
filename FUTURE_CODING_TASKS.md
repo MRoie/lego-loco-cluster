@@ -9,7 +9,7 @@ This document lists all remaining work required to accept a Windows 98 image and
 Steps:
 - Install system packages: `nodejs`, `npm`, `qemu-system-x86`, `qemu-kvm`, `wine`, `gstreamer1.0-tools`, `pulseaudio`, `docker.io`, `tcpdump`.
 - Run `npm install` inside both `backend/` and `frontend/`.
-- Ensure Docker and a Kubernetes distribution (k3s or kubeadm) are available.
+- Ensure Docker and Talos are available and a cluster can be created with `talosctl cluster create`.
 
 ## 1. Image Provisioning
 **Prompt:**
