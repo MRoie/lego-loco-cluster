@@ -66,6 +66,10 @@ helm install loco helm/loco-chart --set imageRepo=$LOCO_REPO
 
 # Run connectivity and game-level tests
 bash k8s-tests/test-network.sh
+bash k8s-tests/test-tcp.sh
+bash k8s-tests/test-broadcast.sh
+bash k8s-tests/test-websocket.sh
+# Logs for each test are written under k8s-tests/logs
 
 # Configure the shared TAP bridge
 bash scripts/setup_bridge.sh
