@@ -2,11 +2,18 @@
 # k8s-tests/test-websocket.sh -- verify websocket and stream endpoints
 set -euo pipefail
 
+command -v curl >/dev/null 2>&1 || { echo "curl not found" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "node not found" >&2; exit 1; }
+
+trap 'log "Error on line $LINENO"' ERR
+
 LOG_DIR=${LOG_DIR:-k8s-tests/logs}
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/test-websocket.log"
 log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*"; }
 exec > >(tee -a "$LOG_FILE") 2>&1
+
+log "Starting websocket test"
 
 BACKEND_URL=${BACKEND_URL:-http://localhost:3001}
 STREAM_CONFIG="config/instances.json"
