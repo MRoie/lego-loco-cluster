@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "loco.fullname" . }}-emulator
+  namespace: {{ include "loco.namespace" . }}
+spec:
+  clusterIP: None
+  selector:
+    app: {{ include "loco.fullname" . }}-emulator
+  ports:
+  - name: vnc
+    port: {{ .Values.emulator.servicePort }}
+    targetPort: {{ .Values.emulator.servicePort }}

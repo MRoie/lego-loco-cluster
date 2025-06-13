@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "loco.fullname" . }}-frontend
+  namespace: {{ include "loco.namespace" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "loco.fullname" . }}-frontend
+  template:
+    metadata:
+      labels:
+        app: {{ include "loco.fullname" . }}-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: {{ include "loco.image" (dict "root" . "image" .Values.frontend.image "tag" .Values.frontend.tag) }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: {{ .Values.frontend.servicePort }}
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/nginx/html/config
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "loco.fullname" . }}-instances
