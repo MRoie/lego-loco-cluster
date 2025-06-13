@@ -3,3 +3,4 @@ backend/node_modules/
 frontend/node_modules/
 *.log
 package-lock.json
+containers/**/win98.*

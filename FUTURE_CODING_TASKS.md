@@ -17,8 +17,8 @@ This document lists the outstanding work required to make the repository fully f
 - Implement hotkeys described in `config/hotkeys.json`.
 - Add a `useWebRTC` hook to negotiate WebRTC streams and display audio meters.
 
-## 4. Windows 95 Container Images
-- Create Dockerfiles for QEMU/PCem/Wine that boot Windows 95 with Lego Loco installed.
+## 4. Windows 98 Container Images
+- Create Dockerfiles for QEMU/PCem/Wine that boot Windows 98 with Lego Loco installed.
 - Configure PulseAudio and GStreamer to capture audio/video and publish as WebRTC.
 - Ensure each container joins the same virtual LAN using TAP bridges so the games can communicate.
 
@@ -41,4 +41,4 @@ This document lists the outstanding work required to make the repository fully f
 - Prototype a simple A-Frame or Three.js scene that mirrors the 3×3 grid in VR.
 - Connect controller input to the same backend hotkeys.
 
-Each section above represents a major area of missing functionality. Completing them will yield a cluster of Windows 95 containers that communicate with each other, stream audio/video to the web interface, and are verified by automated health tests.
+Each section above represents a major area of missing functionality. Completing them will yield a cluster of Windows 98 containers that communicate with each other, stream audio/video to the web interface, and are verified by automated health tests.
