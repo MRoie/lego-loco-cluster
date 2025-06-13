@@ -2,11 +2,18 @@
 # k8s-tests/test-tcp.sh -- verify TCP connectivity between all pods and host
 set -euo pipefail
 
+command -v kubectl >/dev/null 2>&1 || { echo "kubectl not found" >&2; exit 1; }
+command -v nc >/dev/null 2>&1 || { echo "nc not found" >&2; exit 1; }
+
+trap 'log "Error on line $LINENO"' ERR
+
 LOG_DIR=${LOG_DIR:-k8s-tests/logs}
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/test-tcp.log"
 log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*"; }
 exec > >(tee -a "$LOG_FILE") 2>&1
+
+log "Starting TCP test"
 
 PORT=${PORT:-3390}
 PODS=( $(kubectl get pods -o name 2>/dev/null || true) )
