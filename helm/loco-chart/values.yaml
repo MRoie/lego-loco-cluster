@@ -8,6 +8,8 @@ emulator:
   tag: latest
   imagePullPolicy: IfNotPresent
   servicePort: 6080
+  diskPVC: win98-disk
+  diskReadOnly: false
 
 backend:
   image: loco-backend
