@@ -28,7 +28,7 @@ jobs:
   # Spin up a Talos cluster and run connectivity tests
   integration:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
       - name: Install system packages
@@ -73,7 +73,7 @@ jobs:
   # Run end-to-end tests against local services
   e2e:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
       - name: Install system packages
@@ -102,7 +102,7 @@ jobs:
   # Deploy services in Talos and run live end-to-end tests
   e2e-live:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
       - name: Install system packages
