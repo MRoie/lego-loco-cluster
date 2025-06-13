@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "loco.fullname" . }}-backend
+  namespace: {{ include "loco.namespace" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "loco.fullname" . }}-backend
+  template:
+    metadata:
+      labels:
+        app: {{ include "loco.fullname" . }}-backend
+    spec:
+      containers:
+      - name: backend
+        image: {{ include "loco.image" (dict "root" . "image" .Values.backend.image "tag" .Values.backend.tag) }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: {{ .Values.backend.servicePort }}
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "loco.fullname" . }}-instances
