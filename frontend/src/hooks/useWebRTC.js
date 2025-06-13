@@ -18,7 +18,10 @@ export default function useWebRTC(targetId) {
     fetch("/api/config/webrtc")
       .then((r) => r.json())
       .then((cfg) => cfg.iceServers || [])
-      .catch(() => [])
+      .catch((e) => {
+        console.error("Failed to load WebRTC config", e);
+        return [];
+      })
       .then((iceServers) => {
         const wsProto = location.protocol === "https:" ? "wss" : "ws";
         const ws = new WebSocket(`${wsProto}://${location.host}/signal`);
@@ -49,7 +52,9 @@ export default function useWebRTC(targetId) {
           const [stream] = ev.streams;
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            videoRef.current.play().catch(() => {});
+            videoRef.current
+              .play()
+              .catch((e) => console.error("video play failed", e));
           }
           if (!audioCtx) startMeter(stream);
         };
@@ -77,6 +82,14 @@ export default function useWebRTC(targetId) {
               data: pc.localDescription,
             }),
           );
+        };
+
+        ws.onerror = (e) => {
+          console.error("WebSocket error", e);
+        };
+
+        ws.onclose = () => {
+          console.log("WebSocket closed for", targetId);
         };
 
         ws.onmessage = async (ev) => {
