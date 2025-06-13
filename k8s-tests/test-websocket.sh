@@ -14,10 +14,11 @@ STREAM_CONFIG="config/instances.json"
 fail=0
 
 # Check backend health
-if curl -fsS "$BACKEND_URL/health" >/dev/null; then
+status=$(curl -o /dev/null -s -w "%{http_code}" "$BACKEND_URL/health" || echo "000")
+if [ "$status" = "200" ]; then
   log "Backend health check passed"
 else
-  log "Backend health check failed"
+  log "Backend health check failed (status $status)"
   fail=1
 fi
 
@@ -37,13 +38,29 @@ NODE
 # Check stream URLs
 STREAMS=$(grep -o '"streamUrl": "[^"]*"' "$STREAM_CONFIG" | cut -d'"' -f4)
 for url in $STREAMS; do
-  if curl -fsS --max-time 5 -I "$url" >/dev/null; then
+  status=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 -I "$url" || echo "000")
+  if [ "$status" = "200" ]; then
     log "Stream reachable: $url"
   else
-    log "Stream unreachable: $url"
+    log "Stream unreachable (status $status): $url"
     fail=1
   fi
 done
+
+# Basic check that frontend serves video elements
+status=$(curl -o /tmp/frontend.html -s -w "%{http_code}" "$BACKEND_URL" || echo "000")
+if [ "$status" = "200" ]; then
+  count=$(grep -c "<video" /tmp/frontend.html)
+  if [ "$count" -gt 0 ]; then
+    log "Frontend has $count video tags"
+  else
+    log "Frontend missing video tags"
+    fail=1
+  fi
+else
+  log "Failed to load frontend page (status $status)"
+  fail=1
+fi
 
 if [ $fail -eq 0 ]; then
   log "✅ WebSocket and stream test passed"
