@@ -19,6 +19,8 @@ jobs:
         run: |
           cd backend && npm install && cd ..
           cd frontend && npm install && npm run build && cd ..
+          cd frontend && npm install && npm run build && cd ..
+          cd frontend && npm install && npm run build && cd ..
 
   integration:
     needs: build
@@ -46,7 +48,7 @@ jobs:
       - name: Run broadcast tests
         run: bash k8s-tests/test-broadcast.sh
       - name: Upload integration logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: integration-logs
           path: k8s-tests/logs
@@ -63,6 +65,7 @@ jobs:
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
+          cd frontend && npm install && npm run build && cd ..
       - name: Start services
         run: scripts/start_test_services.sh
       - name: Run websocket tests
@@ -71,7 +74,7 @@ jobs:
         if: always()
         run: scripts/stop_test_services.sh
       - name: Upload e2e logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: e2e-logs
           path: k8s-tests/logs
@@ -88,6 +91,7 @@ jobs:
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
+          cd frontend && npm install && npm run build && cd ..
       - uses: helm/kind-action@v1.9.0
         with:
           version: v0.22.0
@@ -105,7 +109,7 @@ jobs:
         if: always()
         run: scripts/stop_live_cluster.sh
       - name: Upload live e2e logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: live-e2e-logs
           path: k8s-tests/logs
