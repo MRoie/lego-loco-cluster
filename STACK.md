@@ -6,7 +6,7 @@ The repository relies on the following tools and libraries:
 - **Streaming**: `GStreamer`, `PulseAudio`
 - **Web UI**: `React`, `Tailwind CSS`, `WebRTC`, `framer-motion`, `vite`
 - **Backend**: `Node.js`, `express`
-- **Infrastructure**: `Docker`, `Helm`, `k3s` (Kubernetes)
+- **Infrastructure**: `Docker`, `Helm`, `Talos` (Kubernetes)
 - **Testing and utilities**: `kubectl`, `tcpdump`, `bash`
 
 Node package dependencies are defined in `backend/package.json` and `frontend/package.json`.
