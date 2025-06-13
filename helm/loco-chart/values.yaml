@@ -1,0 +1,20 @@
+replicas: 3
+namespace: loco
+
+imageRepo: ""
+
+emulator:
+  image: qemu-loco
+  tag: latest
+  imagePullPolicy: IfNotPresent
+  servicePort: 6080
+
+backend:
+  image: loco-backend
+  tag: latest
+  servicePort: 3001
+
+frontend:
+  image: loco-frontend
+  tag: latest
+  servicePort: 3000

@@ -58,10 +58,11 @@ loco-lan/
 🚦 How to Deploy
 
 # Build multi-arch Docker images
-docker buildx build --platform linux/amd64,linux/arm64 -t yourrepo/loco:latest --push .
+export LOCO_REPO=myrepo
+docker buildx build --platform linux/amd64,linux/arm64 -t $LOCO_REPO/loco:latest --push .
 
 # Create K8s cluster (k3s or kubeadm)
-kubectl apply -f helm/loco-chart/
+helm install loco helm/loco-chart --set imageRepo=$LOCO_REPO
 
 # Run connectivity and game-level tests
 bash k8s-tests/test-network.sh
@@ -73,7 +74,7 @@ bash scripts/setup_bridge.sh
 docker run --rm --network host --cap-add=NET_ADMIN \
   -e TAP_IF=tap0 -e BRIDGE=loco-br \
   -v /path/to/win98.qcow2:/images/win98.qcow2 \
-  yourrepo/qemu-loco
+  $LOCO_REPO/qemu-loco
 
 
 ---
