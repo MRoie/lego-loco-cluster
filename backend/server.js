@@ -34,6 +34,7 @@ app.get("/api/config/:name", (req, res) => {
     const data = loadConfig(req.params.name);
     res.json(data);
   } catch (e) {
+    console.error(`Config ${req.params.name} not found`, e.message);
     res.status(404).json({ error: "config not found" });
   }
 });
@@ -72,12 +73,20 @@ server.on("upgrade", (req, socket, head) => {
 // --- WebSocket Signaling Server --------------------------------------------
 // WebSocket signaling server used by the WebRTC hook
 const wss = new WebSocketServer({ server, path: "/signal" });
+wss.on("error", (err) => {
+  console.error("WebSocket server error", err.message);
+});
 // Active peer connections keyed by ID
 const peers = new Map();
 
 // Handle incoming websocket connections for SDP exchange
 wss.on("connection", (ws) => {
   let id = null;
+  console.log("WebSocket client connected");
+
+  ws.on("error", (err) => {
+    console.error("WebSocket client error", err.message);
+  });
 
   ws.on("message", (msg) => {
     let data;
@@ -107,6 +116,7 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     if (id) peers.delete(id);
+    console.log("WebSocket client disconnected", id);
   });
 });
 

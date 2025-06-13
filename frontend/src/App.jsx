@@ -2,6 +2,76 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import useWebRTC from "./hooks/useWebRTC";
 
+function StreamTile({ inst, idx, active, setActive, zoom }) {
+  const { videoRef, audioLevel } = useWebRTC(inst.id);
+  const [muted, setMuted] = useState(true);
+  const [volume, setVolume] = useState(1);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = muted;
+      videoRef.current.volume = volume;
+    }
+  }, [muted, volume]);
+
+  const toggleFullscreen = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document
+        .exitFullscreen()
+        .catch((e) => console.error("exitFullscreen failed", e));
+    } else {
+      el
+        .requestFullscreen()
+        .catch((e) => console.error("requestFullscreen failed", e));
+    }
+  };
+
+  return (
+    <motion.div
+      key={inst.id}
+      className={`border-[12px] rounded-2xl border-yellow-500 lego-style transition-transform bg-black overflow-hidden ${active === idx ? "ring-4 ring-blue-400" : ""}`}
+      onClick={() => setActive(idx)}
+      animate={{ scale: active === idx ? zoom + 0.1 : 1 }}
+      transition={{ type: "spring", stiffness: 300 }}
+    >
+      <video ref={videoRef} className="w-full h-full" playsInline />
+      <div className="absolute bottom-2 left-2 h-2 bg-gray-700" style={{ width: "80%", position: "absolute" }}>
+        <div className="h-full bg-green-500" style={{ width: `${Math.round(audioLevel * 100)}%` }} />
+      </div>
+      <div className="absolute top-2 right-2 bg-black bg-opacity-50 p-1 rounded flex items-center space-x-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setMuted((m) => !m);
+          }}
+          className="text-white text-xs px-1 border border-white rounded"
+        >
+          {muted ? "Unmute" : "Mute"}
+        </button>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={volume}
+          onChange={(e) => setVolume(parseFloat(e.target.value))}
+        />
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFullscreen();
+          }}
+          className="text-white text-xs px-1 border border-white rounded"
+        >
+          Full
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 // Main dashboard component showing the 3×3 grid of instances
 export default function App() {
   const [instances, setInstances] = useState([]);
@@ -14,11 +84,11 @@ export default function App() {
     fetch("/api/config/instances")
       .then((r) => r.json())
       .then(setInstances)
-      .catch(() => {});
+      .catch((e) => console.error("Failed to fetch instances", e));
     fetch("/api/config/hotkeys")
       .then((r) => r.json())
       .then(setHotkeys)
-      .catch(() => {});
+      .catch((e) => console.error("Failed to fetch hotkeys", e));
   }, []);
 
   // Register global hotkeys for focus, zoom and switching instances
@@ -53,35 +123,16 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center">
       <div className="grid grid-cols-3 gap-6 w-[90vw] h-[90vh]">
-        {instances.map((inst, idx) => {
-          // Each instance establishes its own WebRTC connection
-          const { videoRef, audioLevel } = useWebRTC(inst.id);
-          return (
-            <motion.div
-              key={inst.id}
-              className={`border-[12px] rounded-2xl border-yellow-500 lego-style transition-transform bg-black overflow-hidden ${active === idx ? "ring-4 ring-blue-400" : ""}`}
-              onClick={() => setActive(idx)}
-              animate={{ scale: active === idx ? zoom + 0.1 : 1 }}
-              transition={{ type: "spring", stiffness: 300 }}
-            >
-              <video
-                ref={videoRef}
-                className="w-full h-full"
-                muted
-                playsInline
-              />
-              <div
-                className="absolute bottom-2 left-2 h-2 bg-gray-700"
-                style={{ width: "80%", position: "absolute" }}
-              >
-                <div
-                  className="h-full bg-green-500"
-                  style={{ width: `${Math.round(audioLevel * 100)}%` }}
-                />
-              </div>
-            </motion.div>
-          );
-        })}
+        {instances.map((inst, idx) => (
+          <StreamTile
+            key={inst.id}
+            inst={inst}
+            idx={idx}
+            active={active}
+            setActive={setActive}
+            zoom={zoom}
+          />
+        ))}
       </div>
     </div>
   );
