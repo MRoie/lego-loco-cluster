@@ -132,3 +132,19 @@ docker run --rm --network host --cap-add=NET_ADMIN \
 
 > Design a set of SVG patterns and Tailwind classes for Lego-style borders around the video tiles. Provide sample components demonstrating usage.
 
+
+### VR Prototype
+
+The dashboard now includes a built-in VR mode. Click **Enter VR** in the top
+right of the grid to switch to the A-Frame scene. The scene automatically lays
+out however many streams are available, falling back to placeholders if the
+backend is unreachable. Use the **Exit VR** button to return to the normal grid.
+The VR implementation uses React components directly—no iframe—and fully
+replaces the former demo under `frontend/public/vr/`.
+
+### Cluster Status Overlay
+
+Both the standard grid and the VR scene poll `/api/status` to show the boot
+state of each Windows 98 pod. Tiles display **booting**, **ready**, or any
+custom status from `config/status.json`. This helps operators wait through the
+long emulator startup times before launching Lego Loco.
