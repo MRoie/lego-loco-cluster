@@ -132,3 +132,15 @@ docker run --rm --network host --cap-add=NET_ADMIN \
 
 > Design a set of SVG patterns and Tailwind classes for Lego-style borders around the video tiles. Provide sample components demonstrating usage.
 
+
+### VR Prototype
+
+A minimal A-Frame demo is provided under `frontend/public/vr/`. It renders placeholder video planes inside a VR scene and automatically adjusts the layout for however many streams are available. Click a plane to zoom and focus it. A volume slider for the active plane appears in the overlay UI, and keyboard events are routed to the selected tile (logged in the console for now).
+
+Launch the demo with:
+
+```bash
+npx serve frontend/public/vr
+```
+
+Open the served URL in a WebXR-capable browser or in Codespaces preview to try the mockup.
