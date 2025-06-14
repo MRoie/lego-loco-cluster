@@ -11,7 +11,7 @@ function positionForIndex(i, cols, rows) {
   return { x: x * 1.4, y: y * 1.0 };
 }
 
-function VRTile({ inst, idx, active, setActive, cols, rows, volumes, setVolumes }) {
+function VRTile({ inst, idx, active, setActive, cols, rows, volumes, setVolumes, status }) {
   const { videoRef } = useWebRTC(inst.id);
   const [fallback, setFallback] = useState(false);
 
@@ -49,6 +49,15 @@ function VRTile({ inst, idx, active, setActive, cols, rows, volumes, setVolumes 
         height="0.9"
         position="0 0 0.01"
       ></a-video>
+      {status && status !== 'ready' && (
+        <a-text
+          value={status}
+          color="#FFF"
+          align="center"
+          width="1.2"
+          position="0 0 0.02"
+        ></a-text>
+      )}
     </a-entity>
   );
 }
@@ -58,6 +67,7 @@ export default function VRScene({ onExit }) {
   const [active, setActive] = useState(0);
   const [volumes, setVolumes] = useState([]);
   const [info, setInfo] = useState('');
+  const [status, setStatus] = useState({});
 
   useEffect(() => {
     fetch('/api/config/instances')
@@ -77,6 +87,14 @@ export default function VRScene({ onExit }) {
         setVolumes(new Array(3).fill(1));
         setInfo('Using placeholder streams');
       });
+    const interval = setInterval(() => {
+      fetch('/api/status')
+        .then((r) => r.json())
+        .then(setStatus)
+        .catch(() => {});
+    }, 5000);
+    fetch('/api/status').then((r) => r.json()).then(setStatus).catch(() => {});
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -133,6 +151,7 @@ export default function VRScene({ onExit }) {
               rows={rows}
               volumes={volumes}
               setVolumes={setVolumes}
+              status={status[inst.id]}
             />
           ))}
         </a-entity>

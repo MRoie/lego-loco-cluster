@@ -39,6 +39,16 @@ app.get("/api/config/:name", (req, res) => {
   }
 });
 
+// Simple cluster status endpoint used by the UI for boot progress
+app.get("/api/status", (req, res) => {
+  try {
+    const data = loadConfig("status");
+    res.json(data);
+  } catch (e) {
+    res.status(503).json({});
+  }
+});
+
 // --- VNC/WebRTC Proxy -------------------------------------------------------
 // Map instance IDs to their streaming URLs
 const instances = loadConfig("instances");
