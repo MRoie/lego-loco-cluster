@@ -73,7 +73,10 @@ docker buildx build --platform linux/amd64,linux/arm64 -t $LOCO_REPO/loco:latest
 talosctl cluster create --name loco --workers=3
 talosctl kubeconfig .
 export KUBECONFIG=$PWD/kubeconfig
-helm install loco helm/loco-chart --set imageRepo=$LOCO_REPO
+helm install loco helm/loco-chart \
+  --set imageRepo=$LOCO_REPO \
+  --set emulator.diskPVC=my-disk-pvc \
+  --set emulator.diskReadOnly=true
 
 # Run connectivity and game-level tests
 bash k8s-tests/test-network.sh

@@ -20,3 +20,11 @@ spec:
         imagePullPolicy: {{ .Values.emulator.imagePullPolicy }}
         ports:
         - containerPort: {{ .Values.emulator.servicePort }}
+        volumeMounts:
+        - name: disk
+          mountPath: /images
+          readOnly: {{ .Values.emulator.diskReadOnly }}
+      volumes:
+      - name: disk
+        persistentVolumeClaim:
+          claimName: {{ .Values.emulator.diskPVC }}
