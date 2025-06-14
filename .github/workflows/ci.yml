@@ -24,8 +24,8 @@ jobs:
           # Frontend packages and production build
           cd frontend && npm install && npm run build && cd ..
 
-  # Spin up a Talos cluster and run connectivity tests
-  integration-network:
+  # Spin up a Talos cluster to run all integration tests
+  integration-setup:
     needs: build
     runs-on: ubuntu-22.04
     container:
@@ -53,13 +53,53 @@ jobs:
           install -m 0755 talosctl /usr/local/bin/talosctl
       - name: Create Talos cluster
         run: |
+          echo "Creating Talos cluster" && date
           talosctl cluster create --name loco --workers 1 --wait
           talosctl kubeconfig .
           echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
       - name: Deploy cluster
         run: kubectl apply -k kustomize/base
+      - name: Print pod status
+        run: kubectl get pods -A -o wide
       - name: Wait for cluster
-        run: kubectl wait --for=condition=Ready pod --all --timeout=300s
+        run: |
+          kubectl get nodes
+          kubectl wait --for=condition=Ready pod --all --timeout=300s
+          kubectl get pods -A -o wide
+      - name: Upload kubeconfig
+        uses: actions/upload-artifact@v4
+        with:
+          name: talos-kubeconfig
+          path: kubeconfig
+
+  integration-network:
+    needs: integration-setup
+    runs-on: ubuntu-22.04
+    container:
+      image: node:20-bullseye
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install system packages
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
+            pulseaudio docker.io tcpdump netcat-openbsd
+      - name: Install Node dependencies
+        run: |
+          cd backend && npm install && cd ..
+      - name: Download kubeconfig
+        uses: actions/download-artifact@v4
+        with:
+          name: talos-kubeconfig
+      - name: Set kubeconfig
+        run: echo "KUBECONFIG=$PWD/talos-kubeconfig/kubeconfig" >> "$GITHUB_ENV"
       - name: Run network tests
         run: bash k8s-tests/test-network.sh
       - name: Upload integration network logs
@@ -67,12 +107,9 @@ jobs:
         with:
           name: integration-network-logs
           path: k8s-tests/logs
-      - name: Destroy Talos cluster
-        if: always()
-        run: talosctl cluster destroy loco || true
 
   integration-tcp:
-    needs: build
+    needs: integration-setup
     runs-on: ubuntu-22.04
     container:
       image: node:20-bullseye
@@ -93,19 +130,12 @@ jobs:
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
-      - name: Install talosctl
-        run: |
-          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          install -m 0755 talosctl /usr/local/bin/talosctl
-      - name: Create Talos cluster
-        run: |
-          talosctl cluster create --name loco --workers 1 --wait
-          talosctl kubeconfig .
-          echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
-      - name: Deploy cluster
-        run: kubectl apply -k kustomize/base
-      - name: Wait for cluster
-        run: kubectl wait --for=condition=Ready pod --all --timeout=300s
+      - name: Download kubeconfig
+        uses: actions/download-artifact@v4
+        with:
+          name: talos-kubeconfig
+      - name: Set kubeconfig
+        run: echo "KUBECONFIG=$PWD/talos-kubeconfig/kubeconfig" >> "$GITHUB_ENV"
       - name: Run TCP tests
         run: bash k8s-tests/test-tcp.sh
       - name: Upload integration tcp logs
@@ -113,12 +143,9 @@ jobs:
         with:
           name: integration-tcp-logs
           path: k8s-tests/logs
-      - name: Destroy Talos cluster
-        if: always()
-        run: talosctl cluster destroy loco || true
 
   integration-broadcast:
-    needs: build
+    needs: integration-setup
     runs-on: ubuntu-22.04
     container:
       image: node:20-bullseye
@@ -139,19 +166,12 @@ jobs:
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
-      - name: Install talosctl
-        run: |
-          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          install -m 0755 talosctl /usr/local/bin/talosctl
-      - name: Create Talos cluster
-        run: |
-          talosctl cluster create --name loco --workers 1 --wait
-          talosctl kubeconfig .
-          echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
-      - name: Deploy cluster
-        run: kubectl apply -k kustomize/base
-      - name: Wait for cluster
-        run: kubectl wait --for=condition=Ready pod --all --timeout=300s
+      - name: Download kubeconfig
+        uses: actions/download-artifact@v4
+        with:
+          name: talos-kubeconfig
+      - name: Set kubeconfig
+        run: echo "KUBECONFIG=$PWD/talos-kubeconfig/kubeconfig" >> "$GITHUB_ENV"
       - name: Run broadcast tests
         run: bash k8s-tests/test-broadcast.sh
       - name: Upload integration broadcast logs
@@ -159,9 +179,6 @@ jobs:
         with:
           name: integration-broadcast-logs
           path: k8s-tests/logs
-      - name: Destroy Talos cluster
-        if: always()
-        run: talosctl cluster destroy loco || true
 
   # Run end-to-end tests against local services
   e2e:
@@ -198,7 +215,7 @@ jobs:
 
   # Deploy services in Talos and run live end-to-end tests
   e2e-live:
-    needs: build
+    needs: integration-setup
     runs-on: ubuntu-22.04
     container:
       image: node:20-bullseye
@@ -220,19 +237,12 @@ jobs:
         run: |
           cd backend && npm install && cd ..
           cd frontend && npm install && npm run build && cd ..
-      - name: Install talosctl
-        run: |
-          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          install -m 0755 talosctl /usr/local/bin/talosctl
-      - name: Create Talos cluster
-        run: |
-          talosctl cluster create --name loco --workers 1 --wait
-          talosctl kubeconfig .
-          echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
-      - name: Deploy cluster
-        run: kubectl apply -k kustomize/base
-      - name: Wait for cluster
-        run: kubectl wait --for=condition=Ready pod --all --timeout=300s
+      - name: Download kubeconfig
+        uses: actions/download-artifact@v4
+        with:
+          name: talos-kubeconfig
+      - name: Set kubeconfig
+        run: echo "KUBECONFIG=$PWD/talos-kubeconfig/kubeconfig" >> "$GITHUB_ENV"
       - name: Start forwards
         run: scripts/start_live_cluster.sh
       - name: Run websocket tests against cluster
@@ -247,6 +257,21 @@ jobs:
         with:
           name: live-e2e-logs
           path: k8s-tests/logs
+
+  integration-cleanup:
+    if: always()
+    needs: [integration-network, integration-tcp, integration-broadcast, e2e-live]
+    runs-on: ubuntu-22.04
+    container:
+      image: node:20-bullseye
+      options: --privileged
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install talosctl
+        run: |
+          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
+          install -m 0755 talosctl /usr/local/bin/talosctl
       - name: Destroy Talos cluster
-        if: always()
         run: talosctl cluster destroy loco || true
