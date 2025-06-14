@@ -10,8 +10,10 @@ jobs:
   # Build the backend and frontend assets
   build:
     runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install system packages
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -29,8 +31,10 @@ jobs:
   integration:
     needs: build
     runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install system packages
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -74,8 +78,10 @@ jobs:
   e2e:
     needs: build
     runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install system packages
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -103,8 +109,10 @@ jobs:
   e2e-live:
     needs: build
     runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install system packages
         env:
           DEBIAN_FRONTEND: noninteractive
