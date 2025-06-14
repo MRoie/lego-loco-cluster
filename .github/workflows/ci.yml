@@ -11,15 +11,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: ubuntu:22.04
+      image: node:20-bullseye
     steps:
       - uses: actions/checkout@v4
-      - name: Install system packages
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends nodejs npm
       - name: Install Node dependencies and build frontend
         run: |
           # Backend packages
@@ -32,7 +26,7 @@ jobs:
     needs: build
     runs-on: ubuntu-22.04
     container:
-      image: ubuntu:22.04
+      image: node:20-bullseye
     steps:
       - uses: actions/checkout@v4
       - name: Install system packages
@@ -41,7 +35,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            nodejs npm qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
+            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
             pulseaudio docker.io tcpdump netcat-openbsd
       - name: Install Node dependencies
         run: |
@@ -79,7 +73,7 @@ jobs:
     needs: build
     runs-on: ubuntu-22.04
     container:
-      image: ubuntu:22.04
+      image: node:20-bullseye
     steps:
       - uses: actions/checkout@v4
       - name: Install system packages
@@ -87,7 +81,6 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends nodejs npm
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
@@ -110,7 +103,7 @@ jobs:
     needs: build
     runs-on: ubuntu-22.04
     container:
-      image: ubuntu:22.04
+      image: node:20-bullseye
     steps:
       - uses: actions/checkout@v4
       - name: Install system packages
@@ -119,7 +112,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            nodejs npm qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
+            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
             pulseaudio docker.io tcpdump netcat-openbsd
       - name: Install Node dependencies
         run: |
