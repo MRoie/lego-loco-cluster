@@ -10,14 +10,13 @@ jobs:
   # Build the backend and frontend assets
   build:
     runs-on: ubuntu-latest
+    container:
+      image: node:22-bullseye
     steps:
-      - uses: actions/checkout@v3
-      - name: Install system packages
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends nodejs npm
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install Node dependencies and build frontend
         run: |
           # Backend packages
@@ -29,15 +28,20 @@ jobs:
   integration:
     needs: build
     runs-on: ubuntu-22.04
+    container:
+      image: node:22-bullseye
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install system packages
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            nodejs npm qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
             pulseaudio docker.io tcpdump netcat-openbsd
       - name: Install Node dependencies
         run: |
@@ -45,7 +49,7 @@ jobs:
       - name: Install talosctl
         run: |
           curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          sudo install -m 0755 talosctl /usr/local/bin/talosctl
+          install -m 0755 talosctl /usr/local/bin/talosctl
       - name: Create Talos cluster
         run: |
           talosctl cluster create --name loco --workers 3
@@ -74,14 +78,18 @@ jobs:
   e2e:
     needs: build
     runs-on: ubuntu-22.04
+    container:
+      image: node:22-bullseye
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install system packages
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends nodejs npm
+          apt-get update
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
@@ -103,15 +111,20 @@ jobs:
   e2e-live:
     needs: build
     runs-on: ubuntu-22.04
+    container:
+      image: node:22-bullseye
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install system packages
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            nodejs npm qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
             pulseaudio docker.io tcpdump netcat-openbsd
       - name: Install Node dependencies
         run: |
@@ -120,7 +133,7 @@ jobs:
       - name: Install talosctl
         run: |
           curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          sudo install -m 0755 talosctl /usr/local/bin/talosctl
+          install -m 0755 talosctl /usr/local/bin/talosctl
       - name: Create Talos cluster
         run: |
           talosctl cluster create --name loco --workers 3
