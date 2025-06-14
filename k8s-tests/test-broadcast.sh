@@ -15,6 +15,7 @@ log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*"; }
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 log "Starting broadcast test"
+log "Cluster pods:" && kubectl get pods -A
 
 PORT=${PORT:-2242}
 PODS=( $(kubectl get pods -o name 2>/dev/null || true) )
