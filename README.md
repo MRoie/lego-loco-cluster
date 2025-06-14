@@ -75,7 +75,8 @@ talosctl kubeconfig .
 export KUBECONFIG=$PWD/kubeconfig
 helm install loco helm/loco-chart \
   --set imageRepo=$LOCO_REPO \
-  --set emulator.diskPVC=my-disk-pvc \
+  # Uncomment the next line if you provision a PersistentVolumeClaim
+  # --set emulator.diskPVC=my-disk-pvc \
   --set emulator.diskReadOnly=true
 
 # Run connectivity and game-level tests

@@ -8,7 +8,9 @@ emulator:
   tag: latest
   imagePullPolicy: IfNotPresent
   servicePort: 6080
-  diskPVC: win98-disk
+  # Optional PVC that holds the Windows disk image. If empty, an ephemeral
+  # emptyDir volume will be used so tests can run without storage.
+  diskPVC: ""
   diskReadOnly: false
 
 backend:

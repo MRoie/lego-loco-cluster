@@ -26,5 +26,9 @@ spec:
           readOnly: {{ .Values.emulator.diskReadOnly }}
       volumes:
       - name: disk
+        {{- if .Values.emulator.diskPVC }}
         persistentVolumeClaim:
           claimName: {{ .Values.emulator.diskPVC }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
