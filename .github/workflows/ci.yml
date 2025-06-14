@@ -53,7 +53,7 @@ jobs:
           install -m 0755 talosctl /usr/local/bin/talosctl
       - name: Create Talos cluster
         run: |
-          talosctl cluster create --name loco --workers 3 --wait
+          talosctl cluster create --name loco --workers 1 --wait
           talosctl kubeconfig .
           echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
       - name: Deploy cluster
@@ -138,7 +138,7 @@ jobs:
           install -m 0755 talosctl /usr/local/bin/talosctl
       - name: Create Talos cluster
         run: |
-          talosctl cluster create --name loco --workers 3 --wait
+          talosctl cluster create --name loco --workers 1 --wait
           talosctl kubeconfig .
           echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
       - name: Deploy cluster
