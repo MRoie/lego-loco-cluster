@@ -139,4 +139,5 @@ The dashboard now includes a built-in VR mode. Click **Enter VR** in the top
 right of the grid to switch to the A-Frame scene. The scene automatically lays
 out however many streams are available, falling back to placeholders if the
 backend is unreachable. Use the **Exit VR** button to return to the normal grid.
-This replaces the separate demo previously launched from `frontend/public/vr/`.
+The VR implementation uses React components directly—no iframe—and fully
+replaces the former demo under `frontend/public/vr/`.

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import useWebRTC from "./hooks/useWebRTC";
+import VRScene from "./VRScene";
 
 function StreamTile({ inst, idx, active, setActive, zoom }) {
   const { videoRef, audioLevel } = useWebRTC(inst.id);
@@ -153,13 +154,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <button
-              onClick={() => setVrMode(false)}
-              className="absolute top-4 right-4 z-10 bg-yellow-500 text-black px-3 py-1 rounded"
-            >
-              Exit VR
-            </button>
-            <iframe src="/vr/index.html" className="w-full h-full border-0" />
+            <VRScene onExit={() => setVrMode(false)} />
           </motion.div>
         )}
       </AnimatePresence>
