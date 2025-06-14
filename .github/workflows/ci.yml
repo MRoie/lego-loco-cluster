@@ -30,6 +30,7 @@ jobs:
     runs-on: ubuntu-22.04
     container:
       image: node:20-bullseye
+      options: --privileged
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -113,6 +114,7 @@ jobs:
     runs-on: ubuntu-22.04
     container:
       image: node:20-bullseye
+      options: --privileged
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
