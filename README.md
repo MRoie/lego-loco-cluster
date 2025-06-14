@@ -135,12 +135,8 @@ docker run --rm --network host --cap-add=NET_ADMIN \
 
 ### VR Prototype
 
-A minimal A-Frame demo is provided under `frontend/public/vr/`. It renders placeholder video planes inside a VR scene and automatically adjusts the layout for however many streams are available. Click a plane to zoom and focus it. A volume slider for the active plane appears in the overlay UI, and keyboard events are routed to the selected tile (logged in the console for now).
-
-Launch the demo with:
-
-```bash
-npx serve frontend/public/vr
-```
-
-Open the served URL in a WebXR-capable browser or in Codespaces preview to try the mockup.
+The dashboard now includes a built-in VR mode. Click **Enter VR** in the top
+right of the grid to switch to the A-Frame scene. The scene automatically lays
+out however many streams are available, falling back to placeholders if the
+backend is unreachable. Use the **Exit VR** button to return to the normal grid.
+This replaces the separate demo previously launched from `frontend/public/vr/`.

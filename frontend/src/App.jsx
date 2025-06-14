@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import useWebRTC from "./hooks/useWebRTC";
 
 function StreamTile({ inst, idx, active, setActive, zoom }) {
@@ -78,6 +78,7 @@ export default function App() {
   const [hotkeys, setHotkeys] = useState({});
   const [active, setActive] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [vrMode, setVrMode] = useState(false);
 
   // Fetch instance list and hotkey mapping from the backend
   useEffect(() => {
@@ -121,19 +122,47 @@ export default function App() {
   }, [hotkeys, instances]);
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-      <div className="grid grid-cols-3 gap-6 w-[90vw] h-[90vh]">
-        {instances.map((inst, idx) => (
-          <StreamTile
-            key={inst.id}
-            inst={inst}
-            idx={idx}
-            active={active}
-            setActive={setActive}
-            zoom={zoom}
-          />
-        ))}
-      </div>
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center relative">
+      {!vrMode && (
+        <>
+          <button
+            onClick={() => setVrMode(true)}
+            className="absolute top-4 right-4 z-10 bg-yellow-500 text-black px-3 py-1 rounded"
+          >
+            Enter VR
+          </button>
+          <div className="grid grid-cols-3 gap-6 w-[90vw] h-[90vh]">
+            {instances.map((inst, idx) => (
+              <StreamTile
+                key={inst.id}
+                inst={inst}
+                idx={idx}
+                active={active}
+                setActive={setActive}
+                zoom={zoom}
+              />
+            ))}
+          </div>
+        </>
+      )}
+      <AnimatePresence>
+        {vrMode && (
+          <motion.div
+            className="absolute inset-0 bg-black"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <button
+              onClick={() => setVrMode(false)}
+              className="absolute top-4 right-4 z-10 bg-yellow-500 text-black px-3 py-1 rounded"
+            >
+              Exit VR
+            </button>
+            <iframe src="/vr/index.html" className="w-full h-full border-0" />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
