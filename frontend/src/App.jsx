@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import useWebRTC from "./hooks/useWebRTC";
 import VRScene from "./VRScene";
 
-function StreamTile({ inst, idx, active, setActive, zoom }) {
+function StreamTile({ inst, idx, active, setActive, zoom, status }) {
   const { videoRef, audioLevel } = useWebRTC(inst.id);
   const [muted, setMuted] = useState(true);
   const [volume, setVolume] = useState(1);
@@ -38,6 +38,11 @@ function StreamTile({ inst, idx, active, setActive, zoom }) {
       transition={{ type: "spring", stiffness: 300 }}
     >
       <video ref={videoRef} className="w-full h-full" playsInline />
+      {status && status !== 'ready' && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white text-sm">
+          {status}
+        </div>
+      )}
       <div className="absolute bottom-2 left-2 h-2 bg-gray-700" style={{ width: "80%", position: "absolute" }}>
         <div className="h-full bg-green-500" style={{ width: `${Math.round(audioLevel * 100)}%` }} />
       </div>
@@ -80,6 +85,7 @@ export default function App() {
   const [active, setActive] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [vrMode, setVrMode] = useState(false);
+  const [status, setStatus] = useState({});
 
   // Fetch instance list and hotkey mapping from the backend
   useEffect(() => {
@@ -91,6 +97,14 @@ export default function App() {
       .then((r) => r.json())
       .then(setHotkeys)
       .catch((e) => console.error("Failed to fetch hotkeys", e));
+    const interval = setInterval(() => {
+      fetch("/api/status")
+        .then((r) => r.json())
+        .then(setStatus)
+        .catch(() => {});
+    }, 5000);
+    fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => {});
+    return () => clearInterval(interval);
   }, []);
 
   // Register global hotkeys for focus, zoom and switching instances
@@ -141,6 +155,7 @@ export default function App() {
                 active={active}
                 setActive={setActive}
                 zoom={zoom}
+                status={status[inst.id]}
               />
             ))}
           </div>

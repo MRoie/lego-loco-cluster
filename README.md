@@ -141,3 +141,10 @@ out however many streams are available, falling back to placeholders if the
 backend is unreachable. Use the **Exit VR** button to return to the normal grid.
 The VR implementation uses React components directly—no iframe—and fully
 replaces the former demo under `frontend/public/vr/`.
+
+### Cluster Status Overlay
+
+Both the standard grid and the VR scene poll `/api/status` to show the boot
+state of each Windows 98 pod. Tiles display **booting**, **ready**, or any
+custom status from `config/status.json`. This helps operators wait through the
+long emulator startup times before launching Lego Loco.
