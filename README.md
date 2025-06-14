@@ -70,7 +70,7 @@ export LOCO_REPO=myrepo
 docker buildx build --platform linux/amd64,linux/arm64 -t $LOCO_REPO/loco:latest --push .
 
 # Create K8s cluster using Talos
-talosctl cluster create --name loco --workers=3
+talosctl cluster create --name loco --workers=1
 talosctl kubeconfig .
 export KUBECONFIG=$PWD/kubeconfig
 helm install loco helm/loco-chart \
