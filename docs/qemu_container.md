@@ -18,10 +18,11 @@ The file is already in QCOW2 format. Save it to an `images/` directory under the
 repository root.
 
 If you prefer an automated approach, run `scripts/download_and_run_qemu.sh`.
-The helper uses `aria2c` to fetch the Drive image using 16 parallel
-connections (resuming if interrupted), then builds the Docker image and
-launches QEMU with the proper network flags. The script also saves the
-container as `qemu-loco.tar.gz` for archival.
+The helper script now extracts the Google Drive confirmation token from the
+download page and feeds it to `aria2c`, enabling a 16‑connection parallel
+download (resuming if interrupted). After fetching the image it builds the
+Docker container, saves it as `qemu-loco.tar.gz`, and launches QEMU with the
+correct network flags.
 
 ## 2. Hardware Mapping
 

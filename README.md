@@ -96,8 +96,9 @@ docker run --rm --network host --cap-add=NET_ADMIN \
 # A more detailed walkthrough of this container, including the hardware
 # mapping, is available in [docs/qemu_container.md](docs/qemu_container.md).
 # For convenience a helper script `scripts/download_and_run_qemu.sh` downloads
-# the ready-made QCOW2 image using multiple parallel connections, builds the
-# container, saves it as `qemu-loco.tar.gz` and runs it with these flags.
+# the ready-made QCOW2 image. It extracts the confirmation token from Google
+# Drive and feeds it to `aria2c` for a multi-connection download, then builds
+# the container, saves it as `qemu-loco.tar.gz` and runs it with these flags.
 
 ---
 
