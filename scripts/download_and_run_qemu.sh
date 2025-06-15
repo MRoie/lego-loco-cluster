@@ -18,22 +18,30 @@ done
 
 download_parallel() {
   local id="$1" out="$2"
-  local cookie
+  local cookie html
   cookie=$(mktemp)
+  html=$(mktemp)
   local base="https://drive.google.com/uc?export=download&id=${id}"
   echo "==> Fetching confirmation token"
-  curl -c "$cookie" -s "$base" > /tmp/gd.html
-  local confirm
-  confirm=$(grep -o 'confirm=[A-Za-z0-9_-]*' /tmp/gd.html | head -n1 | cut -d= -f2)
+  curl -L -c "$cookie" -s "$base" -o "$html"
+
+  local confirm uuid
+  confirm=$(grep -o 'name="confirm" value="[^" ]*"' "$html" | head -n1 | sed 's/.*value="//;s/"//')
+  uuid=$(grep -o 'name="uuid" value="[^" ]*"' "$html" | head -n1 | sed 's/.*value="//;s/"//')
   if [ -z "$confirm" ]; then
     echo "Failed to retrieve confirmation token" >&2
-    rm -f "$cookie" /tmp/gd.html
+    rm -f "$cookie" "$html"
     return 1
   fi
-  local url="${base}&confirm=${confirm}"
+
+  local url="https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=${confirm}"
+  if [ -n "$uuid" ]; then
+    url="${url}&uuid=${uuid}"
+  fi
+
   echo "==> Downloading qcow2 image in parallel"
   aria2c -c -x 16 -s 16 -k 1M --load-cookies "$cookie" "$url" -o "$out"
-  rm -f "$cookie" /tmp/gd.html
+  rm -f "$cookie" "$html"
 }
 
 echo "==> Downloading qcow2 image from Google Drive"
