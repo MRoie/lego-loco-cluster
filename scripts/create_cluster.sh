@@ -10,6 +10,13 @@ WORKERS=${WORKERS:-1}
 
 echo "Creating Talos cluster with $WORKERS worker(s)" && date
 
+# ensure docker daemon is running
+if ! pgrep dockerd >/dev/null 2>&1; then
+  echo "Starting Docker daemon" && date
+  dockerd >"$LOG_DIR/dockerd.log" 2>&1 &
+  sleep 5
+fi
+
 talosctl cluster create --name loco --workers "$WORKERS" --wait
 
 talosctl kubeconfig .
