@@ -40,7 +40,9 @@ download_parallel() {
   fi
 
   echo "==> Downloading qcow2 image in parallel"
-  aria2c -c -x 16 -s 16 -k 1M --load-cookies "$cookie" "$url" -o "$out"
+  local conns=${CONNS:-16}
+  local splits=${SPLITS:-32}
+  aria2c -c -x "$conns" -s "$splits" -k 1M --load-cookies "$cookie" "$url" -o "$out"
   rm -f "$cookie" "$html"
 }
 

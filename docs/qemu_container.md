@@ -19,8 +19,8 @@ repository root.
 
 If you prefer an automated approach, run `scripts/download_and_run_qemu.sh`.
 The helper script now extracts the Google Drive confirmation token from the
-download page and feeds it to `aria2c`, enabling a 16‑connection parallel
-download (resuming if interrupted). After fetching the image it builds the
+download page and feeds it to `aria2c`, using up to 16 connections and 32
+segments in parallel (override with `CONNS` and `SPLITS`). After fetching the image it builds the
 Docker container, saves it as `qemu-loco.tar.gz`, and launches QEMU with the
 correct network flags.
 
