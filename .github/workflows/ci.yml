@@ -52,25 +52,17 @@ jobs:
           curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
           install -m 0755 talosctl /usr/local/bin/talosctl
       - name: Create Talos cluster
-        run: |
-          echo "Creating Talos cluster" && date
-          talosctl cluster create --name loco --workers 1 --wait
-          talosctl kubeconfig .
-          echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
-      - name: Deploy cluster
-        run: kubectl apply -k kustomize/base
-      - name: Print pod status
-        run: kubectl get pods -A -o wide
-      - name: Wait for cluster
-        run: |
-          kubectl get nodes
-          kubectl wait --for=condition=Ready pod --all --timeout=300s
-          kubectl get pods -A -o wide
+        run: scripts/create_cluster.sh
       - name: Upload kubeconfig
         uses: actions/upload-artifact@v4
         with:
           name: talos-kubeconfig
           path: kubeconfig
+      - name: Upload cluster setup logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cluster-setup-logs
+          path: k8s-tests/logs/create-cluster.log
 
   integration-network:
     needs: integration-setup
