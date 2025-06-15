@@ -62,8 +62,18 @@ fi
 echo "==> Setting up network bridge"
 ./scripts/setup_bridge.sh
 
-echo "==> Building qemu-loco container"
-docker build -t qemu-loco ./containers/qemu
+# Check if we should use pre-built image or build locally
+USE_PUBLISHED_IMAGE=${USE_PUBLISHED_IMAGE:-false}
+IMAGE_REGISTRY="ghcr.io/mroie/qemu-loco:latest"
+
+if [ "$USE_PUBLISHED_IMAGE" = "true" ]; then
+  echo "==> Pulling qemu-loco container from registry"
+  docker pull "$IMAGE_REGISTRY"
+  docker tag "$IMAGE_REGISTRY" qemu-loco
+else
+  echo "==> Building qemu-loco container locally"
+  docker build -t qemu-loco ./containers/qemu
+fi
 
 echo "==> Saving Docker image as qemu-loco.tar"
 docker save qemu-loco | gzip > "$WORKDIR/qemu-loco.tar.gz"
