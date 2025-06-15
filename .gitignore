@@ -5,3 +5,5 @@ frontend/dist/
 *.log
 package-lock.json
 containers/**/win98.*
+*.tar.gz
+images/*.tar.gz

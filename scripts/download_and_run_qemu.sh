@@ -11,7 +11,11 @@ mkdir -p "$WORKDIR"
 
 for cmd in aria2c curl; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "$cmd is required. Install with: sudo apt-get install -y $cmd" >&2
+    if [ "$cmd" = "aria2c" ]; then
+      echo "$cmd is required. Install with: sudo apt-get install -y aria2" >&2
+    else
+      echo "$cmd is required. Install with: sudo apt-get install -y $cmd" >&2
+    fi
     exit 1
   fi
 done
@@ -42,7 +46,9 @@ download_parallel() {
   echo "==> Downloading qcow2 image in parallel"
   local conns=${CONNS:-16}
   local splits=${SPLITS:-32}
-  aria2c -c -x "$conns" -s "$splits" -k 1M --load-cookies "$cookie" "$url" -o "$out"
+  local dir=$(dirname "$out")
+  local filename=$(basename "$out")
+  aria2c -c -x "$conns" -s "$splits" -k 1M --load-cookies "$cookie" "$url" -d "$dir" -o "$filename"
   rm -f "$cookie" "$html"
 }
 
@@ -53,6 +59,9 @@ else
   echo "Using existing $QCOW_PATH"
 fi
 
+echo "==> Setting up network bridge"
+./scripts/setup_bridge.sh
+
 echo "==> Building qemu-loco container"
 docker build -t qemu-loco ./containers/qemu
 
@@ -60,7 +69,7 @@ echo "==> Saving Docker image as qemu-loco.tar"
 docker save qemu-loco | gzip > "$WORKDIR/qemu-loco.tar.gz"
 
 echo "==> Running qemu-loco container"
-docker run --rm --network host --cap-add=NET_ADMIN \
+docker run --rm --network host --cap-add=NET_ADMIN --device /dev/net/tun \
   -e TAP_IF=tap0 -e BRIDGE=loco-br \
   -v "$WORKDIR/win98.qcow2:/images/win98.qcow2" \
   qemu-loco
