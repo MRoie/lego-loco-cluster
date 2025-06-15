@@ -93,6 +93,11 @@ docker run --rm --network host --cap-add=NET_ADMIN \
   -e TAP_IF=tap0 -e BRIDGE=loco-br \
   -v /path/to/win98.qcow2:/images/win98.qcow2 \
   $LOCO_REPO/qemu-loco
+# A more detailed walkthrough of this container, including the hardware
+# mapping, is available in [docs/qemu_container.md](docs/qemu_container.md).
+# For convenience a helper script `scripts/download_and_run_qemu.sh` downloads
+# the ready-made QCOW2 image using multiple parallel connections, builds the
+# container, saves it as `qemu-loco.tar.gz` and runs it with these flags.
 
 ---
 

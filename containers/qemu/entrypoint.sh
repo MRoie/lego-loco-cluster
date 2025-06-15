@@ -31,8 +31,10 @@ fi
 echo "🌐 TAP $TAP_IF attached to $BRIDGE"
 
 qemu-system-i386 \
-  -m 256 -hda "$DISK" \
+  -M pc -cpu pentium2 \
+  -m 512 -hda "$DISK" \
   -net nic,model=ne2k_pci -net tap,ifname=$TAP_IF,script=no,downscript=no \
+  -device sb16,audiodev=snd0 \
   -vga cirrus -display sdl \
   -audiodev pa,id=snd0 \
   -rtc base=localtime &
