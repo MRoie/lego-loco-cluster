@@ -63,3 +63,102 @@ Tasks:
 - Wire VR controller events to existing backend hotkey actions.
 
 Completing these prompts will allow the repository to accept a Windows 98 + Lego Loco image and run the full cluster with stable networking, automated tests, and a polished user interface.
+
+
+image link 
+
+https://drive.google.com/file/d/19UD-SRbTY5qyvsSeNhyX7fIaI6cet8Fb/view?usp=drivesdk
+
+
+pcem cfg file below
+
+
+gameblaster = 0
+gus = 0
+ssi2001 = 0
+voodoo = 0
+model = ga686bx
+cpu_manufacturer = 0
+cpu = 6
+fpu = builtin
+cpu_use_dynarec = 1
+cpu_waitstates = 0
+gfxcard = v3_3000
+video_speed = 5
+sndcard = sbpci128
+cpu_speed = 0
+disc_a = 
+disc_b = 
+hdd_controller = ide
+mem_size = 524288
+cdrom_drive = 200
+cdrom_channel = 2
+cdrom_path = S:\Lego\em\LOOT\LOOT\gmz\NestleBarcodemegamix01.iso
+zip_channel = -1
+hdc_sectors = 63
+hdc_heads = 16
+hdc_cylinders = 20317
+hdc_fn = S:\Lego\em\pcem\H2.vhd
+hdd_sectors = 0
+hdd_heads = 0
+hdd_cylinders = 0
+hdd_fn = 
+hde_sectors = 0
+hde_heads = 0
+hde_cylinders = 0
+hde_fn = 
+hdf_sectors = 0
+hdf_heads = 0
+hdf_cylinders = 0
+hdf_fn = 
+hdg_sectors = 0
+hdg_heads = 0
+hdg_cylinders = 0
+hdg_fn = 
+hdh_sectors = 0
+hdh_heads = 0
+hdh_cylinders = 0
+hdh_fn = 
+hdi_sectors = 0
+hdi_heads = 0
+hdi_cylinders = 0
+hdi_fn = 
+drive_a_type = 0
+drive_b_type = 0
+bpb_disable = 0
+cd_speed = 72
+cd_model = pcemcd
+joystick_type = 0
+mouse_type = 3
+enable_sync = 1
+netcard = rtl8029as
+lpt1_device = none
+vid_resize = 0
+video_fullscreen_scale = 0
+video_fullscreen_first = 1
+
+[Joysticks]
+joystick_0_nr = 0
+joystick_1_nr = 0
+
+[SDL2]
+screenshot_format = png
+screenshot_flash = 1
+custom_width = 640
+custom_height = 480
+fullscreen = 0
+fullscreen_mode = 0
+scale = 1
+scale_mode = 1
+vsync = 0
+focus_dim = 0
+alternative_update_lock = 0
+render_driver = auto
+
+[GL3]
+input_scale = 1.000000
+input_stretch = 0
+shader_refresh_rate = 0.000000
+
+[GL3 Shaders]
+shaders = 0
