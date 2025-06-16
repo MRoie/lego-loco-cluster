@@ -1,29 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import useWebRTC from "./hooks/useWebRTC";
+import VNCViewer from "./components/VNCViewer";
 import VRScene from "./VRScene";
 
 function StreamTile({ inst, idx, active, setActive, zoom, status }) {
-  const { videoRef, audioLevel } = useWebRTC(inst.id);
   const [muted, setMuted] = useState(true);
   const [volume, setVolume] = useState(1);
 
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.muted = muted;
-      videoRef.current.volume = volume;
-    }
-  }, [muted, volume]);
-
   const toggleFullscreen = () => {
-    const el = videoRef.current;
-    if (!el) return;
+    const element = document.querySelector(`[data-instance="${inst.id}"]`);
+    if (!element) return;
     if (document.fullscreenElement) {
       document
         .exitFullscreen()
         .catch((e) => console.error("exitFullscreen failed", e));
     } else {
-      el
+      element
         .requestFullscreen()
         .catch((e) => console.error("requestFullscreen failed", e));
     }
@@ -32,20 +24,18 @@ function StreamTile({ inst, idx, active, setActive, zoom, status }) {
   return (
     <motion.div
       key={inst.id}
+      data-instance={inst.id}
       className={`border-[12px] rounded-2xl border-yellow-500 lego-style transition-transform bg-black overflow-hidden ${active === idx ? "ring-4 ring-blue-400" : ""}`}
       onClick={() => setActive(idx)}
       animate={{ scale: active === idx ? zoom + 0.1 : 1 }}
       transition={{ type: "spring", stiffness: 300 }}
     >
-      <video ref={videoRef} className="w-full h-full" playsInline />
+      <VNCViewer instanceId={inst.id} />
       {status && status !== 'ready' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white text-sm">
           {status}
         </div>
       )}
-      <div className="absolute bottom-2 left-2 h-2 bg-gray-700" style={{ width: "80%", position: "absolute" }}>
-        <div className="h-full bg-green-500" style={{ width: `${Math.round(audioLevel * 100)}%` }} />
-      </div>
       <div className="absolute top-2 right-2 bg-black bg-opacity-50 p-1 rounded flex items-center space-x-2">
         <button
           onClick={(e) => {
