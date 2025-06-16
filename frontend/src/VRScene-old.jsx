@@ -50,7 +50,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
         plane.setAttribute('material', {
           src: `#${textureId}`,
           transparent: false,
-          shader: 'flat'
+          shader: 'flat' // Use flat shader for better performance
         });
 
         setTextureCreated(true);
@@ -58,6 +58,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
         // Set up continuous texture updates
         const updateTexture = () => {
           if (canvas && plane.getAttribute('material')) {
+            // Force texture update
             const material = plane.components.material.material;
             if (material && material.map) {
               material.map.needsUpdate = true;
@@ -76,6 +77,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
     console.log(`VR: VNC disconnected for ${instanceId}`, details);
     setTextureCreated(false);
     
+    // Reset material to default
     if (planeRef.current) {
       planeRef.current.setAttribute('material', {
         color: '#222',
@@ -87,12 +89,14 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
   const handleClick = () => {
     setActive(idx);
     
+    // Send click to VNC if connected
     if (vncRef.current) {
       const connectionState = vncRef.current.getConnectionState();
       if (connectionState.connected) {
-        vncRef.current.sendMouse(320, 240, 1);
+        // Send mouse click at center of screen
+        vncRef.current.sendMouse(320, 240, 1); // Left click down
         setTimeout(() => {
-          vncRef.current.sendMouse(320, 240, 0);
+          vncRef.current.sendMouse(320, 240, 0); // Release
         }, 100);
       }
     }
@@ -102,6 +106,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
 
   return (
     <>
+      {/* Hidden VNC viewer that provides the canvas texture */}
       <VRVNCViewer
         ref={vncRef}
         instanceId={inst.id}
@@ -109,6 +114,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
         onDisconnect={handleVNCDisconnect}
       />
       
+      {/* VR plane that displays the VNC canvas */}
       <a-entity
         class="tile"
         position={`${pos.x} ${pos.y} -3`}
@@ -118,6 +124,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
         ref={planeRef}
         onClick={handleClick}
       >
+        {/* Status overlay */}
         {status && status !== 'ready' && (
           <a-text
             value={status}
@@ -128,6 +135,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
           />
         )}
         
+        {/* Connection status indicator */}
         {!textureCreated && (
           <a-text
             value={`Connecting to ${inst.id}...`}
@@ -142,14 +150,25 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
     </>
   );
 }
+      {status && status !== 'ready' && (
+        <a-text
+          value={status}
+          color="#FFF"
+          align="center"
+          width="1.2"
+          position="0 0 0.02"
+        ></a-text>
+      )}
+    </a-entity>
+  );
+}
 
 export default function VRScene({ onExit }) {
   const [instances, setInstances] = useState([]);
   const [active, setActive] = useState(0);
+  const [volumes, setVolumes] = useState([]);
   const [info, setInfo] = useState('');
   const [status, setStatus] = useState({});
-  const [connectedVNCs, setConnectedVNCs] = useState(new Set());
-  const vncRefs = useRef([]);
 
   useEffect(() => {
     fetch('/api/config/instances')
@@ -157,7 +176,7 @@ export default function VRScene({ onExit }) {
       .then((data) => {
         if (Array.isArray(data) && data.length) {
           setInstances(data);
-          vncRefs.current = new Array(data.length);
+          setVolumes(new Array(data.length).fill(1));
         } else {
           throw new Error('no data');
         }
@@ -166,82 +185,26 @@ export default function VRScene({ onExit }) {
         setInstances(
           Array.from({ length: 3 }, (_, i) => ({ id: `placeholder-${i}` }))
         );
-        vncRefs.current = new Array(3);
+        setVolumes(new Array(3).fill(1));
         setInfo('Using placeholder streams');
       });
-    
     const interval = setInterval(() => {
       fetch('/api/status')
         .then((r) => r.json())
         .then(setStatus)
         .catch(() => {});
     }, 5000);
-    
     fetch('/api/status').then((r) => r.json()).then(setStatus).catch(() => {});
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     const handler = (e) => {
-      if (e.key >= '1' && e.key <= '9') {
-        const idx = parseInt(e.key) - 1;
-        if (idx < instances.length) {
-          setActive(idx);
-        }
-      } else if (connectedVNCs.has(active) && vncRefs.current[active]) {
-        const vncRef = vncRefs.current[active];
-        if (vncRef && vncRef.getConnectionState().connected) {
-          let keysym = 0;
-          
-          if (e.key.length === 1) {
-            keysym = e.key.charCodeAt(0);
-          } else {
-            const specialKeys = {
-              'Enter': 0xFF0D,
-              'Backspace': 0xFF08,
-              'Tab': 0xFF09,
-              'Escape': 0xFF1B,
-              'ArrowUp': 0xFF52,
-              'ArrowDown': 0xFF54,
-              'ArrowLeft': 0xFF51,
-              'ArrowRight': 0xFF53,
-              'F1': 0xFFBE,
-              'F2': 0xFFBF,
-              'F3': 0xFFC0,
-              'F4': 0xFFC1,
-              'F5': 0xFFC2,
-              'F6': 0xFFC3,
-              'F7': 0xFFC4,
-              'F8': 0xFFC5,
-              'F9': 0xFFC6,
-              'F10': 0xFFC7,
-              'F11': 0xFFC8,
-              'F12': 0xFFC9
-            };
-            keysym = specialKeys[e.key] || 0;
-          }
-          
-          if (keysym) {
-            vncRef.sendKey(keysym, e.type === 'keydown' ? 1 : 0);
-          }
-        }
-      }
-      
-      console.log('VR KVM event to tile', active + 1, e.key);
+      console.log('KVM event to tile', active + 1, e.key);
     };
-    
     window.addEventListener('keydown', handler);
-    window.addEventListener('keyup', handler);
-    return () => {
-      window.removeEventListener('keydown', handler);
-      window.removeEventListener('keyup', handler);
-    };
-  }, [active, instances.length, connectedVNCs]);
-
-  const handleVNCReady = (idx, vncRef) => {
-    vncRefs.current[idx] = vncRef;
-    setConnectedVNCs(prev => new Set([...prev, idx]));
-  };
+    return () => window.removeEventListener('keydown', handler);
+  }, [active]);
 
   const cols = Math.ceil(Math.sqrt(instances.length || 1));
   const rows = Math.ceil((instances.length || 1) / cols);
@@ -250,14 +213,7 @@ export default function VRScene({ onExit }) {
     <div className="w-full h-full relative">
       <div className="absolute top-4 left-4 text-white z-10 font-sans text-sm">
         Active tile: {active + 1} <span className="text-gray-400">{info}</span>
-        <div className="text-xs text-gray-300 mt-1">
-          VNC Connected: {connectedVNCs.size}/{instances.length}
-        </div>
-        <div className="text-xs text-gray-300">
-          Keys 1-9: Switch tiles | Type to control active emulator
-        </div>
       </div>
-      
       <div className="absolute top-4 right-4 z-10">
         <button
           onClick={onExit}
@@ -266,11 +222,24 @@ export default function VRScene({ onExit }) {
           Exit VR
         </button>
       </div>
-      
+      <div className="absolute bottom-4 left-4 z-10">
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={volumes[active] || 1}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            setVolumes((vals) => {
+              const arr = [...vals];
+              arr[active] = v;
+              return arr;
+            });
+          }}
+        />
+      </div>
       <a-scene embedded>
-        <a-assets>
-        </a-assets>
-        
         <a-entity>
           {instances.map((inst, idx) => (
             <VRTile
@@ -281,37 +250,13 @@ export default function VRScene({ onExit }) {
               setActive={setActive}
               cols={cols}
               rows={rows}
+              volumes={volumes}
+              setVolumes={setVolumes}
               status={status[inst.id]}
-              onVNCReady={handleVNCReady}
             />
           ))}
         </a-entity>
-        
         <a-sky color="#111"></a-sky>
-        
-        <a-entity 
-          id="rig" 
-          movement-controls 
-          position="0 1.6 3"
-        >
-          <a-entity 
-            camera 
-            look-controls 
-            wasd-controls
-          ></a-entity>
-          
-          <a-entity 
-            id="leftController"
-            oculus-touch-controls="hand: left"
-          ></a-entity>
-          
-          <a-entity 
-            id="rightController" 
-            oculus-touch-controls="hand: right"
-            laser-controls
-            raycaster="objects: .tile"
-          ></a-entity>
-        </a-entity>
       </a-scene>
     </div>
   );

@@ -45,22 +45,35 @@ Tasks:
 - Add `k8s-tests/test-boot.sh` that waits for each emulator to expose VNC and verifies the Windows desktop.
 - Run all tests in CI so failures block merges.
 
-## 5. UI/UX Polishing
+## 5. VNC Video Streaming Implementation
+**Prompt:**
+> "Complete the VNC-based video streaming system for reliable retro gaming compatibility."
+
+Tasks:
+- Complete the VNCViewer.jsx component using NoVNC library
+- Set up WebSocket proxy routing in backend for VNC connections
+- Add input event forwarding (mouse, keyboard) through VNC protocol
+- Create VR texture mapping from NoVNC canvas for A-Frame integration
+- Test with Win98 Lego Loco for full compatibility
+
+## 6. UI/UX Polishing
 **Prompt:**
 > "Improve the frontend experience and make the streaming more resilient."
 
 Tasks:
 - Allow users to select audio output devices per instance.
-- Add reconnect logic to `useWebRTC` for dropped connections.
+- Add reconnect logic to VNC connections for dropped connections.
 - Show loading indicators while streams establish.
+- Add fullscreen mode for individual VNC viewers
 
-## 6. VR Interface (Optional)
+## 7. VR Interface (Optional)
 **Prompt:**
 > "Prototype a VR scene that displays the nine video feeds and maps controller buttons to backend hotkeys."
 
 Tasks:
 - Build a basic A‑Frame scene showing the grid on a curved surface.
 - Wire VR controller events to existing backend hotkey actions.
+- Integrate NoVNC canvas as WebGL textures in VR space
 
 Completing these prompts will allow the repository to accept a Windows 98 + Lego Loco image and run the full cluster with stable networking, automated tests, and a polished user interface.
 
