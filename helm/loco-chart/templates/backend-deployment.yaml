@@ -13,6 +13,12 @@ spec:
       labels:
         app: {{ include "loco.fullname" . }}-backend
     spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
       containers:
       - name: backend
         image: {{ include "loco.image" (dict "root" . "image" .Values.backend.image "tag" .Values.backend.tag) }}
