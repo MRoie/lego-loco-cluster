@@ -18,6 +18,11 @@ spec:
       - name: emulator
         image: {{ include "loco.image" (dict "root" . "image" .Values.emulator.image "tag" .Values.emulator.tag) }}
         imagePullPolicy: {{ .Values.emulator.imagePullPolicy }}
+        securityContext:
+          capabilities:
+            add:
+              - NET_ADMIN
+              - SYS_ADMIN
         ports:
         - containerPort: {{ .Values.emulator.servicePort }}
         volumeMounts:
