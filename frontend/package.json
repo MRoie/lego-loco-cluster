@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@novnc/novnc": "^1.6.0",
     "aframe": "^1.7.1",
     "framer-motion": "^11.0.0",
     "react": "^18.0.0",
