@@ -36,13 +36,18 @@ echo "✅ Xvfb started on display :$DISPLAY_NUM"
 pulseaudio --start --exit-idle-time=-1
 echo "🔈 PulseAudio started"
 
-# Check if TAP interface exists (it should be created by the host setup script)
-if ! ip link show "$TAP_IF" &>/dev/null; then
-  echo "❌ TAP interface $TAP_IF not found. Make sure to run setup_bridge.sh on the host first." >&2
-  exit 1
-fi
+# Create isolated TAP bridge inside this container
+echo "🌐 Setting up isolated TAP bridge..."
+ip link add name "$BRIDGE" type bridge
+ip addr add 192.168.10.1/24 dev "$BRIDGE"
+ip link set "$BRIDGE" up
 
-echo "🌐 Using existing TAP interface $TAP_IF"
+# Create TAP interface
+ip tuntap add "$TAP_IF" mode tap
+ip link set "$TAP_IF" master "$BRIDGE"
+ip link set "$TAP_IF" up
+
+echo "✅ Created isolated TAP bridge $BRIDGE with interface $TAP_IF"
 
 # Create a unique snapshot for this instance to avoid file locking issues
 SNAPSHOT_NAME="/tmp/win98_$(date +%s)_$$.qcow2"
