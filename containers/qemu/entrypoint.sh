@@ -220,7 +220,7 @@ if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
   log_info "File details: $(ls -lh "$DISK")"
   
   log_info "Creating QCOW2 snapshot: $SNAPSHOT_NAME"
-  if qemu-img create -f qcow2 -b "$DISK" "$SNAPSHOT_NAME"; then
+  if qemu-img create -f qcow2 -b "$DISK" -F qcow2 "$SNAPSHOT_NAME"; then
     log_success "Snapshot created successfully"
     log_info "Snapshot details: $(ls -lh "$SNAPSHOT_NAME")"
   else

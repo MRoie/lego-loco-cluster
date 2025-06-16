@@ -27,7 +27,7 @@ registryConfig:
 emulator:
   image: qemu-loco
   tag: latest
-  imagePullPolicy: Never
+  imagePullPolicy: IfNotPresent
   servicePort: 6080
   diskPVC: win98-disk
   diskReadOnly: false
