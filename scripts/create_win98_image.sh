@@ -150,9 +150,12 @@ build_qemu_image() {
     echo ""
     echo "🐳 Building QEMU container image..."
     
-    local qemu_dir="/workspaces/lego-loco-cluster/containers/qemu"
+    # Use relative path from the repository root
+    local qemu_dir="containers/qemu"
     if [[ ! -d "$qemu_dir" ]]; then
         echo "❌ QEMU container directory not found: $qemu_dir" >&2
+        echo "   Current directory: $(pwd)" >&2
+        echo "   Available directories: $(ls -la)" >&2
         exit 1
     fi
     

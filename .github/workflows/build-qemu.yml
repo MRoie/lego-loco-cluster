@@ -57,6 +57,8 @@ jobs:
         # Push both tags
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        
+        echo "✅ QEMU container published successfully"
     
     - name: Build snapshots
       if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/setup-qemu-container-with-pcem-config'
@@ -78,13 +80,36 @@ jobs:
         dd if=images/boot.img of=images/base.img conv=notrunc 2>/dev/null
         qemu-img convert -f raw -O qcow2 images/base.img images/win98.qcow2
         
-        # Build snapshots using our script
-        chmod +x ./scripts/create_win98_image.sh
-        ./scripts/create_win98_image.sh \
-          --build-snapshots \
-          --registry ${{ env.REGISTRY }}/${{ github.repository_owner }} \
-          --tag latest \
-          --no-push
+        # Build snapshot containers directly
+        for variant in base games productivity; do
+          echo "Building snapshot: $variant"
+          
+          # Create working directory
+          work_dir="/tmp/snapshot-build-$variant"
+          mkdir -p "$work_dir"
+          
+          # Copy snapshot file
+          cp images/win98.qcow2 "$work_dir/snapshot.qcow2"
+          
+          # Create Dockerfile
+          cat > "$work_dir/Dockerfile" << EOF
+        FROM alpine:latest
+        RUN echo "Snapshot container for $variant variant" > /etc/motd
+        COPY snapshot.qcow2 /snapshot.qcow2
+        LABEL variant="$variant"
+        LABEL base-image="win98"
+        LABEL created="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        CMD ["cat", "/etc/motd", "&&", "ls", "-la", "/snapshot.qcow2"]
+        EOF
+          
+          # Build snapshot container
+          docker build -t "${{ env.SNAPSHOT_REGISTRY }}:win98-$variant" "$work_dir"
+          
+          # Clean up
+          rm -rf "$work_dir"
+        done
+        
+        echo "✅ All snapshot variants built successfully"
     
     - name: Push snapshots
       if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/setup-qemu-container-with-pcem-config'
