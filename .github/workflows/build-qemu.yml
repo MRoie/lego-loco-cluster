@@ -59,7 +59,7 @@ jobs:
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
     
     - name: Build snapshots
-      if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main'
+      if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/setup-qemu-container-with-pcem-config'
       run: |
         # Install dependencies
         sudo apt-get update
@@ -87,7 +87,7 @@ jobs:
           --no-push
     
     - name: Push snapshots
-      if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main'
+      if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/setup-qemu-container-with-pcem-config'
       run: |
         for variant in base games productivity; do
           docker tag ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant} \
