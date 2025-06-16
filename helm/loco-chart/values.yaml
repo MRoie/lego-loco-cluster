@@ -6,7 +6,7 @@ imageRepo: "ghcr.io/mroie"
 emulator:
   image: qemu-loco
   tag: latest
-  imagePullPolicy: Always
+  imagePullPolicy: Never
   servicePort: 6080
   diskPVC: win98-disk
   diskReadOnly: false
