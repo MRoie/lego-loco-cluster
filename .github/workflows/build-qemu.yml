@@ -2,7 +2,7 @@ name: Build QEMU Container
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, codex/setup-qemu-container-with-pcem-config ]
     paths:
       - 'containers/qemu/**'
       - 'scripts/create_win98_image.sh'
