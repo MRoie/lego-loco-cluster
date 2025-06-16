@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Enhanced logging function
+log() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+}
+
+log_error() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] ❌ ERROR: $1" >&2
+}
+
+log_success() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] ✅ SUCCESS: $1"
+}
+
+log_info() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] ℹ️  INFO: $1"
+}
+
+# Configuration with defaults
 BRIDGE=${BRIDGE:-loco-br}
 TAP_IF=${TAP_IF:-tap0}
 DISK=${DISK:-/images/win98.qcow2}
@@ -8,68 +26,143 @@ SNAPSHOT_REGISTRY=${SNAPSHOT_REGISTRY:-ghcr.io/mroie/qemu-snapshots}
 SNAPSHOT_TAG=${SNAPSHOT_TAG:-win98-base}
 USE_PREBUILT_SNAPSHOT=${USE_PREBUILT_SNAPSHOT:-true}
 
+log_info "Starting QEMU emulator container with configuration:"
+log_info "  BRIDGE=$BRIDGE"
+log_info "  TAP_IF=$TAP_IF"
+log_info "  DISK=$DISK"
+log_info "  USE_PREBUILT_SNAPSHOT=$USE_PREBUILT_SNAPSHOT"
+log_info "  SNAPSHOT_REGISTRY=$SNAPSHOT_REGISTRY"
+log_info "  SNAPSHOT_TAG=$SNAPSHOT_TAG"
 
-# Start virtual display
-echo "🖥️  Starting virtual display..."
+# === STEP 1: Virtual Display Setup ===
+log_info "Setting up virtual display..."
+
 # Find an available display number
+DISPLAY_NUM=""
 for display_num in {99..199}; do
-  if ! pgrep -f "Xvfb :$display_num" > /dev/null && ! netstat -ln | grep -q ":60$((display_num))"; then
+  if ! pgrep -f "Xvfb :$display_num" > /dev/null && ! netstat -ln | grep -q ":60$((display_num))" 2>/dev/null; then
     DISPLAY_NUM=$display_num
     break
   fi
 done
 
-# Kill any existing processes on this display
-pkill -f "Xvfb :$DISPLAY_NUM" 2>/dev/null || true
-sleep 1
+if [ -z "$DISPLAY_NUM" ]; then
+  log_error "No available display numbers found"
+  exit 1
+fi
 
+log_info "Using display number: $DISPLAY_NUM"
+
+# Kill any existing processes on this display
+if pgrep -f "Xvfb :$DISPLAY_NUM" > /dev/null; then
+  log_info "Killing existing Xvfb on display :$DISPLAY_NUM"
+  pkill -f "Xvfb :$DISPLAY_NUM" || true
+  sleep 2
+fi
+
+# Start Xvfb
 export DISPLAY=:$DISPLAY_NUM
+log_info "Starting Xvfb on display :$DISPLAY_NUM"
 Xvfb :$DISPLAY_NUM -screen 0 1024x768x24 &
 XVFB_PID=$!
 sleep 3
 
 # Verify Xvfb started successfully
 if ! kill -0 $XVFB_PID 2>/dev/null; then
-  echo "❌ Failed to start Xvfb on display :$DISPLAY_NUM" >&2
+  log_error "Failed to start Xvfb on display :$DISPLAY_NUM"
   exit 1
 fi
-echo "✅ Xvfb started on display :$DISPLAY_NUM"
+log_success "Xvfb started on display :$DISPLAY_NUM (PID: $XVFB_PID)"
 
-# Start PulseAudio daemon
-pulseaudio --start --exit-idle-time=-1
-echo "🔈 PulseAudio started"
+# === STEP 2: Audio Setup ===
+log_info "Starting PulseAudio daemon..."
+if pulseaudio --start --exit-idle-time=-1; then
+  log_success "PulseAudio started successfully"
+else
+  log_error "Failed to start PulseAudio, continuing without audio"
+fi
 
-# Create isolated TAP bridge inside this container
-echo "🌐 Setting up isolated TAP bridge..."
+# === STEP 3: Network Setup ===
+log_info "Setting up isolated TAP bridge..."
 
 # Clean up any existing interfaces first
-ip link delete "$TAP_IF" 2>/dev/null || true
-ip link delete "$BRIDGE" 2>/dev/null || true
+log_info "Cleaning up existing network interfaces..."
+if ip link show "$TAP_IF" &>/dev/null; then
+  log_info "Removing existing TAP interface: $TAP_IF"
+  ip link delete "$TAP_IF" || true
+fi
+
+if ip link show "$BRIDGE" &>/dev/null; then
+  log_info "Removing existing bridge: $BRIDGE"
+  ip link delete "$BRIDGE" || true
+fi
 
 # Create bridge
-ip link add name "$BRIDGE" type bridge
-ip addr add 192.168.10.1/24 dev "$BRIDGE"
-ip link set "$BRIDGE" up
+log_info "Creating bridge: $BRIDGE"
+if ip link add name "$BRIDGE" type bridge; then
+  log_success "Bridge $BRIDGE created"
+else
+  log_error "Failed to create bridge $BRIDGE"
+  exit 1
+fi
+
+if ip addr add 192.168.10.1/24 dev "$BRIDGE"; then
+  log_success "IP address assigned to bridge $BRIDGE"
+else
+  log_error "Failed to assign IP to bridge $BRIDGE"
+  exit 1
+fi
+
+if ip link set "$BRIDGE" up; then
+  log_success "Bridge $BRIDGE is up"
+else
+  log_error "Failed to bring up bridge $BRIDGE"
+  exit 1
+fi
 
 # Create TAP interface
-ip tuntap add "$TAP_IF" mode tap
-ip link set "$TAP_IF" master "$BRIDGE"
-ip link set "$TAP_IF" up
+log_info "Creating TAP interface: $TAP_IF"
+if ip tuntap add "$TAP_IF" mode tap; then
+  log_success "TAP interface $TAP_IF created"
+else
+  log_error "Failed to create TAP interface $TAP_IF"
+  exit 1
+fi
 
-echo "✅ Created isolated TAP bridge $BRIDGE with interface $TAP_IF"
+if ip link set "$TAP_IF" master "$BRIDGE"; then
+  log_success "TAP interface $TAP_IF added to bridge $BRIDGE"
+else
+  log_error "Failed to add TAP interface to bridge"
+  exit 1
+fi
 
+if ip link set "$TAP_IF" up; then
+  log_success "TAP interface $TAP_IF is up"
+else
+  log_error "Failed to bring up TAP interface $TAP_IF"
+  exit 1
+fi
+
+log_success "Network setup complete - Bridge: $BRIDGE, TAP: $TAP_IF"
+
+# === STEP 4: Disk Image Setup ===
 # Create a unique snapshot for this instance to avoid file locking issues
 SNAPSHOT_NAME="/tmp/win98_$(date +%s)_$$.qcow2"
+SKIP_SNAPSHOT_CREATION=false
+
+log_info "Preparing disk image: $SNAPSHOT_NAME"
 
 # Pre-built snapshot strategy
 if [ "$USE_PREBUILT_SNAPSHOT" = "true" ]; then
-  echo "📥 Attempting to download pre-built snapshot..."
+  log_info "Attempting to download pre-built snapshot..."
   SNAPSHOT_URL="${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG}"
+  log_info "Snapshot URL: $SNAPSHOT_URL"
   
   # Try to download pre-built snapshot using skopeo/crane
   if command -v skopeo >/dev/null 2>&1; then
-    echo "   Using skopeo to download snapshot from: $SNAPSHOT_URL"
+    log_info "Using skopeo to download snapshot"
     if skopeo copy "docker://${SNAPSHOT_URL}" "oci-archive:${SNAPSHOT_NAME}.tar" 2>/dev/null; then
+      log_info "Successfully downloaded snapshot archive"
       # Extract the actual qcow2 file from the OCI archive
       if tar -xf "${SNAPSHOT_NAME}.tar" -C /tmp/ --wildcards "*/layer.tar" 2>/dev/null; then
         # Find and extract the qcow2 from the layer
@@ -79,59 +172,70 @@ if [ "$USE_PREBUILT_SNAPSHOT" = "true" ]; then
           EXTRACTED_QCOW2=$(find /tmp -name "*.qcow2" -not -path "*/tmp/win98_*" | head -1)
           if [ -n "$EXTRACTED_QCOW2" ]; then
             cp "$EXTRACTED_QCOW2" "$SNAPSHOT_NAME"
-            echo "✅ Successfully downloaded and extracted pre-built snapshot"
+            log_success "Successfully downloaded and extracted pre-built snapshot"
             rm -f "${SNAPSHOT_NAME}.tar" "$LAYER_TAR" "$EXTRACTED_QCOW2"
             SKIP_SNAPSHOT_CREATION=true
           fi
         fi
       fi
+    else
+      log_error "Failed to download snapshot with skopeo"
     fi
   elif command -v crane >/dev/null 2>&1; then
-    echo "   Using crane to download snapshot from: $SNAPSHOT_URL"
+    log_info "Using crane to download snapshot"
     if crane export "$SNAPSHOT_URL" - | tar -x -C /tmp/ --wildcards "*.qcow2" 2>/dev/null; then
       EXTRACTED_QCOW2=$(find /tmp -name "*.qcow2" -not -path "*/tmp/win98_*" | head -1)
       if [ -n "$EXTRACTED_QCOW2" ]; then
         cp "$EXTRACTED_QCOW2" "$SNAPSHOT_NAME"
-        echo "✅ Successfully downloaded and extracted pre-built snapshot"
+        log_success "Successfully downloaded and extracted pre-built snapshot"
         rm -f "$EXTRACTED_QCOW2"
         SKIP_SNAPSHOT_CREATION=true
       fi
+    else
+      log_error "Failed to download snapshot with crane"
     fi
   else
-    echo "   No container registry tools (skopeo/crane) available, falling back to base image"
+    log_info "No container registry tools (skopeo/crane) available, falling back to base image"
   fi
   
   if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
-    echo "   Failed to download pre-built snapshot, falling back to creating from base image"
+    log_info "Failed to download pre-built snapshot, falling back to creating from base image"
   fi
 fi
 
 if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
-  echo "📀 Creating snapshot from base image: $SNAPSHOT_NAME"
+  log_info "Creating snapshot from base image: $DISK"
   
   # Check if the base disk image exists
   if [ ! -f "$DISK" ]; then
-    echo "❌ Base disk image not found: $DISK" >&2
-    echo "   Available files in /images:" >&2
-    ls -la /images/ 2>/dev/null || echo "   /images directory not accessible" >&2
+    log_error "Base disk image not found: $DISK"
+    log_info "Available files in /images:"
+    ls -la /images/ 2>/dev/null || log_error "/images directory not accessible"
+    log_info "Available files in /tmp:"
+    ls -la /tmp/ 2>/dev/null || log_error "/tmp directory not accessible"
     exit 1
   fi
   
-  qemu-img create -f qcow2 -b "$DISK" "$SNAPSHOT_NAME"
-  if [ $? -ne 0 ]; then
-    echo "❌ Failed to create snapshot" >&2
+  log_success "Base disk image found: $DISK"
+  log_info "File details: $(ls -lh "$DISK")"
+  
+  log_info "Creating QCOW2 snapshot: $SNAPSHOT_NAME"
+  if qemu-img create -f qcow2 -b "$DISK" "$SNAPSHOT_NAME"; then
+    log_success "Snapshot created successfully"
+    log_info "Snapshot details: $(ls -lh "$SNAPSHOT_NAME")"
+  else
+    log_error "Failed to create snapshot"
     exit 1
   fi
 else
-  echo "📀 Using pre-built snapshot: $SNAPSHOT_NAME"
-fi
-  exit 1
+  log_success "Using pre-built snapshot: $SNAPSHOT_NAME"
+  log_info "Snapshot details: $(ls -lh "$SNAPSHOT_NAME")"
 fi
 
-echo "✅ Base disk image found: $DISK"
-qemu-img create -f qcow2 -b "$DISK" "$SNAPSHOT_NAME"
+# === STEP 5: QEMU Startup ===
+log_info "Starting QEMU emulator..."
+log_info "QEMU command: qemu-system-i386 -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
 
-echo "🚀 Starting QEMU..."
 qemu-system-i386 \
   -M pc -cpu pentium2 \
   -m 512 -hda "$SNAPSHOT_NAME" \
@@ -146,23 +250,23 @@ qemu-system-i386 \
   -monitor none &
 
 EMU_PID=$!
+log_info "QEMU started with PID: $EMU_PID"
 
-# Wait a bit longer for QEMU to initialize
-sleep 8
+# Wait for QEMU to initialize
+log_info "Waiting for QEMU to initialize..."
+sleep 30
+
 if ! kill -0 $EMU_PID 2>/dev/null; then
-  echo "❌ QEMU process died" >&2
+  log_error "QEMU process died during startup"
   wait $EMU_PID
   exit 1
 fi
 
-echo "✅ QEMU started successfully (PID: $EMU_PID)"
+log_success "QEMU started successfully (PID: $EMU_PID)"
+log_info "VNC display available on :5901"
 
-# Wait for QEMU to start
-sleep 5
-echo "🖥️  QEMU started with VNC display on :5901"
-
-# Start GStreamer pipeline for screen capture and streaming
-echo "📹 Starting simple video stream..."
+# === STEP 6: Video Streaming Setup ===
+log_info "Starting GStreamer video stream..."
 gst-launch-1.0 -v \
   ximagesrc display-name=:$DISPLAY_NUM use-damage=0 ! \
   videoconvert ! \
@@ -173,20 +277,46 @@ gst-launch-1.0 -v \
   udpsink host=127.0.0.1 port=5000 &
 GSTREAMER_PID=$!
 
-echo "✅ Container setup complete!"
-echo "   VNC: localhost:5901"
-echo "   Video stream: UDP port 5000"
-echo "   QEMU PID: $EMU_PID"
-echo "   GStreamer PID: $GSTREAMER_PID"
+log_success "GStreamer started with PID: $GSTREAMER_PID"
+
+# === Container Ready ===
+log_success "Container setup complete!"
+log_info "Services:"
+log_info "  - VNC: localhost:5901"
+log_info "  - Video stream: UDP port 5000"
+log_info "  - QEMU PID: $EMU_PID"
+log_info "  - Xvfb PID: $XVFB_PID"
+log_info "  - GStreamer PID: $GSTREAMER_PID"
 
 # Cleanup function
 cleanup() {
-  echo "🧹 Cleaning up..."
-  kill $EMU_PID $XVFB_PID $GSTREAMER_PID 2>/dev/null || true
-  rm -f "$SNAPSHOT_NAME" 2>/dev/null || true
+  log_info "Received shutdown signal, cleaning up..."
+  
+  if [ -n "${GSTREAMER_PID:-}" ]; then
+    log_info "Stopping GStreamer (PID: $GSTREAMER_PID)"
+    kill $GSTREAMER_PID 2>/dev/null || true
+  fi
+  
+  if [ -n "${EMU_PID:-}" ]; then
+    log_info "Stopping QEMU (PID: $EMU_PID)"
+    kill $EMU_PID 2>/dev/null || true
+  fi
+  
+  if [ -n "${XVFB_PID:-}" ]; then
+    log_info "Stopping Xvfb (PID: $XVFB_PID)"
+    kill $XVFB_PID 2>/dev/null || true
+  fi
+  
+  if [ -f "$SNAPSHOT_NAME" ]; then
+    log_info "Removing snapshot file: $SNAPSHOT_NAME"
+    rm -f "$SNAPSHOT_NAME" 2>/dev/null || true
+  fi
+  
+  log_success "Cleanup complete"
   exit 0
 }
 
 trap cleanup SIGTERM SIGINT
 
+log_info "Container is ready and waiting..."
 wait $EMU_PID
