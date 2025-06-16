@@ -20,9 +20,16 @@ spec:
         ports:
         - containerPort: {{ .Values.backend.servicePort }}
         volumeMounts:
-        - name: config
-          mountPath: /app/config
+        - name: instances-config
+          mountPath: /app/config/instances.json
+          subPath: instances.json
+        - name: status-config
+          mountPath: /app/config/status.json
+          subPath: status.json
       volumes:
-      - name: config
+      - name: instances-config
         configMap:
           name: {{ include "loco.fullname" . }}-instances
+      - name: status-config
+        configMap:
+          name: {{ include "loco.fullname" . }}-status

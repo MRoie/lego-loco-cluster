@@ -49,14 +49,24 @@ app.get("/api/status", (req, res) => {
   }
 });
 
+// Instances endpoint for dynamic frontend updates
+app.get("/api/instances", (req, res) => {
+  try {
+    const data = loadConfig("instances");
+    res.json(data);
+  } catch (e) {
+    res.status(503).json([]);
+  }
+});
+
 // --- VNC/WebRTC Proxy -------------------------------------------------------
-// Map instance IDs to their streaming URLs
-const instances = loadConfig("instances");
 // Generic proxy for VNC and WebRTC traffic
 const proxy = httpProxy.createProxyServer({ ws: true, changeOrigin: true });
 
 // Resolve an instance ID to its upstream target URL
 function getInstanceTarget(id) {
+  // Reload instances dynamically to support scaling
+  const instances = loadConfig("instances");
   const inst = instances.find((i) => i.id === id);
   return inst ? inst.streamUrl : null;
 }

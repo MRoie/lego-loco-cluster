@@ -7,4 +7,5 @@ helmCharts:
     namespace: loco
     path: ../../helm/loco-chart
     valuesInline:
-      replicas: 3
+      replicas: 1
+      imageRepo: "ghcr.io/mroie"
