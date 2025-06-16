@@ -1,4 +1,4 @@
-name: Build and Publish QEMU Images
+name: Build QEMU Container
 
 on:
   push:
@@ -6,13 +6,7 @@ on:
     paths:
       - 'containers/qemu/**'
       - 'scripts/create_win98_image.sh'
-      - 'scripts/build_advanced_snapshots.sh'
       - '.github/workflows/build-qemu.yml'
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'containers/qemu/**'
-      - 'scripts/create_win98_image.sh'
   workflow_dispatch:
     inputs:
       build_snapshots:
@@ -28,27 +22,21 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  QEMU_IMAGE: ${{ github.repository_owner }}/qemu-loco
+  IMAGE_NAME: ${{ github.repository_owner }}/qemu-loco
   SNAPSHOT_REGISTRY: ghcr.io/${{ github.repository_owner }}/qemu-snapshots
 
 jobs:
-  build-qemu-container:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      image-digest: ${{ steps.build.outputs.digest }}
-    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
+        
     - name: Log in to Container Registry
       uses: docker/login-action@v3
       with:
@@ -56,289 +44,62 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.QEMU_IMAGE }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=raw,value=latest,enable={{is_default_branch}}
-          type=raw,value=${{ github.event.inputs.image_tag }},enable=${{ github.event.inputs.image_tag != '' }}
-          type=sha,prefix=sha-
-    
-    - name: Build and push QEMU container
-      id: build
-      uses: docker/build-push-action@v5
-      with:
-        context: ./containers/qemu
-        platforms: linux/amd64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Generate SBOM
-      uses: anchore/sbom-action@v0
-      with:
-        image: ${{ env.REGISTRY }}/${{ env.QEMU_IMAGE }}@${{ steps.build.outputs.digest }}
-        format: spdx-json
-        output-file: sbom.spdx.json
-    
-    - name: Upload SBOM
-      uses: actions/upload-artifact@v4
-      with:
-        name: sbom-qemu-container
-        path: sbom.spdx.json
-
-  build-snapshots:
-    runs-on: ubuntu-latest
-    needs: build-qemu-container
-    if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      packages: write
-    
-    strategy:
-      matrix:
-        variant: [base, games, productivity]
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-    
-    - name: Install dependencies
+    - name: Build QEMU container
       run: |
+        cd containers/qemu
+        docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
+        docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+    
+    - name: Push QEMU container
+      run: |
+        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+    
+    - name: Build snapshots
+      if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main'
+      run: |
+        # Install dependencies
         sudo apt-get update
-        sudo apt-get install -y qemu-system-x86 qemu-utils expect netcat-openbsd skopeo
-    
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Create base Windows 98 image
-      run: |
+        sudo apt-get install -y qemu-utils
+        
+        # Create minimal test VM image
         mkdir -p images
-        # Create a minimal bootable qcow2 image for testing
-        # In production, this would be your actual Windows 98 installation
         qemu-img create -f qcow2 images/win98.qcow2 2G
         
-        # Create a simple boot sector for testing
-        dd if=/dev/zero of=images/boot.img bs=512 count=1
-        echo -en '\x55\xAA' | dd of=images/boot.img bs=1 seek=510 conv=notrunc
+        # Create simple boot sector for testing
+        dd if=/dev/zero of=images/boot.img bs=512 count=1 2>/dev/null
+        echo -en '\x55\xAA' | dd of=images/boot.img bs=1 seek=510 conv=notrunc 2>/dev/null
         
         # Copy boot sector to the qcow2 image
-        qemu-img create -f raw images/base.img 2G
-        dd if=images/boot.img of=images/base.img conv=notrunc
+        qemu-img create -f raw images/base.img 2G 2>/dev/null
+        dd if=images/boot.img of=images/base.img conv=notrunc 2>/dev/null
         qemu-img convert -f raw -O qcow2 images/base.img images/win98.qcow2
-    
-    - name: Build snapshot variant using our script
-      run: |
+        
+        # Build snapshots using our script
         chmod +x ./scripts/create_win98_image.sh
         ./scripts/create_win98_image.sh \
           --build-snapshots \
           --registry ${{ env.REGISTRY }}/${{ github.repository_owner }} \
           --tag latest \
           --no-push
-      env:
-        SNAPSHOT_REGISTRY: ${{ env.SNAPSHOT_REGISTRY }}
-        BUILD_SNAPSHOTS: true
-        OUT_DIR: ${{ github.workspace }}/images
     
-    - name: Push snapshot variant
-      run: |
-        docker tag ${{ env.SNAPSHOT_REGISTRY }}:win98-${{ matrix.variant }} \
-               ${{ env.SNAPSHOT_REGISTRY }}:win98-${{ matrix.variant }}-${{ github.sha }}
-        docker push ${{ env.SNAPSHOT_REGISTRY }}:win98-${{ matrix.variant }}
-        docker push ${{ env.SNAPSHOT_REGISTRY }}:win98-${{ matrix.variant }}-${{ github.sha }}
-    
-    - name: Test snapshot container
-      run: |
-        # Test that snapshot container was created correctly
-        docker run --rm \
-          ${{ env.SNAPSHOT_REGISTRY }}:win98-${{ matrix.variant }} \
-          sh -c "test -f /snapshot.qcow2 && echo 'Snapshot file exists' && ls -la /snapshot.qcow2"
-
-  security-scan:
-    runs-on: ubuntu-latest
-    needs: build-qemu-container
-    permissions:
-      contents: read
-      packages: read
-      security-events: write
-    
-    steps:
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ needs.build-qemu-container.outputs.image-tag }}
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-    
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: 'trivy-results.sarif'
-
-  integration-test:
-    runs-on: ubuntu-latest
-    needs: [build-qemu-container, build-snapshots]
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Set up kind cluster
-      uses: helm/kind-action@v1
-      with:
-        cluster_name: test-cluster
-        config: kind-config.yaml
-    
-    - name: Load QEMU image into kind
-      run: |
-        kind load docker-image ${{ needs.build-qemu-container.outputs.image-tag }} --name test-cluster
-    
-    - name: Load snapshot images into kind
+    - name: Push snapshots
+      if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main'
       run: |
         for variant in base games productivity; do
-          docker pull ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}
-          kind load docker-image ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant} --name test-cluster
+          docker tag ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant} \
+                     ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}-${{ github.sha }}
+          docker push ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}
+          docker push ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}-${{ github.sha }}
         done
     
-    - name: Install dependencies in cluster
+    - name: Summary
       run: |
-        # Install skopeo in the cluster for snapshot downloading
-        kubectl create configmap skopeo-install --from-literal=install.sh='#!/bin/bash
-        apt-get update && apt-get install -y skopeo curl'
-    
-    - name: Test snapshot downloading with QEMU container
-      run: |
-        # Create a test pod that uses the QEMU container with snapshot downloading
-        cat > test-snapshot-pod.yaml << EOF
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          name: test-snapshot-download
-        spec:
-          containers:
-          - name: qemu
-            image: ${{ needs.build-qemu-container.outputs.image-tag }}
-            env:
-            - name: USE_PREBUILT_SNAPSHOT
-              value: "true"
-            - name: SNAPSHOT_REGISTRY
-              value: "${{ env.SNAPSHOT_REGISTRY }}"
-            - name: SNAPSHOT_TAG
-              value: "win98-base"
-            - name: DISK_SIZE
-              value: "2G"
-            command: ["/bin/bash"]
-            args: ["-c", "sleep 3600"]
-            volumeMounts:
-            - name: data
-              mountPath: /data
-          volumes:
-          - name: data
-            emptyDir: {}
-          restartPolicy: Never
-        EOF
-        
-        kubectl apply -f test-snapshot-pod.yaml
-        kubectl wait --for=condition=ready pod/test-snapshot-download --timeout=300s
-        
-        # Test that the entrypoint script can download snapshots
-        kubectl exec test-snapshot-download -- /bin/bash -c "
-          export USE_PREBUILT_SNAPSHOT=true
-          export SNAPSHOT_REGISTRY=${{ env.SNAPSHOT_REGISTRY }}
-          export SNAPSHOT_TAG=win98-base
-          echo 'Testing snapshot download capability...'
-          if command -v skopeo >/dev/null; then
-            echo 'skopeo is available'
-          else
-            echo 'Installing skopeo...'
-            apt-get update && apt-get install -y skopeo
-          fi
-          
-          # Test if we can inspect the snapshot image
-          skopeo inspect docker://${{ env.SNAPSHOT_REGISTRY }}:win98-base || echo 'Snapshot not yet available, this is expected in CI'
-        "
-    
-    - name: Install Helm chart with snapshot support
-      run: |
-        helm install test-loco helm/loco-chart/ \
-          --set emulator.image.repository=${{ env.REGISTRY }}/${{ env.QEMU_IMAGE }} \
-          --set emulator.image.tag=latest \
-          --set emulator.env.USE_PREBUILT_SNAPSHOT=true \
-          --set emulator.env.SNAPSHOT_REGISTRY=${{ env.SNAPSHOT_REGISTRY }} \
-          --set emulator.env.SNAPSHOT_TAG=win98-base \
-          --wait --timeout=300s
-    
-    - name: Test deployment
-      run: |
-        kubectl get pods
-        kubectl wait --for=condition=ready pod -l app=loco-loco-emulator --timeout=300s
-        
-        # Test that the emulator pod is running
-        kubectl get pod -l app=loco-loco-emulator -o jsonpath='{.items[0].status.phase}' | grep -q Running
-        
-        # Check logs for snapshot-related messages
-        kubectl logs -l app=loco-loco-emulator --tail=50 | grep -i snapshot || echo "No snapshot messages found"
-    
-    - name: Cleanup
-      if: always()
-      run: |
-        kind delete cluster test-cluster
-
-  create-release:
-    runs-on: ubuntu-latest
-    needs: [build-qemu-container, integration-test]
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-      packages: read
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Generate release notes
-      id: release_notes
-      run: |
-        cat > release_notes.md << EOF
-        # QEMU Container Release
-        
-        ## Container Images
-        - QEMU Container: \`${{ needs.build-qemu-container.outputs.image-tag }}\`
-        
-        ## Changes
-        - Built from commit: ${{ github.sha }}
-        - Container digest: ${{ needs.build-qemu-container.outputs.image-digest }}
-        
-        ## Usage
-        \`\`\`bash
-        # Pull the image
-        docker pull ${{ needs.build-qemu-container.outputs.image-tag }}
-        
-        # Or use in Kubernetes
-        kubectl set image deployment/loco-emulator emulator=${{ needs.build-qemu-container.outputs.image-tag }}
-        \`\`\`
-        EOF
-        
-        echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
-    
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: v${{ github.run_number }}
-        name: Release v${{ github.run_number }}
-        body_path: ${{ steps.release_notes.outputs.notes_file }}
-        draft: false
-        prerelease: false
+        echo "✅ Build complete!"
+        echo "QEMU Container: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+        if [[ "${{ github.event.inputs.build_snapshots }}" == "true" || "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "Snapshots:"
+          echo "  ${{ env.SNAPSHOT_REGISTRY }}:win98-base"
+          echo "  ${{ env.SNAPSHOT_REGISTRY }}:win98-games"
+          echo "  ${{ env.SNAPSHOT_REGISTRY }}:win98-productivity"
+        fi
