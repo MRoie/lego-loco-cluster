@@ -66,7 +66,7 @@ jobs:
           type=ref,event=pr
           type=raw,value=latest,enable={{is_default_branch}}
           type=raw,value=${{ github.event.inputs.image_tag }},enable=${{ github.event.inputs.image_tag != '' }}
-          type=sha,prefix={{branch}}-
+          type=sha,prefix=sha-
     
     - name: Build and push QEMU container
       id: build
