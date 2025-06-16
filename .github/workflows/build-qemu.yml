@@ -22,8 +22,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/qemu-loco
-  SNAPSHOT_REGISTRY: ghcr.io/${{ github.repository_owner }}/qemu-snapshots
+  IMAGE_NAME: mroie/qemu-loco
+  SNAPSHOT_REGISTRY: ghcr.io/mroie/qemu-snapshots
 
 jobs:
   build:
