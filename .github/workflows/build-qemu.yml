@@ -44,14 +44,17 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Build QEMU container
+    - name: Build and Push QEMU container
       run: |
         cd containers/qemu
+        
+        # Build with latest tag
         docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
-        docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-    
-    - name: Push QEMU container
-      run: |
+        
+        # Tag with commit SHA
+        docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        
+        # Push both tags
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
     
