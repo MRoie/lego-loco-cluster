@@ -4,6 +4,9 @@ set -euo pipefail
 BRIDGE=${BRIDGE:-loco-br}
 TAP_IF=${TAP_IF:-tap0}
 DISK=${DISK:-/images/win98.qcow2}
+SNAPSHOT_REGISTRY=${SNAPSHOT_REGISTRY:-ghcr.io/mroie/qemu-snapshots}
+SNAPSHOT_TAG=${SNAPSHOT_TAG:-win98-base}
+USE_PREBUILT_SNAPSHOT=${USE_PREBUILT_SNAPSHOT:-true}
 
 
 # Start virtual display
@@ -38,6 +41,12 @@ echo "🔈 PulseAudio started"
 
 # Create isolated TAP bridge inside this container
 echo "🌐 Setting up isolated TAP bridge..."
+
+# Clean up any existing interfaces first
+ip link delete "$TAP_IF" 2>/dev/null || true
+ip link delete "$BRIDGE" 2>/dev/null || true
+
+# Create bridge
 ip link add name "$BRIDGE" type bridge
 ip addr add 192.168.10.1/24 dev "$BRIDGE"
 ip link set "$BRIDGE" up
@@ -51,7 +60,75 @@ echo "✅ Created isolated TAP bridge $BRIDGE with interface $TAP_IF"
 
 # Create a unique snapshot for this instance to avoid file locking issues
 SNAPSHOT_NAME="/tmp/win98_$(date +%s)_$$.qcow2"
-echo "📀 Creating snapshot: $SNAPSHOT_NAME"
+
+# Pre-built snapshot strategy
+if [ "$USE_PREBUILT_SNAPSHOT" = "true" ]; then
+  echo "📥 Attempting to download pre-built snapshot..."
+  SNAPSHOT_URL="${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG}"
+  
+  # Try to download pre-built snapshot using skopeo/crane
+  if command -v skopeo >/dev/null 2>&1; then
+    echo "   Using skopeo to download snapshot from: $SNAPSHOT_URL"
+    if skopeo copy "docker://${SNAPSHOT_URL}" "oci-archive:${SNAPSHOT_NAME}.tar" 2>/dev/null; then
+      # Extract the actual qcow2 file from the OCI archive
+      if tar -xf "${SNAPSHOT_NAME}.tar" -C /tmp/ --wildcards "*/layer.tar" 2>/dev/null; then
+        # Find and extract the qcow2 from the layer
+        LAYER_TAR=$(find /tmp -name "layer.tar" | head -1)
+        if [ -n "$LAYER_TAR" ] && tar -tf "$LAYER_TAR" | grep -q "\.qcow2$"; then
+          tar -xf "$LAYER_TAR" -C /tmp/ --wildcards "*.qcow2"
+          EXTRACTED_QCOW2=$(find /tmp -name "*.qcow2" -not -path "*/tmp/win98_*" | head -1)
+          if [ -n "$EXTRACTED_QCOW2" ]; then
+            cp "$EXTRACTED_QCOW2" "$SNAPSHOT_NAME"
+            echo "✅ Successfully downloaded and extracted pre-built snapshot"
+            rm -f "${SNAPSHOT_NAME}.tar" "$LAYER_TAR" "$EXTRACTED_QCOW2"
+            SKIP_SNAPSHOT_CREATION=true
+          fi
+        fi
+      fi
+    fi
+  elif command -v crane >/dev/null 2>&1; then
+    echo "   Using crane to download snapshot from: $SNAPSHOT_URL"
+    if crane export "$SNAPSHOT_URL" - | tar -x -C /tmp/ --wildcards "*.qcow2" 2>/dev/null; then
+      EXTRACTED_QCOW2=$(find /tmp -name "*.qcow2" -not -path "*/tmp/win98_*" | head -1)
+      if [ -n "$EXTRACTED_QCOW2" ]; then
+        cp "$EXTRACTED_QCOW2" "$SNAPSHOT_NAME"
+        echo "✅ Successfully downloaded and extracted pre-built snapshot"
+        rm -f "$EXTRACTED_QCOW2"
+        SKIP_SNAPSHOT_CREATION=true
+      fi
+    fi
+  else
+    echo "   No container registry tools (skopeo/crane) available, falling back to base image"
+  fi
+  
+  if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
+    echo "   Failed to download pre-built snapshot, falling back to creating from base image"
+  fi
+fi
+
+if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
+  echo "📀 Creating snapshot from base image: $SNAPSHOT_NAME"
+  
+  # Check if the base disk image exists
+  if [ ! -f "$DISK" ]; then
+    echo "❌ Base disk image not found: $DISK" >&2
+    echo "   Available files in /images:" >&2
+    ls -la /images/ 2>/dev/null || echo "   /images directory not accessible" >&2
+    exit 1
+  fi
+  
+  qemu-img create -f qcow2 -b "$DISK" "$SNAPSHOT_NAME"
+  if [ $? -ne 0 ]; then
+    echo "❌ Failed to create snapshot" >&2
+    exit 1
+  fi
+else
+  echo "📀 Using pre-built snapshot: $SNAPSHOT_NAME"
+fi
+  exit 1
+fi
+
+echo "✅ Base disk image found: $DISK"
 qemu-img create -f qcow2 -b "$DISK" "$SNAPSHOT_NAME"
 
 echo "🚀 Starting QEMU..."

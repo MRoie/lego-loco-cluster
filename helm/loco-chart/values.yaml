@@ -10,6 +10,18 @@ emulator:
   servicePort: 6080
   diskPVC: win98-disk
   diskReadOnly: false
+  
+  # Snapshot configuration
+  usePrebuiltSnapshot: false
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+  
+  # Additional environment variables
+  env: {}
+    # USE_PREBUILT_SNAPSHOT: "true"
+    # SNAPSHOT_REGISTRY: "ghcr.io/mroie/qemu-snapshots"
+    # SNAPSHOT_TAG: "win98-base"
+    # DISK_SIZE: "2G"
 
 backend:
   image: loco-backend
