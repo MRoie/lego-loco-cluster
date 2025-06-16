@@ -40,6 +40,7 @@ spec:
           value: {{ .Values.emulator.snapshotTag | quote }}
         {{- end }}
         securityContext:
+          privileged: true
           capabilities:
             add:
               - NET_ADMIN
@@ -50,7 +51,13 @@ spec:
         - name: disk
           mountPath: /images
           readOnly: {{ .Values.emulator.diskReadOnly }}
+        - name: dev-net-tun
+          mountPath: /dev/net/tun
       volumes:
       - name: disk
         persistentVolumeClaim:
           claimName: {{ .Values.emulator.diskPVC }}
+      - name: dev-net-tun
+        hostPath:
+          path: /dev/net/tun
+          type: CharDevice
