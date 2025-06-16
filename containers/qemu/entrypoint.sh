@@ -236,6 +236,10 @@ fi
 log_info "Starting QEMU emulator..."
 log_info "QEMU command: qemu-system-i386 -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
 
+# Add debugging to see what we're actually booting from
+log_info "Checking disk image contents..."
+qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
+
 qemu-system-i386 \
   -M pc -cpu pentium2 \
   -m 512 -hda "$SNAPSHOT_NAME" \
@@ -244,7 +248,7 @@ qemu-system-i386 \
   -vga cirrus -display vnc=:1 \
   -audiodev pa,id=snd0 \
   -rtc base=localtime \
-  -boot menu=on,splash-time=5000 \
+  -boot order=dc,menu=on,splash-time=5000 \
   -no-shutdown \
   -no-reboot \
   -monitor none &
