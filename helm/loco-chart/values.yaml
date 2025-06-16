@@ -3,6 +3,27 @@ namespace: loco
 
 imageRepo: "ghcr.io/mroie"
 
+# Image pull secrets for private registries
+# Uncomment and configure as needed
+imagePullSecrets: []
+  # - ghcr-secret        # GitHub Container Registry
+  # - jfrog-secret       # JFrog Artifactory
+  # - custom-registry    # Custom registry
+
+# Registry configurations for different environments
+registryConfig:
+  # GitHub Container Registry
+  ghcr:
+    enabled: false
+    secretName: "ghcr-secret"
+    server: "ghcr.io"
+  
+  # JFrog Artifactory
+  jfrog:
+    enabled: false
+    secretName: "jfrog-secret"
+    server: ""  # e.g., "your-company.jfrog.io"
+
 emulator:
   image: qemu-loco
   tag: latest
