@@ -89,7 +89,7 @@ export default function App() {
 
   // Fetch instance list and hotkey mapping from the backend
   useEffect(() => {
-    fetch("/api/config/instances")
+    fetch("/api/instances")
       .then((r) => r.json())
       .then(setInstances)
       .catch((e) => console.error("Failed to fetch instances", e));

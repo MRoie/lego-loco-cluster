@@ -1,12 +1,12 @@
-replicas: 3
+replicas: 1
 namespace: loco
 
-imageRepo: ""
+imageRepo: "ghcr.io/mroie"
 
 emulator:
   image: qemu-loco
   tag: latest
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   servicePort: 6080
   diskPVC: win98-disk
   diskReadOnly: false

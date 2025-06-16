@@ -1,4 +1,3 @@
-// Placeholder for instance configuration (e.g., VNC URLs, container info)
 [
   { "id": "instance-0", "streamUrl": "http://localhost:6080/vnc0" },
   { "id": "instance-1", "streamUrl": "http://localhost:6080/vnc1" },
