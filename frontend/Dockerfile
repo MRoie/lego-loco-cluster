@@ -3,13 +3,13 @@ FROM node:18-alpine as builder
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY frontend/package*.json ./
 
 # Install dependencies
 RUN npm install
 
 # Copy application code
-COPY . .
+COPY frontend/ .
 
 # Build the application
 RUN npm run build
@@ -24,7 +24,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 RUN mkdir -p /usr/share/nginx/html/config
 
 # Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
 
