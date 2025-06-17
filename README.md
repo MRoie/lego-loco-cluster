@@ -41,7 +41,7 @@ Welcome to Loco LAN — a LAN-based Kubernetes system that runs 9 instances of L
 
 Layer   Tech
 
-Emulation       QEMU, PCem, Wine
+Emulation       **QEMU**  (PCem, Wine)
 Streaming       GStreamer, PulseAudio
 Web UI  React, Tailwind, WebRTC
 Infra   Helm, Kubernetes (Talos)
