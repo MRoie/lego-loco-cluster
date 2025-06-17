@@ -1,0 +1,48 @@
+replicas: 1
+namespace: loco
+
+imageRepo: ""
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+
+# Registry configurations for different environments
+registryConfig:
+  ghcr:
+    enabled: false
+    secretName: "ghcr-secret"
+    server: "ghcr.io"
+  jfrog:
+    enabled: false
+    secretName: "jfrog-secret"
+    server: ""
+
+emulator:
+  image: qemu-bootable
+  tag: latest
+  imagePullPolicy: Never
+  servicePort: 5901
+  diskReadOnly: false
+  diskPVC: "bootable-disk"
+  # Environment variables for the bootable emulator
+  env:
+    CREATE_BOOTABLE_DISK: "true"
+    DISK_SIZE: "2G"
+  # Use pre-built snapshots
+  usePrebuiltSnapshot: false
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "freedos-base"
+
+backend:
+  image: ghcr.io/mroie/loco-backend
+  tag: latest
+  imagePullPolicy: IfNotPresent
+  servicePort: 3001
+  serviceType: NodePort
+
+frontend:
+  image: ghcr.io/mroie/loco-frontend
+  tag: latest
+  imagePullPolicy: IfNotPresent
+  servicePort: 3000
+  serviceType: NodePort

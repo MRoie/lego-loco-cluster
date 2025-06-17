@@ -1,6 +1,6 @@
 import 'aframe';
 import React, { useEffect, useState, useRef } from 'react';
-import VRVNCViewer from './components/VRVNCViewer';
+import VRNoVNCViewer from './components/VRNoVNCViewer';
 
 function positionForIndex(i, cols, rows) {
   const x = (i % cols) - (cols - 1) / 2;
@@ -107,7 +107,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
   return (
     <>
       {/* Hidden VNC viewer that provides the canvas texture */}
-      <VRVNCViewer
+      <VRNoVNCViewer
         ref={vncRef}
         instanceId={inst.id}
         onConnect={handleVNCConnect}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import VNCViewer from "./components/VNCViewer";
+import ReactVNCViewer from "./components/ReactVNCViewer";
 import VRScene from "./VRScene";
 
 function StreamTile({ inst, idx, active, setActive, zoom, status }) {
@@ -30,7 +30,7 @@ function StreamTile({ inst, idx, active, setActive, zoom, status }) {
       animate={{ scale: active === idx ? zoom + 0.1 : 1 }}
       transition={{ type: "spring", stiffness: 300 }}
     >
-      <VNCViewer instanceId={inst.id} />
+      <ReactVNCViewer instanceId={inst.id} />
       {status && status !== 'ready' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white text-sm">
           {status}
