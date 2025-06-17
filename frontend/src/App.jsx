@@ -3,9 +3,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import ReactVNCViewer from "./components/ReactVNCViewer";
 import VRScene from "./VRScene";
 
-function StreamTile({ inst, idx, active, setActive, zoom, status }) {
+function StreamTile({ inst, idx, active, setActive, zoom, status, focused, setFocused }) {
   const [muted, setMuted] = useState(true);
   const [volume, setVolume] = useState(1);
+  const [hover, setHover] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   const toggleFullscreen = () => {
     const element = document.querySelector(`[data-instance="${inst.id}"]`);
@@ -25,8 +27,11 @@ function StreamTile({ inst, idx, active, setActive, zoom, status }) {
     <motion.div
       key={inst.id}
       data-instance={inst.id}
-      className={`border-[12px] rounded-2xl border-yellow-500 lego-style transition-transform bg-black overflow-hidden ${active === idx ? "ring-4 ring-blue-400" : ""}`}
-      onClick={() => setActive(idx)}
+      className={`group border-[12px] rounded-2xl border-yellow-500 lego-style transition-transform bg-black overflow-hidden ${active === idx ? "ring-4 ring-blue-400" : ""} ${focused === idx ? "fixed inset-0 z-50 w-screen h-screen" : ""}`}
+      onClick={() => {
+        setActive(idx);
+        setFocused(idx);
+      }}
       animate={{ scale: active === idx ? zoom + 0.1 : 1 }}
       transition={{ type: "spring", stiffness: 300 }}
     >
@@ -36,33 +41,55 @@ function StreamTile({ inst, idx, active, setActive, zoom, status }) {
           {status}
         </div>
       )}
-      <div className="absolute top-2 right-2 bg-black bg-opacity-50 p-1 rounded flex items-center space-x-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setMuted((m) => !m);
-          }}
-          className="text-white text-xs px-1 border border-white rounded"
-        >
-          {muted ? "Unmute" : "Mute"}
-        </button>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={volume}
-          onChange={(e) => setVolume(parseFloat(e.target.value))}
-        />
+      <div className="absolute top-2 right-2 flex items-center space-x-2">
+        <div className="relative" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setMuted((m) => !m);
+            }}
+            className="text-white text-xs px-1 bg-black bg-opacity-60 rounded"
+          >
+            {muted ? "🔇" : "🔊"}
+          </button>
+          {hover && (
+            <div className="absolute right-0 mt-1 bg-black bg-opacity-70 p-2 rounded">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+              />
+            </div>
+          )}
+        </div>
         <button
           onClick={(e) => {
             e.stopPropagation();
             toggleFullscreen();
           }}
-          className="text-white text-xs px-1 border border-white rounded"
+          className="text-white text-xs px-1 bg-black bg-opacity-60 rounded"
         >
-          Full
+          ⛶
         </button>
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDetails((s) => !s);
+            }}
+            className="text-white text-xs px-1 bg-black bg-opacity-60 rounded"
+          >
+            ⚙
+          </button>
+          {showDetails && (
+            <div className="absolute right-0 mt-1 bg-gray-800 text-white text-xs p-2 rounded shadow">
+              Advanced settings for {inst.id}
+            </div>
+          )}
+        </div>
       </div>
     </motion.div>
   );
@@ -76,6 +103,7 @@ export default function App() {
   const [zoom, setZoom] = useState(1);
   const [vrMode, setVrMode] = useState(false);
   const [status, setStatus] = useState({});
+  const [focused, setFocused] = useState(null);
 
   // Fetch instance list and hotkey mapping from the backend
   useEffect(() => {
@@ -126,6 +154,15 @@ export default function App() {
     return () => window.removeEventListener("keydown", handler);
   }, [hotkeys, instances]);
 
+  useEffect(() => {
+    const releaseHandler = (e) => {
+      const idx = instances.findIndex((i) => i.id === e.detail.instanceId);
+      if (idx === focused) setFocused(null);
+    };
+    window.addEventListener("vncControlReleased", releaseHandler);
+    return () => window.removeEventListener("vncControlReleased", releaseHandler);
+  }, [focused, instances]);
+
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center relative">
       {!vrMode && (
@@ -136,7 +173,7 @@ export default function App() {
           >
             Enter VR
           </button>
-          <div className="grid grid-cols-3 gap-6 w-[90vw] h-[90vh]">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full h-full p-4">
             {instances.map((inst, idx) => (
               <StreamTile
                 key={inst.id}
@@ -146,6 +183,8 @@ export default function App() {
                 setActive={setActive}
                 zoom={zoom}
                 status={status[inst.id]}
+                focused={focused}
+                setFocused={setFocused}
               />
             ))}
           </div>

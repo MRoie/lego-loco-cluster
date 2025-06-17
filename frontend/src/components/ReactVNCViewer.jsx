@@ -328,7 +328,7 @@ export default function ReactVNCViewer({ instanceId }) {
           onConnect={handleConnect}
           onDisconnect={handleDisconnect}
           onError={handleError}
-          scaleViewport={false}
+          scaleViewport={true}
           resizeSession={false}
           showDotCursor={true}
           background="#000000"
