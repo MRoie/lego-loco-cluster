@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import VNC from 'react-vnc';
+import { VncScreen } from 'react-vnc';
 
 /**
  * VR-compatible React-VNC based VNC viewer component

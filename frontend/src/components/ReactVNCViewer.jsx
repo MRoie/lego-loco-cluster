@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import VNC from 'react-vnc';
+import { VncScreen } from 'react-vnc';
 
 /**
  * React-VNC based VNC viewer component
@@ -319,7 +319,7 @@ export default function ReactVNCViewer({ instanceId }) {
         className="w-full h-full min-h-96"
         style={{ opacity: hasControl ? 1 : 0.7 }}
       >
-        <VNC
+        <VncScreen
           url={vncUrl}
           style={{
             width: '100%',
