@@ -6,6 +6,17 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true, // Listen on all addresses
+    proxy: {
+      '/api': {
+        target: 'http://loco-backend:3001',
+        changeOrigin: true,
+      },
+      '/proxy': {
+        target: 'http://loco-backend:3001',
+        changeOrigin: true,
+        ws: true, // Enable WebSocket proxying
+      },
+    },
   },
   build: {
     outDir: 'dist',

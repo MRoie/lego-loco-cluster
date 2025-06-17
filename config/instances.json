@@ -2,63 +2,63 @@
   { 
     "id": "instance-0", 
     "streamUrl": "http://localhost:6080/vnc0",
-    "vncUrl": "localhost:5901",
+    "vncUrl": "loco-emulator-0:5901",
     "name": "Windows 98 - Game Server",
     "description": "Primary gaming instance with full Lego Loco installation"
   },
   { 
     "id": "instance-1", 
     "streamUrl": "http://localhost:6081/vnc1",
-    "vncUrl": "localhost:5902",
+    "vncUrl": "loco-emulator-1:5901",
     "name": "Windows 98 - Client 1",
     "description": "Player client instance"
   },
   { 
     "id": "instance-2", 
     "streamUrl": "http://localhost:6082/vnc2",
-    "vncUrl": "localhost:5903",
+    "vncUrl": "loco-emulator-2:5901",
     "name": "Windows 98 - Client 2", 
     "description": "Player client instance"
   },
   { 
     "id": "instance-3", 
     "streamUrl": "http://localhost:6083/vnc3",
-    "vncUrl": "localhost:5904",
+    "vncUrl": "loco-emulator-3:5901",
     "name": "Windows 98 - Client 3",
     "description": "Player client instance"
   },
   { 
     "id": "instance-4", 
     "streamUrl": "http://localhost:6084/vnc4",
-    "vncUrl": "localhost:5905",
+    "vncUrl": "loco-emulator-4:5901",
     "name": "Windows 98 - Client 4",
     "description": "Player client instance"
   },
   { 
     "id": "instance-5", 
     "streamUrl": "http://localhost:6085/vnc5",
-    "vncUrl": "localhost:5906",
+    "vncUrl": "loco-emulator-5:5901",
     "name": "Windows 98 - Client 5",
     "description": "Player client instance"
   },
   { 
     "id": "instance-6", 
     "streamUrl": "http://localhost:6086/vnc6",
-    "vncUrl": "localhost:5907",
+    "vncUrl": "loco-emulator-6:5901",
     "name": "Windows 98 - Client 6",
     "description": "Player client instance"
   },
   { 
     "id": "instance-7", 
     "streamUrl": "http://localhost:6087/vnc7",
-    "vncUrl": "localhost:5908",
+    "vncUrl": "loco-emulator-7:5901",
     "name": "Windows 98 - Client 7",
     "description": "Player client instance"
   },
   { 
     "id": "instance-8", 
     "streamUrl": "http://localhost:6088/vnc8",
-    "vncUrl": "localhost:5909",
+    "vncUrl": "loco-emulator-8:5901",
     "name": "Windows 98 - Client 8",
     "description": "Player client instance"
   }
