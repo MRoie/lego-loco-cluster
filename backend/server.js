@@ -125,7 +125,8 @@ function getInstanceTarget(id) {
   try {
     const instances = loadConfig("instances");
     const inst = instances.find((i) => i.id === id);
-    return inst ? inst.streamUrl : null;
+    // Use vncUrl for direct VNC connection instead of streamUrl (which is for noVNC web interface)
+    return inst ? inst.vncUrl : null;
   } catch (e) {
     console.error("Failed to load instances config:", e.message);
     return null;
@@ -137,9 +138,19 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   console.log(`Creating VNC bridge for ${instanceId} to ${targetUrl}`);
   
   // Parse the target URL to get host and port
-  const parsed = url.parse(targetUrl);
-  const host = parsed.hostname;
-  const port = parseInt(parsed.port) || 5901;
+  // targetUrl format is "localhost:5901" or "host:port"
+  let host, port;
+  if (targetUrl.includes('://')) {
+    // Full URL format
+    const parsed = url.parse(targetUrl);
+    host = parsed.hostname;
+    port = parseInt(parsed.port) || 5901;
+  } else {
+    // Simple host:port format
+    const parts = targetUrl.split(':');
+    host = parts[0] || 'localhost';
+    port = parseInt(parts[1]) || 5901;
+  }
   
   console.log(`Connecting to VNC server at ${host}:${port}`);
   
