@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "loco.fullname" . }}-status
+  namespace: {{ include "loco.namespace" . }}
+data:
+  status.json: |
+    {
+    {{- $replicas := int .Values.replicas }}
+    {{- range $i := until $replicas }}
+      "instance-{{ $i }}": "booting"{{ if lt (add1 $i) $replicas }},{{ end }}
+    {{- end }}
+    }
