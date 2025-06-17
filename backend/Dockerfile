@@ -3,13 +3,13 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy package files
-COPY backend/package*.json ./
+COPY package*.json ./
 
 # Install dependencies
 RUN npm install --only=production
 
 # Copy application code
-COPY backend/ .
+COPY . .
 
 # Create config directory for mounted configmap
 RUN mkdir -p config
