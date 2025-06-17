@@ -1,6 +1,6 @@
 # Lego Loco Cluster - Makefile for Development
 
-.PHONY: help setup up down logs status restart clean build health test
+.PHONY: help setup up down logs status restart clean build health test cleanup-ports
 .DEFAULT_GOAL := help
 
 # Variables
@@ -27,14 +27,17 @@ setup: ## Setup prerequisites and TAP bridge
 
 up: ## Start development environment (3 emulators)
 	@echo "🚀 Starting development environment..."
+	@./docker-compose.sh cleanup-ports
 	@./docker-compose.sh up dev
 
 up-full: ## Start development environment with all 9 emulators
 	@echo "🚀 Starting development environment (full)..."
+	@./docker-compose.sh cleanup-ports
 	@./docker-compose.sh up dev --full
 
 up-prod: ## Start production environment
 	@echo "🚀 Starting production environment..."
+	@./docker-compose.sh cleanup-ports
 	@./docker-compose.sh up prod
 
 up-minimal: ## Start minimal environment (1 emulator)
@@ -89,6 +92,10 @@ restart-emulator: ## Restart first emulator
 
 clean: ## Clean up everything (containers, images, volumes)
 	@./docker-compose.sh clean
+
+cleanup-ports: ## Clean up port conflicts and stop loco containers
+	@echo "🧹 Cleaning up port conflicts..."
+	@./docker-compose.sh cleanup-ports
 
 test: ## Run basic connectivity tests
 	@echo "🧪 Running basic tests..."

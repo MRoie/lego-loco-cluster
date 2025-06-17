@@ -9,7 +9,6 @@ services:
       - BACKEND_HOST=backend
       - BACKEND_PORT=3001
       - FRONTEND_PORT=3000
-    command: npm run dev
 
   backend:
     volumes:
