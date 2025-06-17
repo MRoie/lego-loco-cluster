@@ -1,9 +1,27 @@
-FROM node:18-alpine as builder
+FROM node:18-alpine as base
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+
+# Development stage with Vite dev server
+FROM base AS development
+ENV NODE_ENV=development
+
+# Install all dependencies
+RUN npm install
+
+# Copy application code
+COPY . .
+
+EXPOSE 3000 5173
+
+# Use Vite dev server for development
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+# Builder stage for production
+FROM base as builder
 
 # Install dependencies
 RUN npm install
@@ -15,7 +33,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine
+FROM nginx:alpine AS production
 
 # Copy built app
 COPY --from=builder /app/dist /usr/share/nginx/html
