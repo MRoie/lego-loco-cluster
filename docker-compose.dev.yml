@@ -38,10 +38,10 @@ services:
       # Exclude node_modules to avoid conflicts
       - /app/node_modules
       - /app/dist
-    command: npm run dev -- --host 0.0.0.0
+    command: npm run dev -- --host 0.0.0.0 --port 3000
     ports:
       - "3000:3000"
-      - "5173:5173"  # Vite dev server
+      - "5173:5173"  # Backup Vite port
     restart: unless-stopped
     networks:
       - lego-network
