@@ -37,27 +37,37 @@ log_info "  SNAPSHOT_TAG=$SNAPSHOT_TAG"
 # === STEP 1: Virtual Display Setup ===
 log_info "Setting up virtual display..."
 
-# Find an available display number
-DISPLAY_NUM=""
-for display_num in {99..199}; do
-  if ! pgrep -f "Xvfb :$display_num" > /dev/null && ! netstat -ln | grep -q ":60$((display_num))" 2>/dev/null; then
-    DISPLAY_NUM=$display_num
-    break
-  fi
-done
+# Use provided DISPLAY_NUM or find an available display number
+if [ -n "${DISPLAY_NUM:-}" ]; then
+  log_info "Using provided display number: $DISPLAY_NUM"
+else
+  log_info "No DISPLAY_NUM provided, auto-detecting..."
+  DISPLAY_NUM=""
+  for display_num in {99..199}; do
+    if ! pgrep -f "Xvfb :$display_num" > /dev/null && ! netstat -ln | grep -q ":60$((display_num))" 2>/dev/null; then
+      DISPLAY_NUM=$display_num
+      break
+    fi
+  done
 
-if [ -z "$DISPLAY_NUM" ]; then
-  log_error "No available display numbers found"
-  exit 1
+  if [ -z "$DISPLAY_NUM" ]; then
+    log_error "No available display numbers found"
+    exit 1
+  fi
+  log_info "Auto-detected display number: $DISPLAY_NUM"
 fi
 
-log_info "Using display number: $DISPLAY_NUM"
-
-# Kill any existing processes on this display
+# Kill any existing processes on this display and clean up lock files
 if pgrep -f "Xvfb :$DISPLAY_NUM" > /dev/null; then
   log_info "Killing existing Xvfb on display :$DISPLAY_NUM"
   pkill -f "Xvfb :$DISPLAY_NUM" || true
   sleep 2
+fi
+
+# Remove any leftover X server lock files
+if [ -f "/tmp/.X${DISPLAY_NUM}-lock" ]; then
+  log_info "Removing leftover X server lock file"
+  rm -f "/tmp/.X${DISPLAY_NUM}-lock" || true
 fi
 
 # Start Xvfb
@@ -245,7 +255,7 @@ qemu-system-i386 \
   -m 512 -hda "$SNAPSHOT_NAME" \
   -net nic,model=ne2k_pci -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
-  -vga cirrus -display vnc=:1 \
+  -vga cirrus -display vnc=0.0.0.0:1 \
   -audiodev pa,id=snd0 \
   -rtc base=localtime \
   -boot order=dc,menu=on,splash-time=5000 \
