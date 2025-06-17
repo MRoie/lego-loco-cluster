@@ -11,7 +11,7 @@ A Windows 98 system with Lego Loco installed is required. You can download a
 prepared image from Google Drive:
 
 ```
-https://drive.google.com/file/d/19UD-SRbTY5qyvsSeNhyX7fIaI6cet8Fb/view?usp=drivesdk
+https://drive.google.com/file/d/1U_IfHPHLxaQH8lT4BpY1qOAr-ytIFLSl/view?usp=drivesdk
 ```
 
 The file is already in QCOW2 format. Save it to an `images/` directory under the

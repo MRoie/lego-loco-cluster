@@ -24,6 +24,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: mroie/qemu-loco
   SNAPSHOT_REGISTRY: ghcr.io/mroie/qemu-snapshots
+  BOOT_IMAGE_ID: 1U_IfHPHLxaQH8lT4BpY1qOAr-ytIFLSl
 
 jobs:
   build:
@@ -35,6 +36,11 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Download bootable Win98 image
+      run: |
+        mkdir -p images
+        curl -L -o images/win98.qcow2 "https://drive.google.com/uc?export=download&id=${{ env.BOOT_IMAGE_ID }}"
     
         
     - name: Log in to Container Registry
@@ -66,19 +72,13 @@ jobs:
         # Install dependencies
         sudo apt-get update
         sudo apt-get install -y qemu-utils
-        
-        # Create minimal test VM image
+
+        # Use downloaded Win98 image if present
         mkdir -p images
-        qemu-img create -f qcow2 images/win98.qcow2 2G
-        
-        # Create simple boot sector for testing
-        dd if=/dev/zero of=images/boot.img bs=512 count=1 2>/dev/null
-        echo -en '\x55\xAA' | dd of=images/boot.img bs=1 seek=510 conv=notrunc 2>/dev/null
-        
-        # Copy boot sector to the qcow2 image
-        qemu-img create -f raw images/base.img 2G 2>/dev/null
-        dd if=images/boot.img of=images/base.img conv=notrunc 2>/dev/null
-        qemu-img convert -f raw -O qcow2 images/base.img images/win98.qcow2
+        if [ ! -f images/win98.qcow2 ]; then
+          echo "Creating placeholder image"
+          qemu-img create -f qcow2 images/win98.qcow2 2G
+        fi
         
         # Build snapshot containers directly
         for variant in base games productivity; do
