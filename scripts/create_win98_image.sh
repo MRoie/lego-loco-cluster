@@ -17,11 +17,6 @@ if [[ -z "$SRC_DISK" ]]; then
   exit 1
 fi
 
-# Ensure qemu-img is available
-if ! command -v qemu-img >/dev/null; then
-  echo "qemu-img is required but not installed" >&2
-  exit 1
-fi
 
 if [[ ! -f "$SRC_DISK" ]]; then
   echo "Source disk $SRC_DISK not found" >&2
@@ -41,9 +36,25 @@ case "${SRC_DISK##*.}" in
 esac
 
 echo "==> Converting $SRC_DISK to raw image $RAW_OUT"
-qemu-img convert -f "$INPUT_FMT" -O raw "$SRC_DISK" "$RAW_OUT"
+./qemu-img.exe convert -p -f "$INPUT_FMT" -O raw "$SRC_DISK" "$RAW_OUT"
+
+# Verify MBR signature so the disk is bootable
+CHECK_CMD=""
+if command -v hexdump >/dev/null; then
+  CHECK_CMD="hexdump -v -e '/1 \"%02x\"'"
+elif command -v od >/dev/null; then
+  CHECK_CMD="od -An -tx1"
+fi
+
+if [[ -n "$CHECK_CMD" ]]; then
+  if ! dd if="$RAW_OUT" bs=1 skip=510 count=2 2>/dev/null | eval $CHECK_CMD | tr -d ' \n' | grep -qi "55aa"; then
+    echo "WARNING: MBR signature not found; image may not be bootable." >&2
+  fi
+else
+  echo "WARNING: hexdump/od not found; skipping boot signature check." >&2
+fi
 
 echo "==> Converting $SRC_DISK to QCOW2 image $QCOW_OUT"
-qemu-img convert -f "$INPUT_FMT" -O qcow2 "$SRC_DISK" "$QCOW_OUT"
+./qemu-img.exe convert -p -f "$INPUT_FMT" -O qcow2 -o compat=0.10 "$SRC_DISK" "$QCOW_OUT"
 
 echo "Images saved in $OUT_DIR"
