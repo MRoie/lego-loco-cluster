@@ -2,7 +2,7 @@ name: Build QEMU Container
 
 on:
   push:
-    branches: [ main, develop, codex/setup-qemu-container-with-pcem-config ]
+    branches: [ main, develop ]
     paths:
       - 'containers/qemu/**'
       - 'scripts/create_win98_image.sh'
@@ -40,7 +40,22 @@ jobs:
     - name: Download bootable Win98 image
       run: |
         mkdir -p images
-        curl -L -o images/win98.qcow2 "https://drive.google.com/uc?export=download&id=${{ env.BOOT_IMAGE_ID }}"
+        
+        # Install gdown for reliable Google Drive downloads
+        pip install gdown
+        
+        # Download the Win98 image using gdown (handles large files properly)
+        gdown "https://drive.google.com/uc?id=${{ env.BOOT_IMAGE_ID }}" -O images/win98.qcow2
+        
+        # Verify the download was successful
+        if [ $(stat -f%z images/win98.qcow2 2>/dev/null || stat -c%s images/win98.qcow2) -lt 1000000 ]; then
+          echo "❌ Download failed - file too small ($(stat -f%z images/win98.qcow2 2>/dev/null || stat -c%s images/win98.qcow2) bytes)"
+          echo "File content:"
+          head -c 500 images/win98.qcow2
+          exit 1
+        fi
+        
+        echo "✅ Download successful - $(stat -f%z images/win98.qcow2 2>/dev/null || stat -c%s images/win98.qcow2) bytes"
     
         
     - name: Log in to Container Registry
