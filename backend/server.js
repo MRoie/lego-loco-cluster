@@ -12,8 +12,8 @@ const server = http.createServer(app);
 
 // simple health endpoint for Kubernetes-style checks
 app.get("/health", (req, res) => {
-  console.log("Health check requested");
-  res.json({ status: "ok" });
+  console.log("Health check requested - live reloading test!");
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 // Directory that holds JSON config files
@@ -70,14 +70,48 @@ app.get("/api/status", (req, res) => {
   }
 });
 
-// Instances endpoint for dynamic frontend updates
+// Enhanced instances endpoint that includes status and provisioning info
 app.get("/api/instances", (req, res) => {
   try {
     console.log("Instances request");
-    const data = loadConfig("instances");
-    res.json(data);
+    const instances = loadConfig("instances");
+    const statusData = loadConfig("status");
+    
+    // Enhanced instance data with status information
+    const enhancedInstances = instances.map(instance => ({
+      ...instance,
+      status: statusData[instance.id] || 'unknown',
+      provisioned: statusData[instance.id] === 'ready' || statusData[instance.id] === 'running',
+      ready: statusData[instance.id] === 'ready'
+    }));
+    
+    res.json(enhancedInstances);
   } catch (e) {
     console.error("Instances config error:", e.message);
+    res.status(503).json([]);
+  }
+});
+
+// New endpoint to get provisioned instances only
+app.get("/api/instances/provisioned", (req, res) => {
+  try {
+    console.log("Provisioned instances request");
+    const instances = loadConfig("instances");
+    const statusData = loadConfig("status");
+    
+    // Filter to only provisioned instances
+    const provisionedInstances = instances
+      .map(instance => ({
+        ...instance,
+        status: statusData[instance.id] || 'unknown',
+        provisioned: statusData[instance.id] === 'ready' || statusData[instance.id] === 'running',
+        ready: statusData[instance.id] === 'ready'
+      }))
+      .filter(instance => instance.provisioned);
+    
+    res.json(provisionedInstances);
+  } catch (e) {
+    console.error("Provisioned instances config error:", e.message);
     res.status(503).json([]);
   }
 });

@@ -35,6 +35,7 @@ Usage: $0 [COMMAND] [OPTIONS]
 
 Commands:
     up [dev|prod]     Start the cluster (default: dev)
+    dev               Start development environment with live reloading
     down              Stop and remove all containers
     build             Build all container images
     logs [service]    Show logs for service (or all services)
@@ -49,9 +50,13 @@ Options:
     --no-build        Don't build images before starting
     --no-cleanup      Skip port cleanup before starting
     --pull            Pull latest images before starting
+    --minimal         Start minimal services only (for dev command)
+    --rebuild         Force rebuild images (for dev command)
 
 Examples:
     $0 up dev         # Start development environment (3 emulators)
+    $0 dev            # Start development environment with live reloading
+    $0 dev --minimal  # Start only backend + frontend with live reloading
     $0 up dev --full  # Start development environment (9 emulators)
     $0 up prod        # Start production environment
     $0 logs backend   # Show backend logs
@@ -314,6 +319,10 @@ case "${1:-}" in
     up)
         setup_prerequisites
         start_cluster "${2:-dev}" "${@:2}"
+        ;;
+    dev)
+        print_status "Starting development environment with live reloading..."
+        exec ./dev-start.sh "${@:2}"
         ;;
     down)
         stop_cluster

@@ -1,0 +1,20 @@
+{
+  "watch": [
+    "*.js",
+    "../config/*.json"
+  ],
+  "ext": "js,json",
+  "ignore": [
+    "node_modules/",
+    "*.test.js",
+    "*.spec.js"
+  ],
+  "delay": 1000,
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "verbose": true,
+  "restartable": "rs",
+  "colours": true,
+  "legacyWatch": false
+}

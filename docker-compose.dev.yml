@@ -1,0 +1,53 @@
+# Development Docker Compose Override
+# This file extends docker-compose.yml for development with live reloading
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development  # Use development stage
+    environment:
+      - NODE_ENV=development
+      - CONFIG_DIR=/app/config
+    volumes:
+      # Mount backend source code for live reloading
+      - ./backend:/app:delegated
+      - ./config:/app/config:ro
+      # Exclude node_modules to avoid conflicts
+      - /app/node_modules
+    command: npm run monitor
+    ports:
+      - "3001:3001"
+      - "9229:9229"  # Debug port
+    restart: unless-stopped
+    networks:
+      - lego-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development  # Use development stage
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3001
+    volumes:
+      # Mount frontend source code for live reloading
+      - ./frontend:/app:delegated
+      # Exclude node_modules to avoid conflicts
+      - /app/node_modules
+      - /app/dist
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "3000:3000"
+      - "5173:5173"  # Vite dev server
+    restart: unless-stopped
+    networks:
+      - lego-network
+    depends_on:
+      - backend
+
+networks:
+  lego-network:
+    driver: bridge
