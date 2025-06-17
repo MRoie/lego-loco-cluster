@@ -1,0 +1,41 @@
+# Development override - simplified setup with fewer emulators for faster startup
+services:
+  frontend:
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    environment:
+      - VITE_API_URL=http://localhost:3001
+      - BACKEND_HOST=backend
+      - BACKEND_PORT=3001
+      - FRONTEND_PORT=3000
+    command: npm run dev
+
+  backend:
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: npm run dev
+
+  # Only run 3 emulators for development
+  emulator-3:
+    profiles:
+      - full
+  emulator-4:
+    profiles:
+      - full
+  emulator-5:
+    profiles:
+      - full
+  emulator-6:
+    profiles:
+      - full
+  emulator-7:
+    profiles:
+      - full
+  emulator-8:
+    profiles:
+      - full

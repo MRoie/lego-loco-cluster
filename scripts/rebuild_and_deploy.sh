@@ -97,14 +97,14 @@ print_success "Pod termination complete"
 print_status "Redeploying with Helm..."
 cd /workspaces/lego-loco-cluster/helm/loco-chart
 helm upgrade --install lego-loco . \
-    --set imageRepo=localhost:5000 \
+    --set imageRepo="" \
     --set frontend.image=lego-loco-frontend \
     --set frontend.tag=latest \
     --set backend.image=lego-loco-backend \
     --set backend.tag=latest \
     --set emulator.image=lego-loco-qemu \
     --set emulator.tag=latest \
-    --set emulator.imagePullPolicy=Always \
+    --set emulator.imagePullPolicy=Never \
     --wait --timeout=300s
 
 if [ $? -eq 0 ]; then

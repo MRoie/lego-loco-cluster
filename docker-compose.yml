@@ -1,0 +1,324 @@
+services:
+  # Local Docker Registry for development
+  registry:
+    image: registry:2
+    container_name: loco-registry
+    ports:
+      - "5500:5000"  # Changed from 5000 to avoid conflict with GStreamer
+    environment:
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /data
+    volumes:
+      - registry_data:/data
+    networks:
+      - loco-network
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: loco-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3001
+      - BACKEND_HOST=backend
+      - BACKEND_PORT=3001
+      - FRONTEND_PORT=3000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - loco-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: loco-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - CONFIG_DIR=/app/config
+    volumes:
+      - ./config:/app/config:ro
+    networks:
+      - loco-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # QEMU Emulator Instance 0
+  emulator-0:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-0
+    ports:
+      - "5901:5901"  # VNC
+      - "6080:6080"  # noVNC web interface
+      - "7000:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap0
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=99
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # QEMU Emulator Instance 1
+  emulator-1:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-1
+    ports:
+      - "5902:5901"  # VNC
+      - "6081:6080"  # noVNC web interface
+      - "7001:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap1
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=100
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # QEMU Emulator Instance 2
+  emulator-2:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-2
+    ports:
+      - "5903:5901"  # VNC
+      - "6082:6080"  # noVNC web interface
+      - "7002:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap2
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=101
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # QEMU Emulator Instance 3
+  emulator-3:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-3
+    ports:
+      - "5904:5901"  # VNC
+      - "6083:6080"  # noVNC web interface
+      - "7003:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap3
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=102
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # QEMU Emulator Instance 4
+  emulator-4:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-4
+    ports:
+      - "5905:5901"  # VNC
+      - "6084:6080"  # noVNC web interface
+      - "7004:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap4
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=103
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # QEMU Emulator Instance 5
+  emulator-5:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-5
+    ports:
+      - "5906:5901"  # VNC
+      - "6085:6080"  # noVNC web interface
+      - "7005:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap5
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=104
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # QEMU Emulator Instance 6
+  emulator-6:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-6
+    ports:
+      - "5907:5901"  # VNC
+      - "6086:6080"  # noVNC web interface
+      - "7006:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap6
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=105
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # QEMU Emulator Instance 7
+  emulator-7:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-7
+    ports:
+      - "5908:5901"  # VNC
+      - "6087:6080"  # noVNC web interface
+      - "7007:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap7
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=106
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # QEMU Emulator Instance 8
+  emulator-8:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-8
+    ports:
+      - "5909:5901"  # VNC
+      - "6088:6080"  # noVNC web interface
+      - "7008:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap8
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=107
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+volumes:
+  registry_data:
+    driver: local
+
+networks:
+  loco-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
