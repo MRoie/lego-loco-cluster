@@ -83,28 +83,38 @@ jobs:
         # Build snapshot containers directly
         for variant in base games productivity; do
           echo "Building snapshot: $variant"
-          
+
           # Create working directory
           work_dir="/tmp/snapshot-build-$variant"
           mkdir -p "$work_dir"
-          
+
           # Copy snapshot file
           cp images/win98.qcow2 "$work_dir/snapshot.qcow2"
-          
-          # Create Dockerfile
-          cat > "$work_dir/Dockerfile" << EOF
-        FROM alpine:latest
-        RUN echo "Snapshot container for $variant variant" > /etc/motd
-        COPY snapshot.qcow2 /snapshot.qcow2
-        LABEL variant="$variant"
-        LABEL base-image="win98"
-        LABEL created="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        CMD ["cat", "/etc/motd", "&&", "ls", "-la", "/snapshot.qcow2"]
+
+          # Create a multi-stage Dockerfile with full QEMU environment
+          cat > "$work_dir/Dockerfile" <<'EOF'
+        # Stage 1: install QEMU and streaming utilities
+        FROM ubuntu:22.04 AS qemu-base
+        RUN apt-get update && \
+            apt-get install -y --no-install-recommends \
+                qemu-system-x86 qemu-system-gui qemu-utils pulseaudio \
+                gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+                gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+                x11-utils xdotool iproute2 xvfb net-tools \
+                curl wget skopeo && \
+            rm -rf /var/lib/apt/lists/*
+
+        # Stage 2: add the Win98 snapshot
+        FROM qemu-base AS runtime
+        COPY snapshot.qcow2 /images/win98.qcow2
+
+        # Default command prints image info; entrypoints can override
+        CMD ["qemu-img", "info", "/images/win98.qcow2"]
         EOF
-          
+
           # Build snapshot container
           docker build -t "${{ env.SNAPSHOT_REGISTRY }}:win98-$variant" "$work_dir"
-          
+
           # Clean up
           rm -rf "$work_dir"
         done
