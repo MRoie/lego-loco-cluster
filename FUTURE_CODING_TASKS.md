@@ -65,9 +65,9 @@ Tasks:
 Completing these prompts will allow the repository to accept a Windows 98 + Lego Loco image and run the full cluster with stable networking, automated tests, and a polished user interface.
 
 
-image link 
+image link bootable 98
 
-https://drive.google.com/file/d/19UD-SRbTY5qyvsSeNhyX7fIaI6cet8Fb/view?usp=drivesdk
+https://drive.google.com/file/d/1U_IfHPHLxaQH8lT4BpY1qOAr-ytIFLSl/view?usp=drivesdk
 
 
 pcem cfg file below
