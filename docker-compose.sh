@@ -42,10 +42,12 @@ Commands:
     restart [service] Restart service (or all services)
     setup             Setup prerequisites and TAP bridge
     clean             Clean up everything (containers, images, volumes)
+    cleanup-ports     Clean up ports and stop conflicting containers
 
 Options:
     --full            Start all 9 emulators (dev mode default: 3)
     --no-build        Don't build images before starting
+    --no-cleanup      Skip port cleanup before starting
     --pull            Pull latest images before starting
 
 Examples:
@@ -130,6 +132,11 @@ start_cluster() {
             ;;
     esac
     
+    # Clean up ports and containers before starting
+    if [[ "$*" != *"--no-cleanup"* ]]; then
+        cleanup_ports
+    fi
+    
     if [[ "$*" != *"--no-build"* ]]; then
         print_status "Building images..."
         docker-compose $compose_files build
@@ -159,7 +166,7 @@ start_cluster() {
         echo -e "${BLUE}📋 Service URLs:${NC}"
         echo "  Frontend:     http://localhost:3000"
         echo "  Backend:      http://localhost:3001"
-        echo "  Registry:     http://localhost:5000"
+        echo "  Registry:     http://localhost:5500"
         echo ""
         echo -e "${BLUE}🖥️  VNC Access:${NC}"
         echo "  Emulator 0:   vnc://localhost:5901"
@@ -188,11 +195,57 @@ start_cluster() {
     fi
 }
 
+cleanup_ports() {
+    print_status "Cleaning up ports and containers..."
+    
+    # List of ports used by the lego-loco cluster
+    local ports=(3000 3001 5500 5901 5902 5903 5904 5905 5906 5907 5908 5909 6080 6081 6082 6083 6084 6085 6086 6087 6088 7000 7001 7002 7003 7004 7005 7006 7007 7008)
+    
+    # Stop all Docker Compose setups first
+    print_status "Stopping all Docker Compose setups..."
+    docker-compose -f docker-compose.yml -f docker-compose.override.yml down --remove-orphans 2>/dev/null || true
+    docker-compose -f docker-compose.yml -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+    docker-compose -f docker-compose.minimal.yml down --remove-orphans 2>/dev/null || true
+    docker-compose down --remove-orphans 2>/dev/null || true
+    
+    # Stop all loco containers (including any orphaned ones)
+    print_status "Stopping all loco containers..."
+    docker ps -q --filter "name=loco" | xargs -r docker stop 2>/dev/null || true
+    docker ps -aq --filter "name=loco" | xargs -r docker rm -f 2>/dev/null || true
+    
+    # Also stop containers that might be using our ports
+    for port in "${ports[@]}"; do
+        local containers=$(docker ps --format "table {{.ID}}\t{{.Ports}}" | grep ":$port->" | awk '{print $1}' | tail -n +2 2>/dev/null || true)
+        if [[ -n "$containers" ]]; then
+            print_status "Stopping containers using port $port: $containers"
+            echo "$containers" | xargs -r docker stop 2>/dev/null || true
+            echo "$containers" | xargs -r docker rm -f 2>/dev/null || true
+        fi
+    done
+    
+    # Kill processes using our ports
+    for port in "${ports[@]}"; do
+        local pids=$(lsof -ti tcp:$port 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            print_status "Killing processes using port $port: $pids"
+            echo "$pids" | xargs -r kill -9 2>/dev/null || true
+        fi
+    done
+    
+    # Wait a moment for cleanup to complete
+    sleep 2
+    
+    print_success "Port cleanup complete"
+}
+
 stop_cluster() {
     print_status "Stopping Lego Loco Cluster..."
     
+    # Cleanup ports and containers first
+    cleanup_ports
+    
     # Stop with all possible compose files
-    docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.prod.yml down
+    docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.prod.yml down 2>/dev/null || true
     
     print_success "Cluster stopped"
 }
@@ -279,6 +332,9 @@ case "${1:-}" in
         ;;
     setup)
         setup_prerequisites
+        ;;
+    cleanup-ports)
+        cleanup_ports
         ;;
     clean)
         clean_everything
