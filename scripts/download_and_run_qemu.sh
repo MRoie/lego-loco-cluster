@@ -2,7 +2,10 @@
 # download_and_run_qemu.sh -- fetch the Win98 qcow2 image and run the qemu container
 set -euo pipefail
 
-GDRIVE_ID="19UD-SRbTY5qyvsSeNhyX7fIaI6cet8Fb"
+# Google Drive file ID for the bootable Windows 98 image
+# Allow override via environment variable so CI workflows can supply their own
+# ID without modifying this script.
+GDRIVE_ID="${GDRIVE_ID:-1U_IfHPHLxaQH8lT4BpY1qOAr-ytIFLSl}"
 WORKDIR=${WORKDIR:-$(pwd)/images}
 QCOW_NAME="win98.qcow2"
 QCOW_PATH="$WORKDIR/$QCOW_NAME"
