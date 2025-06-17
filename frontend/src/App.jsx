@@ -111,7 +111,7 @@ export default function App() {
           <div className="bg-gray-800 border-b border-gray-700 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-yellow-400">Lego Loco Cluster</h1>
+                <h1 className="text-2xl font-bold text-yellow-400">🎮 Lego Loco Cluster</h1>
                 <p className="text-gray-300 text-sm">
                   {displayInstances.length} of {instances.length} instances
                   {showOnlyProvisioned ? ' (provisioned only)' : ''}
