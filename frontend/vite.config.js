@@ -8,5 +8,23 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    target: 'esnext',
+    rollupOptions: {
+      output: {
+        format: 'es'
+      }
+    }
   },
+  esbuild: {
+    target: 'esnext'
+  },
+  optimizeDeps: {
+    include: ['react-vnc'],
+    esbuildOptions: {
+      target: 'esnext'
+    }
+  },
+  define: {
+    global: 'globalThis'
+  }
 });
