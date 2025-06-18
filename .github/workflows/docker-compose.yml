@@ -2,7 +2,7 @@ name: Docker Compose CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ build_docker_dev_cluster ]
     paths:
       - 'docker-compose*.yml'
       - 'frontend/**'
