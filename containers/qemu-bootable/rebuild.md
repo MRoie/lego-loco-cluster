@@ -533,5 +533,12 @@ noVNC-ready when used inside Docker/QEMU/K8s
 
 ---
 
-Would you like this packed into a Dockerfile that performs the whole unattended image creation, or convert this into a full GitHub Actions workflow for reproducible image builds?
+win98se.iso
 
+https://drive.google.com/file/d/1Hx9sUjk4UxMrHdDTHJ5cuKHU_BVI-jMT/view?usp=drivesdk
+
+key needed 
+
+Loco zip contains iso 
+
+https://drive.google.com/file/d/1PZaszKLn4NB3k1KXGQ0pRfDMuaM-ne5a/view?usp=drivesdk
