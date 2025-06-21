@@ -16,6 +16,6 @@ COPY setup_network.sh /usr/local/bin/setup_network.sh
 RUN chmod +x /usr/local/bin/run-qemu.sh /usr/local/bin/setup_network.sh
 
 VOLUME ["/shared"]
-EXPOSE 6080
+EXPOSE 6080 2300 47624
 
 ENTRYPOINT ["/usr/local/bin/run-qemu.sh"]
