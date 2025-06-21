@@ -9,13 +9,16 @@ RUN apt-get update && apt-get install -y \
     net-tools sudo curl unzip && \
     rm -rf /var/lib/apt/lists/*
 
-COPY win98_softgpu.qcow2 /vm/win98.qcow2
-COPY run-qemu.sh /usr/local/bin/run-qemu.sh
-COPY setup_network.sh /usr/local/bin/setup_network.sh
+COPY win98_softgpu.qcow2 /vm/win98_softgpu.qcow2
+COPY qemu-manager.sh /usr/local/bin/qemu-manager.sh
 
-RUN chmod +x /usr/local/bin/run-qemu.sh /usr/local/bin/setup_network.sh
+RUN chmod +x /usr/local/bin/qemu-manager.sh
+
+# Set working directory where the VM image is expected
+WORKDIR /vm
 
 VOLUME ["/shared"]
 EXPOSE 6080 2300 47624
 
-ENTRYPOINT ["/usr/local/bin/run-qemu.sh"]
+ENTRYPOINT ["/usr/local/bin/qemu-manager.sh"]
+CMD ["run"]

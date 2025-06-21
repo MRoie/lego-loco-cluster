@@ -352,7 +352,7 @@ run_vm_prod() {
     # Start VM with reduced memory and simplified configuration
     qemu-system-i386 \
         -enable-kvm \
-        -m 512 \
+        -m 768 \
         -cpu pentium3 \
         -smp 1 \
         -hda "$QCOW2_IMAGE" \
