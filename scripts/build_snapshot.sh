@@ -34,7 +34,7 @@ qemu-system-i386 \
     -m 512 -hda "$WORK_SNAPSHOT" \
     -netdev user,id=net0 \
     -device ne2k_pci,netdev=net0 \
-    -vga cirrus \
+    -vga std \
     -nographic \
     -monitor telnet:127.0.0.1:4444,server,nowait \
     -rtc base=localtime \

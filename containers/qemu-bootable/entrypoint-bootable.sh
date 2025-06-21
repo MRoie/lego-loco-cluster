@@ -219,7 +219,7 @@ QEMU_CMD="qemu-system-i386 \
   -netdev tap,id=net0,ifname=$TAP_IF,script=no,downscript=no \
   -device ne2k_pci,netdev=net0 \
   -device sb16 \
-  -vga cirrus \
+  -vga std \
   -display vnc=:2 \
   -rtc base=localtime \
   -boot order=cd,menu=on,splash-time=5000 \

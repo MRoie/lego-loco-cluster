@@ -10,7 +10,7 @@ qemu-system-i386 \
   -boot c \
   -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
   -device rtl8139,netdev=net0 \
-  -vga cirrus \
+  -vga std \
   -soundhw sb16 \
   -vnc :0 &
 
