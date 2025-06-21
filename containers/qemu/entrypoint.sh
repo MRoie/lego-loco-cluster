@@ -255,7 +255,7 @@ qemu-system-i386 \
   -m 512 -hda "$SNAPSHOT_NAME" \
   -net nic,model=ne2k_pci -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
-  -vga cirrus -display vnc=0.0.0.0:1 \
+  -vga std -display vnc=0.0.0.0:1 \
   -audiodev pa,id=snd0 \
   -rtc base=localtime \
   -boot order=dc,menu=on,splash-time=5000 \

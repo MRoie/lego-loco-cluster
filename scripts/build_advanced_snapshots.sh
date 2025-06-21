@@ -57,7 +57,7 @@ build_automated_snapshot() {
         -m 512 -hda "$work_snapshot" \
         -netdev user,id=net0 \
         -device ne2k_pci,netdev=net0 \
-        -vga cirrus \
+        -vga std \
         -vnc ":$(($VNC_PORT - 5900))" \
         -monitor "telnet:127.0.0.1:$MONITOR_PORT,server,nowait" \
         -rtc base=localtime \
