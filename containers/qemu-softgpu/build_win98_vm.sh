@@ -19,11 +19,12 @@ CPU_CORES=1
 
 qemu-system-i386 \
   -enable-kvm \
-  -m "$RAM_MB" \
-  -cpu pentium2 \
-  -smp "$CPU_CORES" \
-  -hda "$OUTPUT_IMG" \
-  -cdrom "win98.iso" \
+  -m 768 \
+  -cpu pentium3 \
+  -smp 1 \
+  -bios bios.bin \
+  -hda "win98_softgpu.qcow2" \
+  -drive file="softgpu.iso",format=raw,if=ide,index=1,media=cdrom,readonly=on \
   -machine pc-i440fx-2.12 \
   -boot order=cd,menu=on \
   -vga std \
