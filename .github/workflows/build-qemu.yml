@@ -3,16 +3,12 @@ name: Build QEMU Container
 on:
   push:
     branches: [ build_qemu ]
-    paths:
-      - 'containers/qemu/**'
-      - 'scripts/build_snapshot.sh'
-      - '.github/workflows/build-qemu.yml'
   workflow_dispatch:
     inputs:
       build_snapshots:
         description: 'Build pre-configured snapshots'
         required: false
-        default: 'false'
+        default: true
         type: boolean
       image_tag:
         description: 'Image tag to use'
@@ -24,7 +20,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: mroie/qemu-loco
   SNAPSHOT_REGISTRY: ghcr.io/mroie/qemu-snapshots
-  BOOT_IMAGE_ID: 1U_IfHPHLxaQH8lT4BpY1qOAr-ytIFLSl
+  BOOT_IMAGE_ID: FabhMDKwF7Uu1XXsPpAycRhWSYDXqQEH
 
 jobs:
   build:

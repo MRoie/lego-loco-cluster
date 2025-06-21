@@ -3,13 +3,10 @@ name: Build Win98 SoftGPU Image
 on:
   push:
     branches: [ build_qemu_softgpu ]
-    paths:
-      - 'containers/qemu-softgpu/**'
-      - '.github/workflows/win98-softgpu.yml'
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/win98-softgpu
+  IMAGE_NAME: mroie/lego-loco-cluster/win98-softgpu
 
 jobs:
   build:
