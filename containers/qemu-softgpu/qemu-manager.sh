@@ -23,9 +23,9 @@ VNC_DISPLAY=0
 MONITOR_PORT=6080
 
 # Audio Configuration
-AUDIO_BACKEND="pa"      # pa, alsa, oss, none
-AUDIO_DEVICE="sb16"     # sb16, es1370, ac97, adlib
-AUDIO_BUFFER="1024"     # Buffer size for low latency
+AUDIO_BACKEND="pa"    # pa, alsa, oss, none
+AUDIO_DEVICE="sb16"   # sb16, es1370, ac97, adlib
+AUDIO_BUFFER="1024"   # Audio buffer size
 
 # Colors for output
 RED='\033[0;31m'
@@ -187,12 +187,10 @@ build_vm() {
     
     # Setup network first
     setup_network
-    
-    # Setup audio
     setup_audio
     
-    # Get audio configuration
-    local audio_args=$(configure_win98_audio "$AUDIO_BACKEND" "$AUDIO_BUFFER")
+    # Get audio configuration for build (use none for installation)
+    local audio_args=$(configure_win98_audio "none")
     local sound_device=$(configure_win98_sound_device "$AUDIO_DEVICE")
     
     log_info "Starting VM for installation..."
@@ -233,17 +231,32 @@ run_vm() {
     setup_network
     setup_audio
     
+    # Get audio configuration
+    local audio_args=$(configure_win98_audio "$AUDIO_BACKEND" "$AUDIO_BUFFER")
+    local sound_device=$(configure_win98_sound_device "$AUDIO_DEVICE")
+    
     qemu-system-i386 \
-        -m 512 \
+        -enable-kvm \
+        -m 768 \
+        -cpu pentium3 \
+        -smp 1 \
+        -bios bios.bin \
         -hda "$QCOW2_IMAGE" \
         -drive file="$SOFTGPU_ISO",media=cdrom,if=ide,index=1 \
-        -boot c \
-        -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
-        -device rtl8139,netdev=net0 \
+        -machine pc-i440fx-2.12 \
+        -boot order=c,menu=on,splash-time=5000 \
         -vga std \
-        -audiodev pa,id=snd0 \
-        -device sb16,audiodev=snd0 \
-        -vnc :$VNC_DISPLAY &
+        -rtc base=localtime \
+        -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+        -device ne2k_pci,netdev=net0 \
+        $audio_args \
+        $sound_device \
+        -usb \
+        -device usb-tablet \
+        -name "Windows 98" \
+        -no-shutdown \
+        -no-reboot \
+        -vnc 0.0.0.0:$VNC_DISPLAY &
     
     # Start noVNC if available
     if command -v websockify &> /dev/null; then
@@ -269,13 +282,14 @@ run_vm_debug() {
     
     qemu-system-i386 \
         -enable-kvm \
-        -m $RAM_MB \
-        -cpu pentium2 \
-        -smp $CPU_CORES \
+        -m 768 \
+        -cpu pentium3 \
+        -smp 1 \
+        -bios bios.bin \
         -hda "$QCOW2_IMAGE" \
         -drive file="$SOFTGPU_ISO",media=cdrom,if=ide,index=1 \
         -machine pc-i440fx-2.12 \
-        -boot order=c,menu=on \
+        -boot order=c,menu=on,splash-time=5000 \
         -vga std \
         $audio_args \
         $sound_device \
@@ -286,6 +300,8 @@ run_vm_debug() {
         -usb \
         -device usb-tablet \
         -name "Windows 98 Debug" \
+        -no-shutdown \
+        -no-reboot \
         -monitor stdio \
         -serial file:debug.log
 }
@@ -539,19 +555,6 @@ show_status() {
     fi
     echo ""
     
-    # Check audio
-    echo "AUDIO:"
-    if pgrep -f "pulseaudio" >/dev/null; then
-        echo "  ✓ PulseAudio running (PID: $(pgrep -f "pulseaudio"))"
-        if command -v pactl >/dev/null; then
-            local sink_count=$(pactl list short sinks 2>/dev/null | wc -l)
-            echo "  ✓ Audio sinks available: $sink_count"
-        fi
-    else
-        echo "  ✗ PulseAudio not running"
-    fi
-    echo ""
-    
     # Check mounts
     echo "MOUNTS:"
     if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
@@ -567,101 +570,6 @@ show_status() {
     fi
     if [ "$loop_count" -gt 0 ]; then
         echo "  ⚠ $loop_count loop device(s) active"
-    fi
-}
-
-# Audio functions
-setup_audio() {
-    log_info "Setting up audio system..."
-    
-    # Start PulseAudio if not running
-    if ! pgrep -f "pulseaudio" >/dev/null; then
-        log_info "Starting PulseAudio daemon..."
-        pulseaudio --start --verbose || log_warn "PulseAudio may already be running"
-    fi
-    
-    # Check audio devices
-    log_info "Available audio sinks:"
-    pactl list short sinks 2>/dev/null || log_warn "No audio sinks found"
-    
-    # Create dummy sink if none available
-    if ! pactl list short sinks | grep -q .; then
-        log_warn "No audio sinks found, creating dummy sink..."
-        pactl load-module module-null-sink sink_name=dummy 2>/dev/null || true
-    fi
-    
-    log_success "Audio setup completed"
-}
-
-# Enhanced audio configuration for Windows 98 VMs
-configure_win98_audio() {
-    local audio_backend="${1:-pa}"  # Default to PulseAudio
-    local audio_buffer="${2:-1024}" # Buffer size for low latency
-    
-    log_info "Configuring Windows 98 audio (backend: $audio_backend, buffer: $audio_buffer)..."
-    
-    case "$audio_backend" in
-        "pa"|"pulseaudio")
-            echo "-audiodev pa,id=snd0,server=unix:/tmp/pulse-*/native,out.buffer-length=$audio_buffer"
-            ;;
-        "alsa")
-            echo "-audiodev alsa,id=snd0,out.buffer-length=$audio_buffer"
-            ;;
-        "oss")
-            echo "-audiodev oss,id=snd0,out.buffer-length=$audio_buffer"
-            ;;
-        "none"|"disabled")
-            echo "-audiodev none,id=snd0"
-            ;;
-        *)
-            log_warn "Unknown audio backend: $audio_backend, using PulseAudio"
-            echo "-audiodev pa,id=snd0,server=unix:/tmp/pulse-*/native,out.buffer-length=$audio_buffer"
-            ;;
-    esac
-}
-
-# Configure Windows 98 compatible sound devices
-configure_win98_sound_device() {
-    local device_type="${1:-sb16}"  # Default to Sound Blaster 16
-    
-    case "$device_type" in
-        "sb16")
-            echo "-device sb16,audiodev=snd0"
-            ;;
-        "es1370")
-            echo "-device ES1370,audiodev=snd0"
-            ;;
-        "ac97")
-            echo "-device AC97,audiodev=snd0"
-            ;;
-        "adlib")
-            echo "-device adlib,audiodev=snd0"
-            ;;
-        *)
-            log_warn "Unknown sound device: $device_type, using Sound Blaster 16"
-            echo "-device sb16,audiodev=snd0"
-            ;;
-    esac
-}
-
-test_audio() {
-    log_info "Testing audio system..."
-    
-    setup_audio
-    
-    # Test PulseAudio
-    if command -v pactl >/dev/null; then
-        log_info "PulseAudio server info:"
-        pactl info | grep -E "(Server Name|Default Sink|Default Source)" || log_warn "Audio info unavailable"
-        
-        # Test audio generation
-        log_info "Testing audio generation (5 seconds)..."
-        speaker-test -t sine -f 440 -l 1 -s 1 2>/dev/null &
-        sleep 2
-        pkill speaker-test 2>/dev/null || true
-        log_success "Audio test completed"
-    else
-        log_error "PulseAudio not available"
     fi
 }
 
@@ -695,6 +603,124 @@ cleanup() {
     rm -f debug.log
     
     log_success "Cleanup completed"
+}
+
+# Setup audio system
+setup_audio() {
+    log_info "Setting up audio system..."
+    
+    # Start PulseAudio if not running
+    if ! pgrep -x "pulseaudio" > /dev/null; then
+        log_info "Starting PulseAudio daemon..."
+        if pulseaudio --start --exit-idle-time=-1 2>/dev/null; then
+            log_success "PulseAudio started successfully"
+        else
+            log_warn "Failed to start PulseAudio, audio may not work"
+        fi
+    else
+        log_info "PulseAudio already running"
+    fi
+    
+    # Check audio sinks
+    if command -v pactl &> /dev/null; then
+        local sinks=$(pactl list sinks short | wc -l)
+        if [ "$sinks" -gt 0 ]; then
+            log_success "Audio sinks available: $sinks"
+        else
+            log_warn "No audio sinks found"
+        fi
+    fi
+}
+
+# Configure Win98 audio backend
+configure_win98_audio() {
+    local backend="${1:-pa}"
+    local buffer="${2:-1024}"
+    
+    case "$backend" in
+        "pa"|"pulseaudio")
+            echo "-audiodev pa,id=snd0,server=unix:/run/user/$UID/pulse/native"
+            ;;
+        "alsa")
+            echo "-audiodev alsa,id=snd0"
+            ;;
+        "oss")
+            echo "-audiodev oss,id=snd0"
+            ;;
+        "none")
+            echo "-audiodev none,id=snd0"
+            ;;
+        *)
+            log_warn "Unknown audio backend: $backend, using PulseAudio"
+            echo "-audiodev pa,id=snd0"
+            ;;
+    esac
+}
+
+# Configure Win98 sound device
+configure_win98_sound_device() {
+    local device="${1:-sb16}"
+    
+    case "$device" in
+        "sb16")
+            echo "-device sb16,audiodev=snd0"
+            ;;
+        "es1370")
+            echo "-device es1370,audiodev=snd0"
+            ;;
+        "ac97")
+            echo "-device ac97,audiodev=snd0"
+            ;;
+        "adlib")
+            echo "-device adlib,audiodev=snd0"
+            ;;
+        *)
+            log_warn "Unknown sound device: $device, using Sound Blaster 16"
+            echo "-device sb16,audiodev=snd0"
+            ;;
+    esac
+}
+
+# Test audio system
+test_audio() {
+    log_info "Testing audio system..."
+    
+    # Check PulseAudio
+    if pgrep -x "pulseaudio" > /dev/null; then
+        log_success "✓ PulseAudio running (PID: $(pgrep -x "pulseaudio"))"
+    else
+        log_error "✗ PulseAudio not running"
+        return 1
+    fi
+    
+    # Check audio sinks
+    if command -v pactl &> /dev/null; then
+        local sink_count=$(pactl list sinks short | wc -l)
+        if [ "$sink_count" -gt 0 ]; then
+            log_success "✓ Audio sinks available: $sink_count"
+            
+            # List available sinks
+            log_info "Available audio sinks:"
+            pactl list sinks short | while read line; do
+                log_info "  $line"
+            done
+            
+            # Test audio playback if speaker-test is available
+            if command -v speaker-test &> /dev/null; then
+                log_info "Testing audio playback for 2 seconds..."
+                timeout 2 speaker-test -t sine -f 440 -l 1 > /dev/null 2>&1 || true
+                log_success "Audio test completed"
+            fi
+            
+        else
+            log_error "✗ No audio sinks found"
+            return 1
+        fi
+    else
+        log_warn "⚠ pactl not available, cannot test audio sinks"
+    fi
+    
+    log_success "Audio system test completed"
 }
 
 # Main script logic
