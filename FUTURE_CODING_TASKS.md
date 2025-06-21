@@ -66,8 +66,7 @@ Completing these prompts will allow the repository to accept a Windows 98 + Leg
 
 
 image link bootable 98
-
-https://drive.google.com/file/d/1U_IfHPHLxaQH8lT4BpY1qOAr-ytIFLSl/view?usp=drivesdk
+https://drive.google.com/file/d/1FabhMDKwF7Uu1XXsPpAycRhWSYDXqQEH/view?usp=sharing
 
 
 pcem cfg file below
