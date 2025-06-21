@@ -55,6 +55,8 @@ VM OPERATIONS:
   build               Build/install Windows 98 VM from ISO
   run                 Run the VM normally (production mode)
   run-debug           Run VM with debug console access
+  run-prod            Run VM in production mode (lightweight/background)
+  run-safe            Run VM in safe mode (no KVM, containers/restricted envs)
   run-build           Run VM for building/installation
   run-file-transfer   Run VM with file transfer ISO mounted
 
@@ -242,9 +244,8 @@ run_vm() {
         -smp 1 \
         -bios bios.bin \
         -hda "$QCOW2_IMAGE" \
-        -drive file="$SOFTGPU_ISO",media=cdrom,if=ide,index=1 \
         -machine pc-i440fx-2.12 \
-        -boot order=c,menu=on,splash-time=5000 \
+        -boot order=c,menu=on \
         -vga std \
         -rtc base=localtime \
         -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
@@ -259,9 +260,14 @@ run_vm() {
         -vnc 0.0.0.0:$VNC_DISPLAY &
     
     # Start noVNC if available
-    if command -v websockify &> /dev/null; then
+    if command -v websockify &> /dev/null && [ -d "/usr/share/novnc" ]; then
         log_info "Starting noVNC on port $MONITOR_PORT..."
         websockify --web=/usr/share/novnc/ $MONITOR_PORT localhost:590$VNC_DISPLAY
+    elif command -v websockify &> /dev/null; then
+        log_warn "websockify available but noVNC files not found in /usr/share/novnc/"
+        log_info "To install noVNC: sudo apt install novnc"
+        log_info "Connect via VNC to localhost:590$VNC_DISPLAY"
+        wait
     else
         log_warn "websockify not available. Connect via VNC to localhost:590$VNC_DISPLAY"
         wait
@@ -304,6 +310,175 @@ run_vm_debug() {
         -no-reboot \
         -monitor stdio \
         -serial file:debug.log
+}
+
+# Run VM in production-like environment with optimized settings
+run_vm_prod() {
+    log_info "Starting Windows 98 VM in production mode (lightweight)..."
+    
+    if [ ! -f "$QCOW2_IMAGE" ]; then
+        log_error "VM image not found: $QCOW2_IMAGE"
+        log_info "Run './qemu-manager.sh build' first"
+        exit 1
+    fi
+    
+    # Use simpler networking (user mode) for production-like testing
+    log_info "Setting up user-mode networking (no sudo required)..."
+    
+    # Setup audio with fallback to 'none' if PulseAudio fails
+    setup_audio
+    local audio_backend="$AUDIO_BACKEND"
+    local pulse_socket=""
+    
+    if command -v pactl &> /dev/null; then
+        pulse_socket=$(pactl info 2>/dev/null | grep "Server String:" | cut -d' ' -f3)
+    fi
+    
+    if [ -z "$pulse_socket" ] || [ ! -S "$pulse_socket" ]; then
+        log_warn "PulseAudio not working properly, falling back to no audio"
+        audio_backend="none"
+    fi
+    
+    local audio_args=$(configure_win98_audio "$audio_backend")
+    local sound_device=$(configure_win98_sound_device "$AUDIO_DEVICE")
+    
+    log_info "VM Configuration:"
+    log_info "  Memory: 512MB (reduced for stability)"
+    log_info "  Audio: $audio_backend"
+    log_info "  Network: User mode (NAT)"
+    log_info "  VNC: localhost:5900"
+    log_info ""
+    
+    # Start VM with reduced memory and simplified configuration
+    qemu-system-i386 \
+        -enable-kvm \
+        -m 512 \
+        -cpu pentium3 \
+        -smp 1 \
+        -hda "$QCOW2_IMAGE" \
+        -machine pc-i440fx-2.12 \
+        -boot order=c,menu=on \
+        -vga std \
+        -rtc base=localtime \
+        -netdev user,id=net0,hostfwd=tcp::2300-:2300,hostfwd=udp::2300-:2300 \
+        -device ne2k_pci,netdev=net0 \
+        $audio_args \
+        $sound_device \
+        -usb \
+        -device usb-tablet \
+        -name "Windows 98 Production" \
+        -vnc 0.0.0.0:0 \
+        -daemonize \
+        -pidfile qemu.pid
+    
+    if [ $? -eq 0 ]; then
+        log_success "VM started successfully in background!"
+        log_info "Connection details:"
+        log_info "  VNC: localhost:5900 (or use VNC viewer)"
+        log_info "  Lego Loco port: localhost:2300 (forwarded)"
+        log_info "  PID file: qemu.pid"
+        log_info ""
+        log_info "To stop the VM: kill \$(cat qemu.pid)"
+        log_info "To check status: ./qemu-manager.sh status"
+        
+        # Wait a moment and check if it's still running
+        sleep 3
+        if [ -f "qemu.pid" ] && kill -0 $(cat qemu.pid) 2>/dev/null; then
+            log_success "VM is running stable (PID: $(cat qemu.pid))"
+        else
+            log_error "VM failed to start or crashed immediately"
+            return 1
+        fi
+    else
+        log_error "Failed to start VM"
+        return 1
+    fi
+}
+
+# Run VM safely without KVM (for containers/restricted environments)
+run_vm_safe() {
+    log_info "Starting Windows 98 VM in safe mode (no KVM, software emulation)..."
+    
+    if [ ! -f "$QCOW2_IMAGE" ]; then
+        log_error "VM image not found: $QCOW2_IMAGE"
+        log_info "Run './qemu-manager.sh build' first"
+        exit 1
+    fi
+    
+    log_info "Setting up safe mode (no sudo, no KVM, user networking)..."
+    
+    # Setup audio with fallback to 'none' 
+    setup_audio
+    local audio_backend="none"  # Use no audio by default for safety
+    
+    # Check if PulseAudio is actually working
+    if command -v pactl &> /dev/null; then
+        local pulse_socket=$(pactl info 2>/dev/null | grep "Server String:" | cut -d' ' -f3)
+        if [ -n "$pulse_socket" ] && [ -S "$pulse_socket" ]; then
+            log_info "PulseAudio detected and working, enabling audio"
+            audio_backend="pa"
+        fi
+    fi
+    
+    local audio_args=$(configure_win98_audio "$audio_backend")
+    local sound_device=$(configure_win98_sound_device "$AUDIO_DEVICE")
+    
+    log_info "Safe VM Configuration:"
+    log_info "  Memory: 256MB (minimal for stability)"
+    log_info "  Audio: $audio_backend"
+    log_info "  Network: User mode (NAT)"
+    log_info "  VNC: localhost:5900"
+    log_info "  KVM: Disabled (software emulation)"
+    log_info "  CPU: 486 (compatible mode)"
+    log_info ""
+    
+    # Start VM with minimal configuration and no KVM
+    qemu-system-i386 \
+        -m 256 \
+        -cpu 486 \
+        -smp 1 \
+        -hda "$QCOW2_IMAGE" \
+        -machine pc-i440fx-2.12 \
+        -boot order=c,menu=on \
+        -vga std \
+        -rtc base=localtime \
+        -netdev user,id=net0,hostfwd=tcp::2300-:2300,hostfwd=udp::2300-:2300 \
+        -device ne2k_pci,netdev=net0 \
+        $audio_args \
+        $sound_device \
+        -usb \
+        -device usb-tablet \
+        -name "Windows 98 Safe Mode" \
+        -vnc 0.0.0.0:0 \
+        -daemonize \
+        -pidfile qemu_safe.pid
+    
+    local qemu_exit_code=$?
+    
+    if [ $qemu_exit_code -eq 0 ]; then
+        log_success "VM started successfully in safe mode!"
+        log_info "Connection details:"
+        log_info "  VNC: localhost:5900 (or use VNC viewer)"
+        log_info "  Lego Loco port: localhost:2300 (forwarded)"
+        log_info "  PID file: qemu_safe.pid"
+        log_info ""
+        log_info "To stop the VM: kill \$(cat qemu_safe.pid)"
+        log_info "To check status: ./qemu-manager.sh status"
+        
+        # Wait a moment and check if it's still running
+        sleep 5
+        if [ -f "qemu_safe.pid" ] && kill -0 $(cat qemu_safe.pid) 2>/dev/null; then
+            log_success "VM is running stable in safe mode (PID: $(cat qemu_safe.pid))"
+            log_info "Note: Performance will be slower without KVM acceleration"
+        else
+            log_error "VM failed to start or crashed immediately"
+            log_info "Check if the VM image is valid: ./qemu-manager.sh fix-disk"
+            return 1
+        fi
+    else
+        log_error "Failed to start VM (exit code: $qemu_exit_code)"
+        return 1
+    fi
 }
 
 # Create transfer ISO
@@ -621,8 +796,13 @@ setup_audio() {
         log_info "PulseAudio already running"
     fi
     
-    # Check audio sinks
+    # Check audio sinks and socket
     if command -v pactl &> /dev/null; then
+        local pulse_socket=$(pactl info 2>/dev/null | grep "Server String:" | cut -d' ' -f3)
+        if [ -n "$pulse_socket" ]; then
+            log_info "PulseAudio socket: $pulse_socket"
+        fi
+        
         local sinks=$(pactl list sinks short | wc -l)
         if [ "$sinks" -gt 0 ]; then
             log_success "Audio sinks available: $sinks"
@@ -639,7 +819,18 @@ configure_win98_audio() {
     
     case "$backend" in
         "pa"|"pulseaudio")
-            echo "-audiodev pa,id=snd0,server=unix:/run/user/$UID/pulse/native"
+            # Get the actual PulseAudio socket path
+            local pulse_socket=""
+            if command -v pactl &> /dev/null; then
+                pulse_socket=$(pactl info 2>/dev/null | grep "Server String:" | cut -d' ' -f3)
+            fi
+            
+            if [ -n "$pulse_socket" ] && [ -S "$pulse_socket" ]; then
+                echo "-audiodev pa,id=snd0,server=unix:$pulse_socket"
+            else
+                # Fallback to default PulseAudio connection
+                echo "-audiodev pa,id=snd0"
+            fi
             ;;
         "alsa")
             echo "-audiodev alsa,id=snd0"
@@ -743,6 +934,12 @@ main() {
             ;;
         "run-debug")
             run_vm_debug
+            ;;
+        "run-prod")
+            run_vm_prod
+            ;;
+        "run-safe")
+            run_vm_safe
             ;;
         "run-file-transfer")
             inject_simple
