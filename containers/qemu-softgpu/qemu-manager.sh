@@ -179,6 +179,9 @@ build_vm() {
         qemu-img create -f qcow2 "$QCOW2_IMAGE" "$DISK_SIZE"
     fi
     
+    # Setup network first
+    setup_network
+    
     log_info "Starting VM for installation..."
     qemu-system-i386 \
         -enable-kvm \
@@ -188,7 +191,7 @@ build_vm() {
         -bios bios.bin \
         -hda "$QCOW2_IMAGE" \
         -drive file="$WIN98_ISO",media=cdrom,if=ide,index=1 \
-        -drive file="$SOFTGPU_ISO",format=raw,if=ide,index=2,media=cdrom,readonly=on \
+        -drive file="Lego_Loco.iso",format=raw,if=ide,index=2,media=cdrom,readonly=on \
         -machine pc-i440fx-2.12 \
         -boot order=cd,menu=on \
         -vga std \
@@ -196,8 +199,8 @@ build_vm() {
         -device sb16,audiodev=noaudio \
         -vnc 0.0.0.0:$VNC_DISPLAY \
         -rtc base=localtime \
-        -netdev user,id=net0 \
-        -device ne2k_isa,netdev=net0 \
+        -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+        -device ne2k_pci,netdev=net0 \
         -usb \
         -device usb-tablet \
         -name "Win98 Installer with SoftGPU" \
@@ -241,6 +244,9 @@ run_vm() {
 run_vm_debug() {
     log_info "Starting Windows 98 VM in debug mode..."
     
+    # Setup network first
+    setup_network
+    
     qemu-system-i386 \
         -enable-kvm \
         -m $RAM_MB \
@@ -255,8 +261,8 @@ run_vm_debug() {
         -device sb16,audiodev=noaudio \
         -vnc 0.0.0.0:$VNC_DISPLAY \
         -rtc base=localtime \
-        -netdev user,id=net0 \
-        -device ne2k_isa,netdev=net0 \
+        -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+        -device ne2k_pci,netdev=net0 \
         -usb \
         -device usb-tablet \
         -name "Windows 98 Debug" \
