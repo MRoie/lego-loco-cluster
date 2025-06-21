@@ -5,7 +5,7 @@ on:
     branches: [ build_qemu ]
     paths:
       - 'containers/qemu/**'
-      - 'scripts/create_win98_image.sh'
+      - 'scripts/build_snapshot.sh'
       - '.github/workflows/build-qemu.yml'
   workflow_dispatch:
     inputs:
@@ -91,24 +91,28 @@ jobs:
         # Use downloaded Win98 image if present
         mkdir -p images
         if [ ! -f images/win98.qcow2 ]; then
-          echo "Creating placeholder image"
-          qemu-img create -f qcow2 images/win98.qcow2 2G
+          echo "❌ Win98 image not found after download"
+          exit 1
         fi
         
-        # Build snapshot containers directly
-        for variant in base games productivity; do
-          echo "Building snapshot: $variant"
+        # Build snapshot containers using multistage Docker build
+        # Currently building only 'base' variant, but keeping loop structure for future expansion
+        for variant in base; do
+          echo "🏗️ Building snapshot: $variant"
 
           # Create working directory
           work_dir="/tmp/snapshot-build-$variant"
           mkdir -p "$work_dir"
 
-          # Copy snapshot file
-          cp images/win98.qcow2 "$work_dir/snapshot.qcow2"
+          # Copy the downloaded Win98 image
+          cp images/win98.qcow2 "$work_dir/win98.qcow2"
+          
+          # Copy build script for snapshot configuration
+          cp scripts/build_snapshot.sh "$work_dir/build_snapshot.sh"
 
-          # Create a multi-stage Dockerfile with full QEMU environment
+          # Create a multi-stage Dockerfile for snapshot building
           cat > "$work_dir/Dockerfile" <<'EOF'
-        # Stage 1: install QEMU and streaming utilities
+        # Stage 1: Base environment with QEMU
         FROM ubuntu:22.04 AS qemu-base
         RUN apt-get update && \
             apt-get install -y --no-install-recommends \
@@ -119,13 +123,34 @@ jobs:
                 curl wget skopeo && \
             rm -rf /var/lib/apt/lists/*
 
-        # Stage 2: add the Win98 snapshot
-        FROM qemu-base AS runtime
-        COPY snapshot.qcow2 /images/win98.qcow2
+        # Stage 2: Snapshot builder (processes the Win98 image)
+        FROM qemu-base AS snapshot-builder
+        WORKDIR /build
+        COPY win98.qcow2 /build/win98.qcow2
+        COPY build_snapshot.sh /build/build_snapshot.sh
+        
+        # Set environment variables for the build script
+        ENV BASE_IMAGE=/build/win98.qcow2
+        ENV WORK_DIR=/build/snapshot-work
+        
+        # Run snapshot preparation (creates configured snapshot)
+        RUN mkdir -p /build/snapshot-work && \
+            bash /build/build_snapshot.sh || true
 
-        # Default command prints image info; entrypoints can override
-        CMD ["qemu-img", "info", "/images/win98.qcow2"]
+        # Stage 3: Final runtime image with snapshot
+        FROM qemu-base AS runtime
+        COPY --from=snapshot-builder /build/snapshot-work/snapshot.qcow2 /images/win98-snapshot.qcow2
+        
+        # Copy entrypoint script
+        COPY entrypoint.sh /entrypoint.sh
+        RUN chmod +x /entrypoint.sh
+
+        ENTRYPOINT ["/entrypoint.sh"]
+        CMD ["qemu-img", "info", "/images/win98-snapshot.qcow2"]
         EOF
+
+          # Copy entrypoint from containers/qemu
+          cp containers/qemu/entrypoint.sh "$work_dir/entrypoint.sh"
 
           # Build snapshot container
           docker build -t "${{ env.SNAPSHOT_REGISTRY }}:win98-$variant" "$work_dir"
@@ -134,16 +159,19 @@ jobs:
           rm -rf "$work_dir"
         done
         
-        echo "✅ All snapshot variants built successfully"
+        echo "✅ Snapshot built successfully"
     
     - name: Push snapshots
       if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/setup-qemu-container-with-pcem-config'
       run: |
-        for variant in base games productivity; do
+        # Push only the base variant (keeping loop structure for future expansion)
+        for variant in base; do
+          echo "🚀 Pushing snapshot: win98-$variant"
           docker tag ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant} \
                      ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}-${{ github.sha }}
           docker push ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}
           docker push ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}-${{ github.sha }}
+          echo "✅ Pushed: ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}"
         done
     
     - name: Summary
@@ -151,8 +179,7 @@ jobs:
         echo "✅ Build complete!"
         echo "QEMU Container: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
         if [[ "${{ github.event.inputs.build_snapshots }}" == "true" || "${{ github.ref }}" == "refs/heads/main" ]]; then
-          echo "Snapshots:"
+          echo "Snapshot built and pushed:"
           echo "  ${{ env.SNAPSHOT_REGISTRY }}:win98-base"
-          echo "  ${{ env.SNAPSHOT_REGISTRY }}:win98-games"
-          echo "  ${{ env.SNAPSHOT_REGISTRY }}:win98-productivity"
+          echo "  ${{ env.SNAPSHOT_REGISTRY }}:win98-base-${{ github.sha }}"
         fi

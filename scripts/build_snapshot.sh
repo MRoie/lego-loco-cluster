@@ -3,8 +3,9 @@ set -euo pipefail
 
 # Configuration
 SNAPSHOT_REGISTRY=${SNAPSHOT_REGISTRY:-ghcr.io/mroie/qemu-snapshots}
-SNAPSHOT_TAG=${SNAPSHOT_TAG:-win98-base}
-BASE_IMAGE=${BASE_IMAGE:-/workspaces/lego-loco-cluster/images/win98.qcow2}
+SNAPSHOT_TAG=${SNAPSHOT_TAG:-win98-loco}
+BASE_IMAGE=${BASE_IMAGE:-/workspaces/lego-loco-cluster/containers/qemu-softgpu/win98_softgpu.qcow2}
+BIOS_BIN=${BIOS_BIN:-/workspaces/lego-loco-cluster/containers/qemu-softgpu/bios.bin}
 WORK_DIR=${WORK_DIR:-/tmp/snapshot-build}
 
 echo "🏗️  Building pre-configured snapshot..."
@@ -29,17 +30,24 @@ qemu-img create -f qcow2 -b "$BASE_IMAGE" "$WORK_SNAPSHOT"
 
 # Start QEMU in background for configuration
 echo "🚀 Starting QEMU for configuration..."
-qemu-system-i386 \
-    -M pc -cpu pentium2 \
-    -m 512 -hda "$WORK_SNAPSHOT" \
-    -netdev user,id=net0 \
-    -device ne2k_pci,netdev=net0 \
-    -vga cirrus \
-    -nographic \
-    -monitor telnet:127.0.0.1:4444,server,nowait \
-    -rtc base=localtime \
-    -boot menu=off \
-    -daemonize
+-enable-kvm \
+        -m 768 \
+        -cpu pentium3 \
+        -smp 1 \
+        -bios "$BIOS_BIN" \
+        -hda "$QCOW2_IMAGE" \
+        -machine pc-i440fx-2.12 \
+        -boot order=c,menu=on \
+        -vga std \
+        -rtc base=localtime \
+        -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+        -device ne2k_pci,netdev=net0 \
+        -audiodev pa,id=snd0 \
+        -device sb16,audiodev=snd0 \
+        -usb \
+        -device usb-tablet \
+        -name "Loco" \
+        -vnc 0.0.0.0:0 
 
 QEMU_PID=$!
 
