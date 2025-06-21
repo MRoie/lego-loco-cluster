@@ -20,7 +20,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: mroie/qemu-loco
   SNAPSHOT_REGISTRY: ghcr.io/mroie/qemu-snapshots
-  BOOT_IMAGE_ID: FabhMDKwF7Uu1XXsPpAycRhWSYDXqQEH
+  BOOT_IMAGE_ID: 1FabhMDKwF7Uu1XXsPpAycRhWSYDXqQEH
 
 jobs:
   build:

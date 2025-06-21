@@ -7,7 +7,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: mroie/lego-loco-cluster/win98-softgpu
-  BOOT_IMAGE_ID: FabhMDKwF7Uu1XXsPpAycRhWSYDXqQEH
+  BOOT_IMAGE_ID: 1FabhMDKwF7Uu1XXsPpAycRhWSYDXqQEH
 
 jobs:
   build:
