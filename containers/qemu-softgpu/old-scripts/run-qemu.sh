@@ -5,10 +5,12 @@ set -e
 
 qemu-system-i386 \
   -m 512 \
-  -hda /vm/win98.qcow2 \
+  -hda /vm/win98_softgpu.qcow2 \
+  -drive file=/vm/softgpu.iso,media=cdrom \
+  -boot c \
   -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
   -device rtl8139,netdev=net0 \
-  -vga std \
+  -vga cirrus \
   -soundhw sb16 \
   -vnc :0 &
 
