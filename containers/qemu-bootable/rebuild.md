@@ -249,7 +249,7 @@ qemu-system-i386 \
   -hda "$OUTPUT_IMG" \
   -cdrom "$WIN98_ISO" \
   -boot d \
-  -vga cirrus \
+  -vga std \
   -soundhw sb16 \
   -fda floppy.img \
   -rtc base=localtime \
@@ -491,7 +491,7 @@ qemu-system-i386 \
   -cdrom "$ISO" \
   -boot d \
   -fda "$FLOPPY" \
-  -vga cirrus \
+  -vga std \
   -soundhw sb16 \
   -net nic -net user \
   -rtc base=localtime \

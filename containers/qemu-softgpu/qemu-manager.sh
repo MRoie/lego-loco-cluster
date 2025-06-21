@@ -22,6 +22,11 @@ CPU_CORES=1
 VNC_DISPLAY=0
 MONITOR_PORT=6080
 
+# Audio Configuration
+AUDIO_BACKEND="pa"      # pa, alsa, oss, none
+AUDIO_DEVICE="sb16"     # sb16, es1370, ac97, adlib
+AUDIO_BUFFER="1024"     # Buffer size for low latency
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -77,6 +82,7 @@ UTILITIES:
   restore             Restore from backup
   cleanup             Clean up temporary files
   check-prereqs       Check prerequisites and dependencies
+  test-audio          Test audio system setup
 
 EXAMPLES:
   ./qemu-manager.sh build                    # Build VM from scratch
@@ -182,6 +188,13 @@ build_vm() {
     # Setup network first
     setup_network
     
+    # Setup audio
+    setup_audio
+    
+    # Get audio configuration
+    local audio_args=$(configure_win98_audio "$AUDIO_BACKEND" "$AUDIO_BUFFER")
+    local sound_device=$(configure_win98_sound_device "$AUDIO_DEVICE")
+    
     log_info "Starting VM for installation..."
     qemu-system-i386 \
         -enable-kvm \
@@ -195,8 +208,8 @@ build_vm() {
         -machine pc-i440fx-2.12 \
         -boot order=cd,menu=on \
         -vga std \
-        -audiodev none,id=noaudio \
-        -device sb16,audiodev=noaudio \
+        $audio_args \
+        $sound_device \
         -vnc 0.0.0.0:$VNC_DISPLAY \
         -rtc base=localtime \
         -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
@@ -218,6 +231,7 @@ run_vm() {
     fi
     
     setup_network
+    setup_audio
     
     qemu-system-i386 \
         -m 512 \
@@ -226,8 +240,9 @@ run_vm() {
         -boot c \
         -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
         -device rtl8139,netdev=net0 \
-        -vga cirrus \
-        -soundhw sb16 \
+        -vga std \
+        -audiodev pa,id=snd0 \
+        -device sb16,audiodev=snd0 \
         -vnc :$VNC_DISPLAY &
     
     # Start noVNC if available
@@ -246,6 +261,11 @@ run_vm_debug() {
     
     # Setup network first
     setup_network
+    setup_audio
+    
+    # Get audio configuration
+    local audio_args=$(configure_win98_audio "$AUDIO_BACKEND" "$AUDIO_BUFFER")
+    local sound_device=$(configure_win98_sound_device "$AUDIO_DEVICE")
     
     qemu-system-i386 \
         -enable-kvm \
@@ -257,8 +277,8 @@ run_vm_debug() {
         -machine pc-i440fx-2.12 \
         -boot order=c,menu=on \
         -vga std \
-        -audiodev none,id=noaudio \
-        -device sb16,audiodev=noaudio \
+        $audio_args \
+        $sound_device \
         -vnc 0.0.0.0:$VNC_DISPLAY \
         -rtc base=localtime \
         -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
@@ -315,7 +335,7 @@ extract_files() {
     log_success "Extraction completed. Total size: $total_size"
 }
 
-# Simple injection using ISO method
+# Simple file injection using ISO method
 inject_simple() {
     log_info "Starting simple file injection..."
     
@@ -519,6 +539,19 @@ show_status() {
     fi
     echo ""
     
+    # Check audio
+    echo "AUDIO:"
+    if pgrep -f "pulseaudio" >/dev/null; then
+        echo "  ✓ PulseAudio running (PID: $(pgrep -f "pulseaudio"))"
+        if command -v pactl >/dev/null; then
+            local sink_count=$(pactl list short sinks 2>/dev/null | wc -l)
+            echo "  ✓ Audio sinks available: $sink_count"
+        fi
+    else
+        echo "  ✗ PulseAudio not running"
+    fi
+    echo ""
+    
     # Check mounts
     echo "MOUNTS:"
     if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
@@ -534,6 +567,101 @@ show_status() {
     fi
     if [ "$loop_count" -gt 0 ]; then
         echo "  ⚠ $loop_count loop device(s) active"
+    fi
+}
+
+# Audio functions
+setup_audio() {
+    log_info "Setting up audio system..."
+    
+    # Start PulseAudio if not running
+    if ! pgrep -f "pulseaudio" >/dev/null; then
+        log_info "Starting PulseAudio daemon..."
+        pulseaudio --start --verbose || log_warn "PulseAudio may already be running"
+    fi
+    
+    # Check audio devices
+    log_info "Available audio sinks:"
+    pactl list short sinks 2>/dev/null || log_warn "No audio sinks found"
+    
+    # Create dummy sink if none available
+    if ! pactl list short sinks | grep -q .; then
+        log_warn "No audio sinks found, creating dummy sink..."
+        pactl load-module module-null-sink sink_name=dummy 2>/dev/null || true
+    fi
+    
+    log_success "Audio setup completed"
+}
+
+# Enhanced audio configuration for Windows 98 VMs
+configure_win98_audio() {
+    local audio_backend="${1:-pa}"  # Default to PulseAudio
+    local audio_buffer="${2:-1024}" # Buffer size for low latency
+    
+    log_info "Configuring Windows 98 audio (backend: $audio_backend, buffer: $audio_buffer)..."
+    
+    case "$audio_backend" in
+        "pa"|"pulseaudio")
+            echo "-audiodev pa,id=snd0,server=unix:/tmp/pulse-*/native,out.buffer-length=$audio_buffer"
+            ;;
+        "alsa")
+            echo "-audiodev alsa,id=snd0,out.buffer-length=$audio_buffer"
+            ;;
+        "oss")
+            echo "-audiodev oss,id=snd0,out.buffer-length=$audio_buffer"
+            ;;
+        "none"|"disabled")
+            echo "-audiodev none,id=snd0"
+            ;;
+        *)
+            log_warn "Unknown audio backend: $audio_backend, using PulseAudio"
+            echo "-audiodev pa,id=snd0,server=unix:/tmp/pulse-*/native,out.buffer-length=$audio_buffer"
+            ;;
+    esac
+}
+
+# Configure Windows 98 compatible sound devices
+configure_win98_sound_device() {
+    local device_type="${1:-sb16}"  # Default to Sound Blaster 16
+    
+    case "$device_type" in
+        "sb16")
+            echo "-device sb16,audiodev=snd0"
+            ;;
+        "es1370")
+            echo "-device ES1370,audiodev=snd0"
+            ;;
+        "ac97")
+            echo "-device AC97,audiodev=snd0"
+            ;;
+        "adlib")
+            echo "-device adlib,audiodev=snd0"
+            ;;
+        *)
+            log_warn "Unknown sound device: $device_type, using Sound Blaster 16"
+            echo "-device sb16,audiodev=snd0"
+            ;;
+    esac
+}
+
+test_audio() {
+    log_info "Testing audio system..."
+    
+    setup_audio
+    
+    # Test PulseAudio
+    if command -v pactl >/dev/null; then
+        log_info "PulseAudio server info:"
+        pactl info | grep -E "(Server Name|Default Sink|Default Source)" || log_warn "Audio info unavailable"
+        
+        # Test audio generation
+        log_info "Testing audio generation (5 seconds)..."
+        speaker-test -t sine -f 440 -l 1 -s 1 2>/dev/null &
+        sleep 2
+        pkill speaker-test 2>/dev/null || true
+        log_success "Audio test completed"
+    else
+        log_error "PulseAudio not available"
     fi
 }
 
@@ -629,6 +757,9 @@ main() {
             ;;
         "cleanup")
             cleanup
+            ;;
+        "test-audio")
+            test_audio
             ;;
         *)
             log_error "Unknown command: $command"

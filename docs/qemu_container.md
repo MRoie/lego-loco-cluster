@@ -44,7 +44,7 @@ When running under QEMU we emulate comparable hardware:
 - `-cpu pentium2` selects a Pentium II CPU
 - `-m 512` allocates 512 MB RAM
 - `-device sb16` creates a Sound Blaster compatible card (close to SB PCI 128)
-- `-vga cirrus` offers a basic SVGA adapter
+- `-vga std` offers a basic SVGA adapter
 - IDE is enabled by default when attaching a QCOW2 disk
 
 ## 3. Build the Container
