@@ -20,12 +20,11 @@ The agent should execute these steps before running any other commands.
 ## Sequential Prompts for Future Work
 The core development environment is functional, but several features remain. Use the following tasks in order to finish the project. Each item can be used as a Codex prompt:
 
-1. **Windows 98 Disk Image** – create a Lego Loco disk image using `docs/win98_image.md` and supply scripts to convert it for container use.
+1. **SoftGPU Snapshot Integration** – download the latest snapshot containing SoftGPU and Lego Loco from `ghcr.io/mroie/qemu-snapshots` and ensure emulator containers boot from it. Provide fallback scripts to build the snapshot using `docs/win98_image.md`.
 2. **Persistent Storage** – update the Helm chart so emulator pods mount the image from a PVC and allow a read‑only mode.
 3. **Cluster Bootstrap Scripts** – add helpers to upload the image into the cluster, patch the Helm release and regenerate `config/instances.json`.
 4. **Extended Cluster Tests** – expand `k8s-tests/test-network.sh`, add `test-boot.sh`, and run the full suite in CI.
-5. **Frontend and Streaming Polishing** – implement audio device selection, reconnect logic and loading indicators in `useWebRTC`.
-6. **Optional VR Interface** – prototype an A‑Frame or Three.js scene displaying the grid in VR and map controller input to backend hotkeys.
+5. **Frontend, Streaming and VR Polishing** – implement audio device selection, reconnect logic and loading indicators in `useWebRTC`, and deliver a production-ready VR mode with minimal latency.
 
-Completing these tasks will yield a robust Windows 98 cluster with automated deployment, reliable streaming and optional VR support.
+Completing these tasks will yield a robust Windows 98 cluster with automated deployment, reliable streaming and a polished VR experience.
 
