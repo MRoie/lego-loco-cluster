@@ -9,23 +9,30 @@ export default function useWebRTC(targetId) {
   const videoRef = useRef(null);
   // simple numeric audio meter 0-1 updated from Web Audio API
   const [audioLevel, setAudioLevel] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!targetId) return;
-    // Fetch optional ICE server configuration. In a Kubernetes cluster we
-    // typically don't need external STUN/TURN servers, so this defaults to an
-    // empty array when the config isn't present.
-    fetch("/api/config/webrtc")
-      .then((r) => r.json())
-      .then((cfg) => cfg.iceServers || [])
-      .catch((e) => {
-        console.error("Failed to load WebRTC config", e);
-        return [];
-      })
-      .then((iceServers) => {
-        const wsProto = location.protocol === "https:" ? "wss" : "ws";
-        const ws = new WebSocket(`${wsProto}://${location.host}/signal`);
-        const pc = new RTCPeerConnection({ iceServers });
+    let cancelled = false;
+
+    async function connect() {
+      setLoading(true);
+      // Fetch optional ICE server configuration. In a Kubernetes cluster we
+      // typically don't need external STUN/TURN servers, so this defaults to an
+      // empty array when the config isn't present.
+      const iceServers = await fetch("/api/config/webrtc")
+        .then((r) => r.json())
+        .then((cfg) => cfg.iceServers || [])
+        .catch((e) => {
+          console.error("Failed to load WebRTC config", e);
+          return [];
+        });
+
+      if (cancelled) return;
+
+      const wsProto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${wsProto}://${location.host}/signal`);
+      const pc = new RTCPeerConnection({ iceServers });
 
         let audioCtx;
         let analyser;
@@ -57,6 +64,7 @@ export default function useWebRTC(targetId) {
               .catch((e) => console.error("video play failed", e));
           }
           if (!audioCtx) startMeter(stream);
+          setLoading(false);
         };
 
         pc.onicecandidate = ({ candidate }) => {
@@ -90,6 +98,16 @@ export default function useWebRTC(targetId) {
 
         ws.onclose = () => {
           console.log("WebSocket closed for", targetId);
+          if (!cancelled) setTimeout(connect, 1000);
+        };
+
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+            console.log('Peer connection lost, reconnecting');
+            ws.close();
+            pc.close();
+            if (!cancelled) setTimeout(connect, 1000);
+          }
         };
 
         ws.onmessage = async (ev) => {
@@ -125,8 +143,15 @@ export default function useWebRTC(targetId) {
           pc.close();
           if (audioCtx) audioCtx.close();
         };
-      });
+      }
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (videoRef.current) videoRef.current.srcObject = null;
+    };
   }, [targetId]);
 
-  return { videoRef, audioLevel };
+  return { videoRef, audioLevel, loading };
 }

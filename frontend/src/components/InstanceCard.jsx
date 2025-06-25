@@ -1,6 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import ReactVNCViewer from './ReactVNCViewer';
+import useWebRTC from '../hooks/useWebRTC';
+import AudioSinkSelector from './AudioSinkSelector';
 
 /**
  * Individual instance card component for the 3x3 grid
@@ -10,6 +12,7 @@ import ReactVNCViewer from './ReactVNCViewer';
  * - onClick: callback when card is clicked
  */
 export default function InstanceCard({ instance, isActive, onClick }) {
+  const { videoRef, loading } = useWebRTC(instance.id);
   const getStatusColor = (status) => {
     switch (status) {
       case 'ready':
@@ -67,12 +70,21 @@ export default function InstanceCard({ instance, isActive, onClick }) {
         {instance.description && (
           <p className="text-xs text-gray-400 truncate">{instance.description}</p>
         )}
+        <AudioSinkSelector mediaRef={videoRef} />
       </div>
 
       {/* VNC Content Area */}
       <div className="aspect-video bg-black rounded-b-lg overflow-hidden">
         {instance.provisioned && instance.ready ? (
-          <ReactVNCViewer instanceId={instance.id} />
+          <>
+            <ReactVNCViewer instanceId={instance.id} />
+            <video ref={videoRef} className="hidden" />
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center text-xs text-white bg-black bg-opacity-50">
+                Loading stream...
+              </div>
+            )}
+          </>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
             {!instance.provisioned ? (
