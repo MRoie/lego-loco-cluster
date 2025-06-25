@@ -2,6 +2,7 @@ import 'aframe';
 import React, { useEffect, useState, useRef } from 'react';
 import VRReactVNCViewer from './components/VRReactVNCViewer';
 import ControlsConfig from './components/ControlsConfig';
+import VRToast from './components/VRToast';
 
 function positionForIndex(i, cols, rows) {
   const x = (i % cols) - (cols - 1) / 2;
@@ -150,6 +151,7 @@ export default function VRScene({ onExit }) {
   const [info, setInfo] = useState('');
   const [status, setStatus] = useState({});
   const [connectedVNCs, setConnectedVNCs] = useState(new Set());
+  const [toast, setToast] = useState('');
   const defaultControllerMap = {
     abuttondown: 'F1',
     bbuttondown: 'F2',
@@ -207,6 +209,11 @@ export default function VRScene({ onExit }) {
     }
   });
   const vncRefs = useRef([]);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3000);
+  };
 
   const saveMappings = (cMap, kMap) => {
     const mergedController = { ...defaultControllerMap, ...cMap };
@@ -346,6 +353,7 @@ export default function VRScene({ onExit }) {
             controllerMap={controllerMap}
             keyboardMap={keyboardMap}
             onSave={saveMappings}
+            showToast={showToast}
           />
         </div>
       </div>
@@ -398,6 +406,7 @@ export default function VRScene({ onExit }) {
             raycaster="objects: .tile"
             cursor="fuse: false"
           ></a-entity>
+          <VRToast message={toast} />
         </a-entity>
       </a-scene>
     </div>

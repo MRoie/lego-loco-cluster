@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function ControlsConfig({ controllerMap, keyboardMap, onSave }) {
+export default function ControlsConfig({ controllerMap, keyboardMap, onSave, showToast }) {
   const [open, setOpen] = useState(false);
   const [controllerText, setControllerText] = useState(
     JSON.stringify(controllerMap, null, 2)
@@ -8,15 +8,19 @@ export default function ControlsConfig({ controllerMap, keyboardMap, onSave }) {
   const [keyboardText, setKeyboardText] = useState(
     JSON.stringify(keyboardMap, null, 2)
   );
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleSave = () => {
     try {
       const newController = JSON.parse(controllerText);
       const newKeyboard = JSON.parse(keyboardText);
       onSave(newController, newKeyboard);
+      setErrorMessage('');
       setOpen(false);
     } catch (e) {
-      alert('Invalid JSON');
+      const msg = 'Invalid JSON. Please check your input.';
+      setErrorMessage(msg);
+      if (showToast) showToast(msg);
     }
   };
 
@@ -42,6 +46,9 @@ export default function ControlsConfig({ controllerMap, keyboardMap, onSave }) {
             value={keyboardText}
             onChange={e => setKeyboardText(e.target.value)}
           />
+          {errorMessage && (
+            <div className="text-red-400 text-xs mt-1">{errorMessage}</div>
+          )}
           <div className="mt-2 flex justify-end space-x-2">
             <button
               className="bg-blue-500 px-2 py-1 rounded text-xs"
