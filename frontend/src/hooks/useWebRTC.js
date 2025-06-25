@@ -14,6 +14,16 @@ export default function useWebRTC(targetId) {
   useEffect(() => {
     if (!targetId) return;
     let cancelled = false;
+    let reconnectTimer = null;
+
+    const scheduleReconnect = () => {
+      if (cancelled || reconnectTimer) return;
+      setLoading(true);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, 1000);
+    };
 
     async function connect() {
       setLoading(true);
@@ -98,7 +108,7 @@ export default function useWebRTC(targetId) {
 
         ws.onclose = () => {
           console.log("WebSocket closed for", targetId);
-          if (!cancelled) setTimeout(connect, 1000);
+          scheduleReconnect();
         };
 
         pc.onconnectionstatechange = () => {
@@ -106,7 +116,7 @@ export default function useWebRTC(targetId) {
             console.log('Peer connection lost, reconnecting');
             ws.close();
             pc.close();
-            if (!cancelled) setTimeout(connect, 1000);
+            scheduleReconnect();
           }
         };
 
