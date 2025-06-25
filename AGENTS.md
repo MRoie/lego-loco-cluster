@@ -1,9 +1,11 @@
 # Workspace Agent Instructions
 
-This repository uses the Codex agent to build a functional Lego Loco cluster. Begin every session by installing the core packages and Node dependencies so that tests and development servers run correctly.
+This repository uses the Codex agent to build a functional Lego Loco cluster. A development container is provided to ensure all dependencies are available. Begin every session by launching the dev container or installing the packages below so tests and development servers run correctly.
 
 ## Environment Setup
-Run the following commands in the workspace shell:
+Use the `.devcontainer` configuration with VS Code or `devcontainer up` for a ready‑made environment based on `mcr.microsoft.com/devcontainers/base:ubuntu-22.04`. It includes Node.js 22, Docker‑in‑Docker and the Kubernetes tools `kubectl` v1.33.2, `kind` v0.23.0, `helm` v3.14.3 and `talosctl` v1.3.7.
+
+If you cannot use the dev container, run the following commands in the workspace shell instead:
 
 ```bash
 sudo apt-get update

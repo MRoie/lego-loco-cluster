@@ -16,6 +16,7 @@ single command.
 - `backend/` – signaling and API server
 - `frontend/` – React dashboard
 - `containers/` – emulator Dockerfiles
+- `compose/` – Docker Compose configurations
 - `helm/` – Helm chart
 - `k8s/` – manifests and kind config
 - `k8s-tests/` – cluster tests

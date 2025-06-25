@@ -118,18 +118,18 @@ build_images() {
 
 start_cluster() {
     local env=${1:-dev}
-    local compose_files="-f docker-compose.yml"
+    local compose_files="-f compose/docker-compose.yml"
     local additional_args=""
     
     case $env in
         dev)
-            compose_files+=" -f docker-compose.override.yml"
+            compose_files+=" -f compose/docker-compose.override.yml"
             if [[ "$*" == *"--full"* ]]; then
                 additional_args="--profile full"
             fi
             ;;
         prod)
-            compose_files+=" -f docker-compose.prod.yml"
+            compose_files+=" -f compose/docker-compose.prod.yml"
             ;;
         *)
             print_error "Invalid environment: $env. Use 'dev' or 'prod'"
@@ -208,9 +208,9 @@ cleanup_ports() {
     
     # Stop all Docker Compose setups first
     print_status "Stopping all Docker Compose setups..."
-    docker-compose -f docker-compose.yml -f docker-compose.override.yml down --remove-orphans 2>/dev/null || true
-    docker-compose -f docker-compose.yml -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
-    docker-compose -f docker-compose.minimal.yml down --remove-orphans 2>/dev/null || true
+    docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml down --remove-orphans 2>/dev/null || true
+    docker-compose -f compose/docker-compose.yml -f compose/docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+    docker-compose -f compose/docker-compose.minimal.yml down --remove-orphans 2>/dev/null || true
     docker-compose down --remove-orphans 2>/dev/null || true
     
     # Stop all loco containers (including any orphaned ones)
@@ -250,14 +250,14 @@ stop_cluster() {
     cleanup_ports
     
     # Stop with all possible compose files
-    docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.prod.yml down 2>/dev/null || true
+    docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml -f compose/docker-compose.prod.yml down 2>/dev/null || true
     
     print_success "Cluster stopped"
 }
 
 show_logs() {
     local service=$1
-    local compose_files="-f docker-compose.yml -f docker-compose.override.yml"
+    local compose_files="-f compose/docker-compose.yml -f compose/docker-compose.override.yml"
     
     if [[ -n "$service" ]]; then
         docker-compose $compose_files logs -f "$service"
@@ -271,7 +271,7 @@ show_status() {
     echo ""
     
     # Show running containers
-    docker-compose -f docker-compose.yml ps
+    docker-compose -f compose/docker-compose.yml ps
     
     echo ""
     print_status "Resource Usage:"
@@ -280,7 +280,7 @@ show_status() {
 
 restart_service() {
     local service=$1
-    local compose_files="-f docker-compose.yml -f docker-compose.override.yml"
+    local compose_files="-f compose/docker-compose.yml -f compose/docker-compose.override.yml"
     
     if [[ -n "$service" ]]; then
         print_status "Restarting $service..."
@@ -300,7 +300,7 @@ clean_everything() {
         print_status "Cleaning up everything..."
         
         # Stop everything
-        docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.prod.yml down -v --rmi all
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml -f compose/docker-compose.prod.yml down -v --rmi all
         
         # Remove any remaining loco containers
         docker ps -a --filter name=loco --format "{{.ID}}" | xargs -r docker rm -f
