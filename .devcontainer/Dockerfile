@@ -4,7 +4,7 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu-22.04
 ARG KUBECTL_VERSION="v1.33.2"
 ARG KIND_VERSION="v0.23.0"
 ARG HELM_VERSION="v3.14.3"
-ARG TALOSCTL_VERSION="latest"
+ARG TALOSCTL_VERSION="v1.3.7"
 
 RUN apt-get update \
     && apt-get install -y \
