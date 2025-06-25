@@ -143,7 +143,7 @@ echo "🚀 Step 5: Testing cluster deployment..."
 # Check if kind cluster exists
 if ! kind get clusters | grep -q "loco-cluster"; then
     echo "⚠️  Kind cluster 'loco-cluster' not found"
-    echo "   Run: kind create cluster --name loco-cluster --config kind-config.yaml"
+    echo "   Run: kind create cluster --name loco-cluster --config k8s/kind-config.yaml"
     echo "   Skipping cluster deployment test"
     exit 0
 fi
