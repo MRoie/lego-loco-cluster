@@ -153,7 +153,7 @@ echo "Docker Development:"
 echo "  • Volume mounting for instant file sync"
 echo "  • Separate development containers with dev dependencies"
 echo "  • Health checks and service monitoring"
-echo "  • Easy startup with ./scripts/dev-start.sh"
+echo "  • Easy startup with $STARTUP_CMD"
 print_success "Full development environment is ready"
 wait_for_input
 
