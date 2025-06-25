@@ -16,12 +16,15 @@ single command.
 - `backend/` – signaling and API server
 - `frontend/` – React dashboard
 - `containers/` – emulator Dockerfiles
+- `compose/` – Docker Compose configurations
 - `helm/` – Helm chart
 - `k8s/` – manifests and kind config
 - `k8s-tests/` – cluster tests
 - `scripts/` – helper utilities
 - `tests/` – assorted test configs
 - `docs/` – documentation
+- `docs/REPOSITORY_SUMMARY.md` – overview of the project
+- `docs/FUTURE_TASKS.md` – remaining high level goals
 
 ## Quick Setup
 Install system packages and Node dependencies:

@@ -4,7 +4,7 @@ on:
   push:
     branches: [ build_docker_dev_cluster ]
     paths:
-      - 'docker-compose*.yml'
+      - 'compose/docker-compose*.yml'
       - 'frontend/**'
       - 'backend/**'
       - 'containers/**'
@@ -12,7 +12,7 @@ on:
   pull_request:
     branches: [ main ]
     paths:
-      - 'docker-compose*.yml'
+      - 'compose/docker-compose*.yml'
       - 'frontend/**'
       - 'backend/**'
       - 'containers/**'
@@ -47,13 +47,13 @@ jobs:
         echo "Testing minimal Docker Compose setup..."
         
         # Start minimal setup
-        docker-compose -f docker-compose.minimal.yml up -d
+        docker-compose -f compose/docker-compose.minimal.yml up -d
         
         # Wait for services
         sleep 30
         
         # Check if services are running
-        docker-compose -f docker-compose.minimal.yml ps
+        docker-compose -f compose/docker-compose.minimal.yml ps
         
         # Test service health
         timeout 60 bash -c 'until curl -f http://localhost:3001/health; do sleep 2; done'
@@ -66,10 +66,10 @@ jobs:
         echo "Testing development Docker Compose setup..."
         
         # Stop minimal setup
-        docker-compose -f docker-compose.minimal.yml down
+        docker-compose -f compose/docker-compose.minimal.yml down
         
         # Start development setup (without full emulator set)
-        docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d frontend backend registry
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml up -d frontend backend registry
         
         # Wait for services
         sleep 20
@@ -101,22 +101,22 @@ jobs:
       if: failure()
       run: |
         echo "=== Docker Compose Status ==="
-        docker-compose -f docker-compose.yml -f docker-compose.override.yml ps || true
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml ps || true
         
         echo "=== Frontend Logs ==="
-        docker-compose -f docker-compose.yml -f docker-compose.override.yml logs frontend || true
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml logs frontend || true
         
         echo "=== Backend Logs ==="
-        docker-compose -f docker-compose.yml -f docker-compose.override.yml logs backend || true
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml logs backend || true
         
         echo "=== Registry Logs ==="
-        docker-compose -f docker-compose.yml -f docker-compose.override.yml logs registry || true
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml logs registry || true
 
     - name: Cleanup
       if: always()
       run: |
-        docker-compose -f docker-compose.yml -f docker-compose.override.yml down -v || true
-        docker-compose -f docker-compose.minimal.yml down -v || true
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml down -v || true
+        docker-compose -f compose/docker-compose.minimal.yml down -v || true
         docker system prune -f || true
 
   build-and-push:

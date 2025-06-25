@@ -159,7 +159,7 @@ Docker Environment:
 ### File Structure:
 ```
 lego-loco-cluster/
-├── docker-compose.dev.yml     # Development overrides
+├── compose/docker-compose.dev.yml     # Development overrides
 ├── scripts/dev-start.sh              # Development startup script  
 ├── demo-dev-environment.sh   # Comprehensive demo
 ├── DEVELOPMENT_COMPLETE.md   # This documentation
@@ -233,13 +233,13 @@ lego-loco-cluster/
 ### Development Commands:
 ```bash
 # View logs
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f
+docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml logs -f
 
 # Restart services
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml restart backend
+docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml restart backend
 
 # Stop environment
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml down
 ```
 
 ## 🏆 SUCCESS METRICS

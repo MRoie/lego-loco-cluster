@@ -33,9 +33,9 @@ print_dev() {
     echo -e "${PURPLE}[$(date '+%H:%M:%S')] 🚀${NC} $1"
 }
 
-# Check if we're in the right directory
-if [[ ! -f "docker-compose.yml" ]]; then
-    print_error "docker-compose.yml not found. Run this script from the project root."
+# Check if we're in the right directory and required Compose files exist
+if [[ ! -f "compose/docker-compose.yml" || ! -f "compose/docker-compose.dev.yml" ]]; then
+    print_error "Compose files missing. Run this script from the project root."
     exit 1
 fi
 
@@ -44,7 +44,7 @@ print_dev "🐳 Starting Lego Loco Cluster Development Environment"
 # Function to cleanup
 cleanup() {
     print_status "Shutting down development environment..."
-    docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+    docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml down
     print_status "Development environment stopped"
     exit 0
 }
@@ -108,24 +108,24 @@ done
 
 # Stop any existing containers
 print_status "Stopping any existing containers..."
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml down 2>/dev/null || true
+docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml down 2>/dev/null || true
 
 # Build images if needed
 if [[ "$FORCE_REBUILD" == "true" ]]; then
     print_status "Force rebuilding Docker images..."
-    docker-compose -f docker-compose.yml -f docker-compose.dev.yml build --no-cache
+    docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml build --no-cache
 else
     print_status "Building Docker images..."
-    docker-compose -f docker-compose.yml -f docker-compose.dev.yml build
+    docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml build
 fi
 
 # Start services based on mode
 if [[ "$DEV_MODE" == "minimal" ]]; then
     print_dev "Starting minimal development services (backend + frontend)..."
-    docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d backend frontend
+    docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml up -d backend frontend
 else
     print_dev "Starting full development environment..."
-    docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+    docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml up -d
 fi
 
 # Wait for services to be ready
@@ -167,7 +167,7 @@ done
 
 # Show running containers
 print_status "Running containers:"
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml ps
+docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml ps
 
 echo ""
 print_success "🎉 Development Environment Ready!"
@@ -199,7 +199,7 @@ echo ""
 if [[ "$SHOW_LOGS" == "true" ]]; then
     print_dev "Following container logs (press Ctrl+C to stop)..."
     echo ""
-    docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f
+    docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml logs -f
 else
     print_dev "Development environment running. Press Ctrl+C to stop."
     
