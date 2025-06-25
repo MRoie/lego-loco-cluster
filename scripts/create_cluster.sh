@@ -14,7 +14,16 @@ echo "Creating Talos cluster with $WORKERS worker(s)" && date
 if ! pgrep dockerd >/dev/null 2>&1; then
   echo "Starting Docker daemon" && date
   dockerd >"$LOG_DIR/dockerd.log" 2>&1 &
-  sleep 5
+  echo "Waiting for Docker daemon to be ready" && date
+  timeout=30
+  while ! docker info >/dev/null 2>&1; do
+    ((timeout--))
+    if [ $timeout -le 0 ]; then
+      echo "Docker daemon failed to start within the timeout period" && date
+      exit 1
+    fi
+    sleep 1
+  done
 fi
 
 talosctl cluster create --name loco --workers "$WORKERS" --wait
