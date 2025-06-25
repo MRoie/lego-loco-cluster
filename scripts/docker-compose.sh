@@ -256,7 +256,7 @@ stop_cluster() {
     cleanup_ports
     
     # Stop with all possible compose files
-    docker-compose $COMPOSE_DEV -f compose/docker-compose.prod.yml down 2>/dev/null || true
+    docker-compose $COMPOSE_PROD down 2>/dev/null || true
     
     print_success "Cluster stopped"
 }
