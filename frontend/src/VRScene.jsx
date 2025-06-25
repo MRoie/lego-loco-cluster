@@ -209,10 +209,12 @@ export default function VRScene({ onExit }) {
   const vncRefs = useRef([]);
 
   const saveMappings = (cMap, kMap) => {
-    setControllerMap({ ...defaultControllerMap, ...cMap });
-    setKeyboardMap({ ...defaultKeyboardMap, ...kMap });
-    localStorage.setItem('vrControllerMap', JSON.stringify(cMap));
-    localStorage.setItem('vrKeyboardMap', JSON.stringify(kMap));
+    const mergedController = { ...defaultControllerMap, ...cMap };
+    const mergedKeyboard = { ...defaultKeyboardMap, ...kMap };
+    setControllerMap(mergedController);
+    setKeyboardMap(mergedKeyboard);
+    localStorage.setItem('vrControllerMap', JSON.stringify(mergedController));
+    localStorage.setItem('vrKeyboardMap', JSON.stringify(mergedKeyboard));
   };
 
   useEffect(() => {
