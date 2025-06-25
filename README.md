@@ -23,6 +23,8 @@ single command.
 - `scripts/` – helper utilities
 - `tests/` – assorted test configs
 - `docs/` – documentation
+- `docs/REPOSITORY_SUMMARY.md` – overview of the project
+- `docs/FUTURE_TASKS.md` – remaining high level goals
 
 ## Quick Setup
 Install system packages and Node dependencies:
