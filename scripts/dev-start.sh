@@ -33,9 +33,9 @@ print_dev() {
     echo -e "${PURPLE}[$(date '+%H:%M:%S')] 🚀${NC} $1"
 }
 
-# Check if we're in the right directory
-if [[ ! -f "compose/docker-compose.yml" ]]; then
-    print_error "compose/docker-compose.yml not found. Run this script from the project root."
+# Check if we're in the right directory and required Compose files exist
+if [[ ! -f "compose/docker-compose.yml" || ! -f "compose/docker-compose.dev.yml" ]]; then
+    print_error "Compose files missing. Run this script from the project root."
     exit 1
 fi
 
