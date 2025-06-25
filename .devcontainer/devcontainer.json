@@ -1,0 +1,16 @@
+{
+    "name": "Loco Loco Dev",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "runArgs": [
+        "--privileged",
+        "--device=/dev/kvm",
+        "--init"
+    ],
+    "forwardPorts": [3000, 3001, 5173, 6080, 6090, 6091, 6092],
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    },
+    "postCreateCommand": "cd backend && npm install && cd ../frontend && npm install && cd .."
+}
