@@ -14,16 +14,45 @@ spec:
       labels:
         app: {{ include "loco.fullname" . }}-emulator
     spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
       containers:
       - name: emulator
         image: {{ include "loco.image" (dict "root" . "image" .Values.emulator.image "tag" .Values.emulator.tag) }}
         imagePullPolicy: {{ .Values.emulator.imagePullPolicy }}
+        env:
+        {{- if .Values.emulator.env }}
+        {{- range $key, $value := .Values.emulator.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.emulator.usePrebuiltSnapshot }}
+        - name: USE_PREBUILT_SNAPSHOT
+          value: "true"
+        - name: SNAPSHOT_REGISTRY
+          value: {{ .Values.emulator.snapshotRegistry | quote }}
+        - name: SNAPSHOT_TAG
+          value: {{ .Values.emulator.snapshotTag | quote }}
+        {{- end }}
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+              - NET_ADMIN
+              - SYS_ADMIN
         ports:
         - containerPort: {{ .Values.emulator.servicePort }}
         volumeMounts:
         - name: disk
           mountPath: /images
           readOnly: {{ .Values.emulator.diskReadOnly }}
+        - name: dev-net-tun
+          mountPath: /dev/net/tun
       volumes:
       - name: disk
         {{- if .Values.emulator.diskPVC }}
@@ -32,3 +61,7 @@ spec:
         {{- else }}
         emptyDir: {}
         {{- end }}
+      - name: dev-net-tun
+        hostPath:
+          path: /dev/net/tun
+          type: CharDevice

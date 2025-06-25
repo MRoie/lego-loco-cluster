@@ -1,0 +1,185 @@
+name: Build QEMU Container
+
+on:
+  push:
+    branches: [ build_qemu ]
+    paths:
+      - 'containers/qemu/**'
+      - 'scripts/build_snapshot.sh'
+      - '.github/workflows/build-qemu.yml'
+  workflow_dispatch:
+    inputs:
+      build_snapshots:
+        description: 'Build pre-configured snapshots'
+        required: false
+        default: 'false'
+        type: boolean
+      image_tag:
+        description: 'Image tag to use'
+        required: false
+        default: 'latest'
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: mroie/qemu-loco
+  SNAPSHOT_REGISTRY: ghcr.io/mroie/qemu-snapshots
+  BOOT_IMAGE_ID: 1U_IfHPHLxaQH8lT4BpY1qOAr-ytIFLSl
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download bootable Win98 image
+      run: |
+        mkdir -p images
+        
+        # Install gdown for reliable Google Drive downloads
+        pip install gdown
+        
+        # Download the Win98 image using gdown (handles large files properly)
+        gdown "https://drive.google.com/uc?id=${{ env.BOOT_IMAGE_ID }}" -O images/win98.qcow2
+        
+        # Verify the download was successful
+        if [ $(stat -f%z images/win98.qcow2 2>/dev/null || stat -c%s images/win98.qcow2) -lt 1000000 ]; then
+          echo "❌ Download failed - file too small ($(stat -f%z images/win98.qcow2 2>/dev/null || stat -c%s images/win98.qcow2) bytes)"
+          echo "File content:"
+          head -c 500 images/win98.qcow2
+          exit 1
+        fi
+        
+        echo "✅ Download successful - $(stat -f%z images/win98.qcow2 2>/dev/null || stat -c%s images/win98.qcow2) bytes"
+    
+        
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Build and Push QEMU container
+      run: |
+        cd containers/qemu
+        
+        # Build with latest tag
+        docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
+        
+        # Tag with commit SHA
+        docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        
+        # Push both tags
+        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        
+        echo "✅ QEMU container published successfully"
+    
+    - name: Build snapshots
+      if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/setup-qemu-container-with-pcem-config'
+      run: |
+        # Install dependencies
+        sudo apt-get update
+        sudo apt-get install -y qemu-utils
+
+        # Use downloaded Win98 image if present
+        mkdir -p images
+        if [ ! -f images/win98.qcow2 ]; then
+          echo "❌ Win98 image not found after download"
+          exit 1
+        fi
+        
+        # Build snapshot containers using multistage Docker build
+        # Currently building only 'base' variant, but keeping loop structure for future expansion
+        for variant in base; do
+          echo "🏗️ Building snapshot: $variant"
+
+          # Create working directory
+          work_dir="/tmp/snapshot-build-$variant"
+          mkdir -p "$work_dir"
+
+          # Copy the downloaded Win98 image
+          cp images/win98.qcow2 "$work_dir/win98.qcow2"
+          
+          # Copy build script for snapshot configuration
+          cp scripts/build_snapshot.sh "$work_dir/build_snapshot.sh"
+
+          # Create a multi-stage Dockerfile for snapshot building
+          cat > "$work_dir/Dockerfile" <<'EOF'
+        # Stage 1: Base environment with QEMU
+        FROM ubuntu:22.04 AS qemu-base
+        RUN apt-get update && \
+            apt-get install -y --no-install-recommends \
+                qemu-system-x86 qemu-system-gui qemu-utils pulseaudio \
+                gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+                gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+                x11-utils xdotool iproute2 xvfb net-tools \
+                curl wget skopeo && \
+            rm -rf /var/lib/apt/lists/*
+
+        # Stage 2: Snapshot builder (processes the Win98 image)
+        FROM qemu-base AS snapshot-builder
+        WORKDIR /build
+        COPY win98.qcow2 /build/win98.qcow2
+        COPY build_snapshot.sh /build/build_snapshot.sh
+        
+        # Set environment variables for the build script
+        ENV BASE_IMAGE=/build/win98.qcow2
+        ENV WORK_DIR=/build/snapshot-work
+        
+        # Run snapshot preparation (creates configured snapshot)
+        RUN mkdir -p /build/snapshot-work && \
+            bash /build/build_snapshot.sh || true
+
+        # Stage 3: Final runtime image with snapshot
+        FROM qemu-base AS runtime
+        COPY --from=snapshot-builder /build/snapshot-work/snapshot.qcow2 /images/win98-snapshot.qcow2
+        
+        # Copy entrypoint script
+        COPY entrypoint.sh /entrypoint.sh
+        RUN chmod +x /entrypoint.sh
+
+        ENTRYPOINT ["/entrypoint.sh"]
+        CMD ["qemu-img", "info", "/images/win98-snapshot.qcow2"]
+        EOF
+
+          # Copy entrypoint from containers/qemu
+          cp containers/qemu/entrypoint.sh "$work_dir/entrypoint.sh"
+
+          # Build snapshot container
+          docker build -t "${{ env.SNAPSHOT_REGISTRY }}:win98-$variant" "$work_dir"
+
+          # Clean up
+          rm -rf "$work_dir"
+        done
+        
+        echo "✅ Snapshot built successfully"
+    
+    - name: Push snapshots
+      if: github.event.inputs.build_snapshots == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/setup-qemu-container-with-pcem-config'
+      run: |
+        # Push only the base variant (keeping loop structure for future expansion)
+        for variant in base; do
+          echo "🚀 Pushing snapshot: win98-$variant"
+          docker tag ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant} \
+                     ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}-${{ github.sha }}
+          docker push ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}
+          docker push ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}-${{ github.sha }}
+          echo "✅ Pushed: ${{ env.SNAPSHOT_REGISTRY }}:win98-${variant}"
+        done
+    
+    - name: Summary
+      run: |
+        echo "✅ Build complete!"
+        echo "QEMU Container: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+        if [[ "${{ github.event.inputs.build_snapshots }}" == "true" || "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "Snapshot built and pushed:"
+          echo "  ${{ env.SNAPSHOT_REGISTRY }}:win98-base"
+          echo "  ${{ env.SNAPSHOT_REGISTRY }}:win98-base-${{ github.sha }}"
+        fi

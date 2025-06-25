@@ -8,3 +8,4 @@ helmCharts:
     path: ../../helm/loco-chart
     valuesInline:
       replicas: 1
+      imageRepo: "ghcr.io/mroie"

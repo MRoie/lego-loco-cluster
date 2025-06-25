@@ -1,0 +1,33 @@
+replicas: 1
+namespace: default
+
+imageRepo: "ghcr.io/mroie"
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+
+emulator:
+  image: qemu-loco
+  tag: latest
+  imagePullPolicy: IfNotPresent
+  servicePort: 5901
+  diskReadOnly: false
+  diskPVC: "win98-disk"
+  # Use pre-built snapshots
+  usePrebuiltSnapshot: true
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+
+backend:
+  image: loco-backend
+  tag: latest
+  imagePullPolicy: IfNotPresent
+  servicePort: 3001
+  serviceType: NodePort
+
+frontend:
+  image: loco-frontend
+  tag: latest
+  imagePullPolicy: IfNotPresent
+  servicePort: 3000
+  serviceType: NodePort

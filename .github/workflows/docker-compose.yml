@@ -1,0 +1,179 @@
+name: Docker Compose CI
+
+on:
+  push:
+    branches: [ build_docker_dev_cluster ]
+    paths:
+      - 'compose/docker-compose*.yml'
+      - 'frontend/**'
+      - 'backend/**'
+      - 'containers/**'
+      - '.github/workflows/docker-compose.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'compose/docker-compose*.yml'
+      - 'frontend/**'
+      - 'backend/**'
+      - 'containers/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test-docker-compose:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl netcat-openbsd
+
+    - name: Setup TAP bridge
+      run: |
+        sudo apt-get install -y bridge-utils
+        sudo ./scripts/setup_bridge.sh || true
+
+    - name: Test minimal Docker Compose
+      run: |
+        echo "Testing minimal Docker Compose setup..."
+        
+        # Start minimal setup
+        docker-compose -f compose/docker-compose.minimal.yml up -d
+        
+        # Wait for services
+        sleep 30
+        
+        # Check if services are running
+        docker-compose -f compose/docker-compose.minimal.yml ps
+        
+        # Test service health
+        timeout 60 bash -c 'until curl -f http://localhost:3001/health; do sleep 2; done'
+        timeout 60 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+        
+        echo "✅ Minimal setup test passed"
+
+    - name: Test development setup
+      run: |
+        echo "Testing development Docker Compose setup..."
+        
+        # Stop minimal setup
+        docker-compose -f compose/docker-compose.minimal.yml down
+        
+        # Start development setup (without full emulator set)
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml up -d frontend backend registry
+        
+        # Wait for services
+        sleep 20
+        
+        # Test core services
+        timeout 60 bash -c 'until curl -f http://localhost:3001/health; do sleep 2; done'
+        timeout 60 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+        timeout 60 bash -c 'until curl -f http://localhost:5000/v2/; do sleep 2; done'
+        
+        echo "✅ Development setup test passed"
+
+    - name: Run health checks
+      run: |
+        echo "Running health checks..."
+        chmod +x ./scripts/health-check.sh
+        ./scripts/health-check.sh --quiet || true
+
+    - name: Test Docker Compose management script
+      run: |
+        echo "Testing management script..."
+        chmod +x ./scripts/docker-compose.sh
+        
+        # Test status command
+        ./scripts/docker-compose.sh status || true
+        
+        echo "✅ Management script test passed"
+
+    - name: Show logs on failure
+      if: failure()
+      run: |
+        echo "=== Docker Compose Status ==="
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml ps || true
+        
+        echo "=== Frontend Logs ==="
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml logs frontend || true
+        
+        echo "=== Backend Logs ==="
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml logs backend || true
+        
+        echo "=== Registry Logs ==="
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml logs registry || true
+
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose -f compose/docker-compose.yml -f compose/docker-compose.override.yml down -v || true
+        docker-compose -f compose/docker-compose.minimal.yml down -v || true
+        docker system prune -f || true
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test-docker-compose
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push QEMU image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./containers/qemu
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/qemu:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/qemu:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

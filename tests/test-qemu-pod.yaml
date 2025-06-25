@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qemu-test
+spec:
+  containers:
+  - name: qemu-bootable
+    image: qemu-bootable:latest
+    imagePullPolicy: Never
+    securityContext:
+      privileged: true
+      capabilities:
+        add:
+          - NET_ADMIN
+          - SYS_ADMIN
+    env:
+    - name: CREATE_BOOTABLE_DISK
+      value: "true"
+    - name: DISK_SIZE
+      value: "1G"
+    ports:
+    - containerPort: 5901
+      name: vnc
+    volumeMounts:
+    - name: dev-net-tun
+      mountPath: /dev/net/tun
+    - name: tmp-storage
+      mountPath: /tmp
+  volumes:
+  - name: dev-net-tun
+    hostPath:
+      path: /dev/net/tun
+      type: CharDevice
+  - name: tmp-storage
+    emptyDir: {}
+  restartPolicy: Never

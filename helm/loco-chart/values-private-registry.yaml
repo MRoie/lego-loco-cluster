@@ -1,0 +1,45 @@
+# values-private-registry.yaml
+# Configuration for deploying with private container registries
+
+# Enable image pull secrets for private registries
+imagePullSecrets:
+  - ghcr-secret      # GitHub Container Registry authentication
+  - jfrog-secret     # JFrog Artifactory authentication (if needed)
+
+# Registry configurations
+registryConfig:
+  ghcr:
+    enabled: true
+    secretName: "ghcr-secret"
+    server: "ghcr.io"
+  
+  jfrog:
+    enabled: false  # Set to true if using JFrog
+    secretName: "jfrog-secret"
+    server: "your-company.jfrog.io"  # Update with your JFrog URL
+
+emulator:
+  image: qemu-loco
+  tag: latest
+  imagePullPolicy: Always  # Always pull from registry for private images
+  
+  # Snapshot configuration for private registry
+  usePrebuiltSnapshot: true
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+  
+  env:
+    USE_PREBUILT_SNAPSHOT: "true"
+    SNAPSHOT_REGISTRY: "ghcr.io/mroie/qemu-snapshots"
+    SNAPSHOT_TAG: "win98-base"
+    DISK_SIZE: "2G"
+
+backend:
+  image: loco-backend
+  tag: latest
+  imagePullPolicy: Always  # Always pull from private registry
+
+frontend:
+  image: loco-frontend
+  tag: latest
+  imagePullPolicy: Always  # Always pull from private registry

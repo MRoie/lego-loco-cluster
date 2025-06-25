@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "run_ci" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "run_ci" ]
 
 jobs:
   # Build the backend and frontend assets

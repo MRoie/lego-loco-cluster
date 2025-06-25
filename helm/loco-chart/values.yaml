@@ -1,17 +1,49 @@
-replicas: 3
+replicas: 1
 namespace: loco
 
-imageRepo: ""
+imageRepo: "ghcr.io/mroie"
+
+# Image pull secrets for private registries
+# Uncomment and configure as needed
+imagePullSecrets: []
+  # - ghcr-secret        # GitHub Container Registry
+  # - jfrog-secret       # JFrog Artifactory
+  # - custom-registry    # Custom registry
+
+# Registry configurations for different environments
+registryConfig:
+  # GitHub Container Registry
+  ghcr:
+    enabled: false
+    secretName: "ghcr-secret"
+    server: "ghcr.io"
+  
+  # JFrog Artifactory
+  jfrog:
+    enabled: false
+    secretName: "jfrog-secret"
+    server: ""  # e.g., "your-company.jfrog.io"
 
 emulator:
   image: qemu-loco
   tag: latest
   imagePullPolicy: IfNotPresent
-  servicePort: 6080
-  # Optional PVC that holds the Windows disk image. If empty, an ephemeral
-  # emptyDir volume will be used so tests can run without storage.
-  diskPVC: ""
+
+  servicePort: 5901
+  diskPVC: win98-disk
   diskReadOnly: false
+  
+  # Snapshot configuration
+  usePrebuiltSnapshot: false
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+  
+  # Additional environment variables
+  env: {}
+    # USE_PREBUILT_SNAPSHOT: "true"
+    # SNAPSHOT_REGISTRY: "ghcr.io/mroie/qemu-snapshots"
+    # SNAPSHOT_TAG: "win98-base"
+    # DISK_SIZE: "2G"
 
 backend:
   image: loco-backend
