@@ -3,10 +3,10 @@
 The following steps will complete the Loco LAN cluster. Each item can be used as
 a future Codex prompt.
 
-1. **Windows 98 Disk Image**
-   - Follow `docs/win98_image.md` to create a disk image with Lego Loco installed.
-   - Provide scripts (`create_win98_image.sh`/`.ps1`) that convert and package the image for container use.
-   - Update emulator entrypoints to read the image path from an environment variable.
+1. **SoftGPU Snapshot Integration**
+   - Use the latest snapshot files with SoftGPU and Lego Loco from `ghcr.io/mroie/qemu-snapshots`.
+   - Provide fallback scripts (`create_win98_image.sh`/`.ps1`) so the snapshot can be rebuilt if needed.
+   - Ensure emulator entrypoints read the image path from an environment variable.
 
 2. **Persistent Storage**
    - Modify the Helm chart so emulator pods mount the disk image via a PersistentVolumeClaim.
@@ -21,14 +21,11 @@ a future Codex prompt.
    - Add `k8s-tests/test-boot.sh` to verify each emulator exposes VNC and reaches the Windows desktop.
    - Ensure all tests run in CI and block merges on failure.
 
-5. **Frontend and Streaming Polishing**
+5. **Frontend, Streaming and VR Polishing**
    - Allow users to select audio output devices per instance.
    - Add reconnect logic to `useWebRTC` for dropped connections and show loading indicators while streams establish.
+   - Finalize a production-ready VR scene with minimal latency and controller input mapped to backend hotkeys.
 
-6. **Optional VR Interface**
-   - Prototype a simple A-Frame or Three.js scene rendering the 3×3 grid in VR.
-   - Map controller input to existing backend hotkey actions.
-
-Completing these tasks will produce a robust Windows 98 cluster with automated deployment, reliable streaming and an optional VR mode.
+Completing these tasks will produce a robust Windows 98 cluster with automated deployment, reliable streaming and a polished VR experience.
 
 
