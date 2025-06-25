@@ -1,214 +1,40 @@
-Loco LAN: Kubernetes-Controlled Lego Loco LAN Cluster
+# Loco LAN
 
-Welcome to Loco LAN — a LAN-based Kubernetes system that runs 9 instances of Lego Loco on emulated Windows 98 environments. Each instance is visualized in a 3×3 web-based KVM grid with Lego-styled borders, full keyboard/mouse control, audio metering, and real-time video streaming. The system also supports VR scene navigation of the game instances.
+Loco LAN runs multiple instances of Lego Loco inside emulated Windows 98 environments.
+A web dashboard streams each emulator and provides keyboard, mouse and audio control.
+The stack uses Docker and Kubernetes so you can spin up the whole cluster with a
+single command.
 
-🧩 Key Features
+## Features
+- 3×3 grid of WebRTC streams
+- Audio passthrough with meters
+- Dockerized Windows 98 images
+- Helm chart for Kubernetes
+- Simple dev container
 
-✅ Runs 9 emulated Win98 environments (QEMU, PCem, Wine supported)
+## Repository Layout
+- `backend/` – signaling and API server
+- `frontend/` – React dashboard
+- `containers/` – emulator Dockerfiles
+- `helm/` – Helm chart
+- `k8s/` – manifests and kind config
+- `k8s-tests/` – cluster tests
+- `scripts/` – helper utilities
+- `tests/` – assorted test configs
+- `docs/` – documentation
 
-🎮 Each runs Lego Loco with full multiplayer LAN support
-
-🌐 TCP/IP stack patched using virtual TAP bridge
-
-🖼️ Web-based KVM dashboard (React, WebRTC)
-
-🔊 Audio metering and passthrough per instance
-
-🎥 Low-latency streaming using GStreamer + WebRTC
-
-📦 CI/CD with multi-arch Docker builds and Kubernetes deployment
-
-🧠 Fully scripted test plan to validate networking and game state
-
-🚀 Future expansion to 3D VR room interface with live controls
-
-## Quick Start
-
-1. Clone this repository and enter the project directory.
-2. Run the following setup commands:
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y nodejs npm qemu-system-x86 qemu-kvm wine gstreamer1.0-tools pulseaudio docker.io tcpdump
-   cd backend && npm install && cd ..
-   cd frontend && npm install && cd ..
-   ```
-3. Ensure Docker and Talos are installed. Use `talosctl cluster create` to provision the Kubernetes cluster.
-4. Build the Docker images and deploy the Helm chart as described below.
-
-### Running in a Dev Container
-
-The repository provides a `.devcontainer` definition for GitHub Codespaces or
-other DevPod tools. The container installs QEMU, Wine, GStreamer, Docker and the
-Node.js toolchain so the full stack can run in a single environment.
-
-1. Open the project in a Codespace or DevPod and wait for the container to
-   finish building.
-2. Once inside the container run:
-
-   ```bash
-   ./dev-start.sh
-   ```
-
-   This command starts the backend and frontend with live reloading and exposes
-   the VR dashboard on port `3000`. When running a Talos cluster it will also
-   forward emulator ports `6090-6092` for VR control.
-
-### Running the Cluster with Kind
-
-The dev container also installs **kubectl**, **kind** and **helm** so you can
-spin up a local Kubernetes cluster. To test the full stack with three emulator
-pods run:
+## Quick Setup
+Install system packages and Node dependencies:
 
 ```bash
-kind create cluster --name loco --config kind-config.yaml
-REPLICAS=3 ./scripts/deploy_single.sh
+sudo apt-get update
+sudo apt-get install -y nodejs npm qemu-system-x86 qemu-kvm wine gstreamer1.0-tools pulseaudio docker.io tcpdump
+cd backend && npm install && cd ..
+cd frontend && npm install && cd ..
 ```
 
-This launches the backend, frontend and three emulator pods. The services are
-available on the forwarded ports from the dev container.
-
-### Running the Cluster with Talos
-
-The dev container also ships with **talosctl** so you can provision a small
-Talos Kubernetes cluster locally. To spin up three emulator pods with live
-reloading in the VR dashboard:
+Start the development stack with:
 
 ```bash
-# Create a Talos cluster with three workers
-talosctl cluster create --name loco --workers 3
-talosctl kubeconfig .
-export KUBECONFIG=$PWD/kubeconfig
-
-# Deploy the stack and expose instances
-REPLICAS=3 ./scripts/deploy_single.sh
-./scripts/start_live_cluster.sh
-
-# Launch the development environment with hot reload
-./dev-start.sh
+./scripts/dev-start.sh
 ```
-
-The script `start_live_cluster.sh` forwards the backend and VNC ports from all
-pods to your dev container (3001 and 6090‑6092). The generated configuration
-file is automatically picked up by the frontend so entering VR mode lets you
-control all three instances in real time.
-
----
-
-🛠️ Stack
-
-Layer   Tech
-
-Emulation       **QEMU**  (PCem, Wine)
-Streaming       GStreamer, PulseAudio
-Web UI  React, Tailwind, WebRTC
-Infra   Helm, Kubernetes (Talos)
-CI/CD   GitHub Actions, Docker
-Testing Bash, kubectl, tcpdump
-
----
-
-📁 Repo Structure
-
-loco-lan/
-├── frontend/                # React dashboard
-├── backend/                 # Signaling + API control server
-├── containers/              # Multi-arch Dockerfiles
-├── helm/                    # Helm charts and values
-├── k8s-tests/               # Cluster and pod health scripts
-├── ci/                      # Build + manifest + pipeline
-└── README.md
-
----
-
-🚦 How to Deploy
-
-# Build multi-arch Docker images
-export LOCO_REPO=myrepo
-docker buildx build --platform linux/amd64,linux/arm64 -t $LOCO_REPO/loco:latest --push .
-
-# Create K8s cluster using Talos
-talosctl cluster create --name loco --workers=3
-talosctl kubeconfig .
-export KUBECONFIG=$PWD/kubeconfig
-helm install loco helm/loco-chart \
-  --set imageRepo=$LOCO_REPO \
-  --set emulator.diskPVC=my-disk-pvc \
-  --set emulator.diskReadOnly=true
-
-# Run connectivity and game-level tests
-bash k8s-tests/test-network.sh
-bash k8s-tests/test-tcp.sh
-bash k8s-tests/test-broadcast.sh
-bash k8s-tests/test-websocket.sh
-# Logs for each test are written under k8s-tests/logs
-
-# Configure the shared TAP bridge
-bash scripts/setup_bridge.sh
-
-# Launch a QEMU-based instance
-docker run --rm --network host --cap-add=NET_ADMIN \
-  -e TAP_IF=tap0 -e BRIDGE=loco-br \
-  -v /path/to/win98.qcow2:/images/win98.qcow2 \
-  $LOCO_REPO/qemu-loco
-# A more detailed walkthrough of this container, including the hardware
-# mapping, is available in [docs/qemu_container.md](docs/qemu_container.md).
-# For convenience a helper script `scripts/download_and_run_qemu.sh` downloads
-# the ready-made QCOW2 image. It extracts the confirmation token from Google
-# Drive and feeds it to `aria2c` using up to 16 connections and 32 segments
-# (set `CONNS` and `SPLITS` to override), then builds
-# the container, saves it as `qemu-loco.tar.gz` and runs it with these flags.
-
----
-
-1. 🏗️ Bootstrap React Web App (3×3 Grid UI)
-
-> Scaffold a React app using Tailwind and Vite that renders a 3×3 grid of video tiles. Each tile has zoom controls, Lego-styled borders, and a hover control panel with audio meter and fullscreen toggle.
-
-2. 🔌 Create WebRTC Hook for StreamTile
-
-> Build a useWebRTC.ts hook that connects to a signaling server, negotiates a WebRTC stream, and handles cleanup. It should support audio metering via Web Audio API and expose stats.
-
-3. 🧠 Write Signaling Server in Node.js
-
-> Create a lightweight WebSocket signaling server in Node.js using ws. It should assign stream IDs, handle SDP offer/answer exchange, and support reconnections.
-
-4. 🐳 Write Multi-Arch Dockerfiles for Emulators
-
-> Write three Dockerfiles for PCem, QEMU, and Wine environments with VNC output, PulseAudio capture, and GStreamer pipeline that exposes video+audio as WebRTC stream.
-
-5. 📦 Create Docker Manifest Workflow
-
-> Write a GitHub Actions CI workflow that builds all three Dockerfiles for both amd64 and arm64, tags them with digests, and publishes a Docker manifest list for latest.
-
-6. 🔁 Design Helm Chart with Theme Support
-
-> Create a Helm chart that defines a deployment per instance (0–8) with per-pod values for emulator type and UI border theme. Use config maps to pass per-instance style IDs.
-
-7. 🧪 Test Plan CI Job
-
-> Create a Job resource that runs test-network.sh and test-broadcast.sh after each deployment to verify L2/L3/L4 communication across pods.
-
-8. 🎮 Automate In-Game Multiplayer Detection
-
-> Write a script that connects to each VNC output, takes screenshots using vncdotool, and uses OpenCV to detect presence of LAN multiplayer game listings.
-
-9. 🎨 Lego Border Styling with SVG/CSS
-
-> Design a set of SVG patterns and Tailwind classes for Lego-style borders around the video tiles. Provide sample components demonstrating usage.
-
-
-### VR Prototype
-
-The dashboard now includes a built-in VR mode. Click **Enter VR** in the top
-right of the grid to switch to the A-Frame scene. The scene automatically lays
-out however many streams are available, falling back to placeholders if the
-backend is unreachable. Use the **Exit VR** button to return to the normal grid.
-The VR implementation uses React components directly—no iframe—and fully
-replaces the former demo under `frontend/public/vr/`.
-
-### Cluster Status Overlay
-
-Both the standard grid and the VR scene poll `/api/status` to show the boot
-state of each Windows 98 pod. Tiles display **booting**, **ready**, or any
-custom status from `config/status.json`. This helps operators wait through the
-long emulator startup times before launching Lego Loco.
