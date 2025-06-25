@@ -86,15 +86,15 @@ run_test "Frontend HTML Structure" \
 
 # Test 7: Container Status
 run_test "Development Containers Running" \
-    "docker-compose -f docker-compose.yml -f docker-compose.dev.yml ps | grep -q 'Up'"
+    "docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml ps | grep -q 'Up'"
 
 # Test 8: Backend Live Reloading (nodemon)
 run_test "Backend Nodemon Configuration" \
-    "docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs backend | grep -q 'nodemon'"
+    "docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml logs backend | grep -q 'nodemon'"
 
 # Test 9: Frontend Live Reloading (Vite)
 run_test "Frontend Vite HMR" \
-    "docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs frontend | grep -q 'vite'"
+    "docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml logs frontend | grep -q 'vite'"
 
 # Test 10: Debug Port Exposed
 run_test "Backend Debug Port" \

@@ -28,10 +28,10 @@ This directory contains Docker Compose configurations for running the Lego Loco 
 
 | File | Description |
 |------|-------------|
-| `docker-compose.yml` | Main compose file with all services |
-| `docker-compose.override.yml` | Development overrides (auto-loaded) |
-| `docker-compose.prod.yml` | Production configuration |
-| `docker-compose.minimal.yml` | Minimal setup for testing |
+| `compose/docker-compose.yml` | Main compose file with all services |
+| `compose/docker-compose.override.yml` | Development overrides (auto-loaded) |
+| `compose/docker-compose.prod.yml` | Production configuration |
+| `compose/docker-compose.minimal.yml` | Minimal setup for testing |
 | `.env.example` | Environment variables template |
 
 ## Services
@@ -97,7 +97,7 @@ In development mode:
 ### Minimal Setup
 For quick testing, use the minimal configuration:
 ```bash
-docker-compose -f docker-compose.minimal.yml up
+docker-compose -f compose/docker-compose.minimal.yml up
 ```
 
 ## Networking
@@ -147,7 +147,7 @@ All services run on a custom bridge network (`loco-network`):
    - Download image: `./scripts/download_and_run_qemu.sh`
 
 4. **Out of memory**
-   - Use minimal setup: `docker-compose -f docker-compose.minimal.yml up`
+   - Use minimal setup: `docker-compose -f compose/docker-compose.minimal.yml up`
    - Or dev mode with fewer emulators: `./docker-compose.sh up dev`
 
 ### Logs

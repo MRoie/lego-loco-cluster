@@ -85,14 +85,14 @@ loco-frontend   lego-loco-cluster-frontend   Up (healthy) - Development mode wit
 ### Available Commands
 ```bash
 # View logs
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f backend
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f frontend
+docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml logs -f backend
+docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml logs -f frontend
 
 # Stop development environment
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml down
 
 # Restart specific service
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml restart backend
+docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml restart backend
 ```
 
 ## 🎨 Frontend Features
