@@ -34,7 +34,7 @@ kubectl get pods -A -o wide
 kubectl get nodes
 
 echo "Waiting for pods to be ready" && date
-kubectl wait --for=condition=Ready pod --all --timeout=300s
+kubectl wait --for=condition=Ready pod -A --all --timeout=300s
 
 kubectl get pods -A -o wide
 
