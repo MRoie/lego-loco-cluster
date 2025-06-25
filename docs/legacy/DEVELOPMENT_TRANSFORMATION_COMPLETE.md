@@ -91,7 +91,7 @@ Response: [/* Only provisioned instances */]
 - **Docker Volume Mounting**: Code changes sync instantly to containers
 - **Debug Port Exposure**: Chrome DevTools debugging on port 9229
 - **Health Monitoring**: Automatic health checks and service status
-- **One-Command Startup**: `./dev-start.sh` launches entire environment
+- **One-Command Startup**: `./scripts/dev-start.sh` launches entire environment
 
 #### Development Stack:
 ```yaml
@@ -160,7 +160,7 @@ Docker Environment:
 ```
 lego-loco-cluster/
 ├── docker-compose.dev.yml     # Development overrides
-├── dev-start.sh              # Development startup script  
+├── scripts/dev-start.sh              # Development startup script  
 ├── demo-dev-environment.sh   # Comprehensive demo
 ├── DEVELOPMENT_COMPLETE.md   # This documentation
 ├── backend/
@@ -216,13 +216,13 @@ lego-loco-cluster/
 ### Quick Start:
 ```bash
 # Start development environment
-./dev-start.sh
+./scripts/dev-start.sh
 
 # Or start minimal (backend + frontend only)
-./dev-start.sh --minimal
+./scripts/dev-start.sh --minimal
 
 # Force rebuild if needed
-./dev-start.sh --rebuild
+./scripts/dev-start.sh --rebuild
 ```
 
 ### Access Points:

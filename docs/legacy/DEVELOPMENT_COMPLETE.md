@@ -26,7 +26,7 @@ Successfully implemented a Docker-based development environment with live monito
 
 ### 4. Development Tooling
 - ✅ **Development Compose File** - `docker-compose.dev.yml` for dev-specific services
-- ✅ **Dev Startup Script** - `dev-start.sh` with health checks and monitoring
+- ✅ **Dev Startup Script** - `scripts/dev-start.sh` with health checks and monitoring
 - ✅ **Enhanced Docker Compose Script** - Added `dev` command for easy development
 - ✅ **Nodemon Configuration** - Optimized file watching and restart settings
 
@@ -63,13 +63,13 @@ loco-frontend   lego-loco-cluster-frontend   Up (healthy) - Development mode wit
 ### Start Development Environment
 ```bash
 # Start full development environment
-./dev-start.sh
+./scripts/dev-start.sh
 
 # Start minimal (backend + frontend only)
-./dev-start.sh --minimal
+./scripts/dev-start.sh --minimal
 
 # Force rebuild images
-./dev-start.sh --rebuild
+./scripts/dev-start.sh --rebuild
 
 # Alternative: Use docker-compose.sh
 ./docker-compose.sh dev

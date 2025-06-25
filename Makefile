@@ -201,6 +201,6 @@ docs: ## Show important URLs and info
 	@echo "  Emulator 2:  http://localhost:6082"
 	@echo ""
 	@echo "📚 Documentation:"
-	@echo "  Docker Compose: DOCKER_COMPOSE.md"
+	@echo "  Docker Compose: docs/legacy/DOCKER_COMPOSE.md"
 	@echo "  Main README:    README.md"
 	@echo "  Private Registry: docs/PRIVATE_REGISTRY_GUIDE.md"

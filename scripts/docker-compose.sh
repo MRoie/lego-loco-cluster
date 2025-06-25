@@ -322,7 +322,7 @@ case "${1:-}" in
         ;;
     dev)
         print_status "Starting development environment with live reloading..."
-        exec ./dev-start.sh "${@:2}"
+        exec ./scripts/dev-start.sh "${@:2}"
         ;;
     down)
         stop_cluster
