@@ -1,6 +1,7 @@
 import 'aframe';
 import React, { useEffect, useState, useRef } from 'react';
 import VRReactVNCViewer from './components/VRReactVNCViewer';
+import ControlsConfig from './components/ControlsConfig';
 
 function positionForIndex(i, cols, rows) {
   const x = (i % cols) - (cols - 1) / 2;
@@ -149,7 +150,70 @@ export default function VRScene({ onExit }) {
   const [info, setInfo] = useState('');
   const [status, setStatus] = useState({});
   const [connectedVNCs, setConnectedVNCs] = useState(new Set());
+  const defaultControllerMap = {
+    abuttondown: 'F1',
+    bbuttondown: 'F2',
+    xbuttondown: 'F3',
+    ybuttondown: 'F4',
+    triggerdown: 'Enter',
+    abuttonup: 'F1',
+    bbuttonup: 'F2',
+    xbuttonup: 'F3',
+    ybuttonup: 'F4',
+    triggerup: 'Enter',
+    pinchstarted: 'Enter',
+    pinchended: 'Enter',
+  };
+  const defaultKeyboardMap = {
+    Enter: 0xFF0D,
+    Backspace: 0xFF08,
+    Tab: 0xFF09,
+    Escape: 0xFF1B,
+    ArrowUp: 0xFF52,
+    ArrowDown: 0xFF54,
+    ArrowLeft: 0xFF51,
+    ArrowRight: 0xFF53,
+    F1: 0xFFBE,
+    F2: 0xFFBF,
+    F3: 0xFFC0,
+    F4: 0xFFC1,
+    F5: 0xFFC2,
+    F6: 0xFFC3,
+    F7: 0xFFC4,
+    F8: 0xFFC5,
+    F9: 0xFFC6,
+    F10: 0xFFC7,
+    F11: 0xFFC8,
+    F12: 0xFFC9,
+  };
+  const [controllerMap, setControllerMap] = useState(() => {
+    try {
+      return {
+        ...defaultControllerMap,
+        ...JSON.parse(localStorage.getItem('vrControllerMap') || '{}'),
+      };
+    } catch {
+      return defaultControllerMap;
+    }
+  });
+  const [keyboardMap, setKeyboardMap] = useState(() => {
+    try {
+      return {
+        ...defaultKeyboardMap,
+        ...JSON.parse(localStorage.getItem('vrKeyboardMap') || '{}'),
+      };
+    } catch {
+      return defaultKeyboardMap;
+    }
+  });
   const vncRefs = useRef([]);
+
+  const saveMappings = (cMap, kMap) => {
+    setControllerMap({ ...defaultControllerMap, ...cMap });
+    setKeyboardMap({ ...defaultKeyboardMap, ...kMap });
+    localStorage.setItem('vrControllerMap', JSON.stringify(cMap));
+    localStorage.setItem('vrKeyboardMap', JSON.stringify(kMap));
+  };
 
   useEffect(() => {
     fetch('/api/config/instances')
@@ -196,29 +260,7 @@ export default function VRScene({ onExit }) {
           if (e.key.length === 1) {
             keysym = e.key.charCodeAt(0);
           } else {
-            const specialKeys = {
-              'Enter': 0xFF0D,
-              'Backspace': 0xFF08,
-              'Tab': 0xFF09,
-              'Escape': 0xFF1B,
-              'ArrowUp': 0xFF52,
-              'ArrowDown': 0xFF54,
-              'ArrowLeft': 0xFF51,
-              'ArrowRight': 0xFF53,
-              'F1': 0xFFBE,
-              'F2': 0xFFBF,
-              'F3': 0xFFC0,
-              'F4': 0xFFC1,
-              'F5': 0xFFC2,
-              'F6': 0xFFC3,
-              'F7': 0xFFC4,
-              'F8': 0xFFC5,
-              'F9': 0xFFC6,
-              'F10': 0xFFC7,
-              'F11': 0xFFC8,
-              'F12': 0xFFC9
-            };
-            keysym = specialKeys[e.key] || 0;
+            keysym = keyboardMap[e.key] || 0;
           }
           
           if (keysym) {
@@ -236,7 +278,39 @@ export default function VRScene({ onExit }) {
       window.removeEventListener('keydown', handler);
       window.removeEventListener('keyup', handler);
     };
-  }, [active, instances.length, connectedVNCs]);
+  }, [active, instances.length, connectedVNCs, keyboardMap]);
+
+  useEffect(() => {
+    const left = document.getElementById('leftController');
+    const right = document.getElementById('rightController');
+    if (!left || !right) return;
+
+    const specialKeys = keyboardMap;
+    const map = controllerMap;
+
+    const handler = (e) => {
+      const keyName = map[e.type];
+      if (!keyName) return;
+      const vncRef = vncRefs.current[active];
+      if (!connectedVNCs.has(active) || !vncRef) return;
+      if (!vncRef.getConnectionState().connected) return;
+      const keysym = specialKeys[keyName];
+      vncRef.sendKey(keysym, e.type.endsWith('down') ? 1 : 0);
+    };
+
+    const events = Object.keys(map);
+    events.forEach(ev => {
+      left.addEventListener(ev, handler);
+      right.addEventListener(ev, handler);
+    });
+
+    return () => {
+      events.forEach(ev => {
+        left.removeEventListener(ev, handler);
+        right.removeEventListener(ev, handler);
+      });
+    };
+  }, [active, connectedVNCs, controllerMap, keyboardMap]);
 
   const handleVNCReady = (idx, vncRef) => {
     vncRefs.current[idx] = vncRef;
@@ -265,6 +339,13 @@ export default function VRScene({ onExit }) {
         >
           Exit VR
         </button>
+        <div className="inline-block ml-2">
+          <ControlsConfig
+            controllerMap={controllerMap}
+            keyboardMap={keyboardMap}
+            onSave={saveMappings}
+          />
+        </div>
       </div>
       
       <a-scene embedded>
@@ -294,22 +375,26 @@ export default function VRScene({ onExit }) {
           movement-controls 
           position="0 1.6 3"
         >
-          <a-entity 
-            camera 
-            look-controls 
+          <a-entity
+            camera
+            look-controls
             wasd-controls
+            cursor="rayOrigin: mouse"
           ></a-entity>
           
-          <a-entity 
+          <a-entity
             id="leftController"
             oculus-touch-controls="hand: left"
+            hand-tracking-controls="hand: left"
           ></a-entity>
           
-          <a-entity 
-            id="rightController" 
+          <a-entity
+            id="rightController"
             oculus-touch-controls="hand: right"
+            hand-tracking-controls="hand: right"
             laser-controls
             raycaster="objects: .tile"
+            cursor="fuse: false"
           ></a-entity>
         </a-entity>
       </a-scene>
