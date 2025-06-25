@@ -81,7 +81,7 @@ export KUBECONFIG=$PWD/kubeconfig
 
 # Deploy the stack and expose instances
 REPLICAS=3 ./scripts/deploy_single.sh
-scripts/start_live_cluster.sh
+./scripts/start_live_cluster.sh
 
 # Launch the development environment with hot reload
 ./dev-start.sh
