@@ -4,9 +4,9 @@
 .DEFAULT_GOAL := help
 
 # Variables
-COMPOSE_FILES := -f docker-compose.yml -f docker-compose.override.yml
-COMPOSE_PROD := -f docker-compose.yml -f docker-compose.prod.yml
-COMPOSE_MINIMAL := -f docker-compose.minimal.yml
+COMPOSE_FILES := -f compose/docker-compose.yml -f compose/docker-compose.override.yml
+COMPOSE_PROD := -f compose/docker-compose.yml -f compose/docker-compose.prod.yml
+COMPOSE_MINIMAL := -f compose/docker-compose.minimal.yml
 
 help: ## Show this help message
 	@echo "Lego Loco Cluster - Development Commands"

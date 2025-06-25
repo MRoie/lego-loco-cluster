@@ -51,10 +51,10 @@ loco-registry-minimal   Up 4 minutes    0.0.0.0:5500->5000/tcp
 - ✅ Added proper environment variable substitution
 
 ### 2. Docker Compose Files
-- ✅ `docker-compose.yml` - Main configuration with all 9 emulators
-- ✅ `docker-compose.minimal.yml` - Quick testing setup
-- ✅ `docker-compose.override.yml` - Development overrides
-- ✅ `docker-compose.prod.yml` - Production resource limits
+ - ✅ `compose/docker-compose.yml` - Main configuration with all 9 emulators
+ - ✅ `compose/docker-compose.minimal.yml` - Quick testing setup
+ - ✅ `compose/docker-compose.override.yml` - Development overrides
+ - ✅ `compose/docker-compose.prod.yml` - Production resource limits
 
 ### 3. Instance Configuration
 - ✅ Updated `config/instances-docker-compose.json` with new port mappings
@@ -84,7 +84,7 @@ loco-registry-minimal   Up 4 minutes    0.0.0.0:5500->5000/tcp
 
 ```bash
 # Quick start minimal setup
-docker-compose -f docker-compose.minimal.yml up
+docker-compose -f compose/docker-compose.minimal.yml up
 
 # Full development setup
 ./docker-compose.sh up dev
