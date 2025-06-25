@@ -35,6 +35,63 @@ Welcome to Loco LAN — a LAN-based Kubernetes system that runs 9 instances of L
 3. Ensure Docker and Talos are installed. Use `talosctl cluster create` to provision the Kubernetes cluster.
 4. Build the Docker images and deploy the Helm chart as described below.
 
+### Running in a Dev Container
+
+The repository provides a `.devcontainer` definition for GitHub Codespaces or
+other DevPod tools. The container installs QEMU, Wine, GStreamer, Docker and the
+Node.js toolchain so the full stack can run in a single environment.
+
+1. Open the project in a Codespace or DevPod and wait for the container to
+   finish building.
+2. Once inside the container run:
+
+   ```bash
+   ./dev-start.sh
+   ```
+
+   This command starts the backend and frontend with live reloading and exposes
+   the VR dashboard on port `3000`. When running a Talos cluster it will also
+   forward emulator ports `6090-6092` for VR control.
+
+### Running the Cluster with Kind
+
+The dev container also installs **kubectl**, **kind** and **helm** so you can
+spin up a local Kubernetes cluster. To test the full stack with three emulator
+pods run:
+
+```bash
+kind create cluster --name loco --config kind-config.yaml
+REPLICAS=3 ./scripts/deploy_single.sh
+```
+
+This launches the backend, frontend and three emulator pods. The services are
+available on the forwarded ports from the dev container.
+
+### Running the Cluster with Talos
+
+The dev container also ships with **talosctl** so you can provision a small
+Talos Kubernetes cluster locally. To spin up three emulator pods with live
+reloading in the VR dashboard:
+
+```bash
+# Create a Talos cluster with three workers
+talosctl cluster create --name loco --workers 3
+talosctl kubeconfig .
+export KUBECONFIG=$PWD/kubeconfig
+
+# Deploy the stack and expose instances
+REPLICAS=3 ./scripts/deploy_single.sh
+scripts/start_live_cluster.sh
+
+# Launch the development environment with hot reload
+./dev-start.sh
+```
+
+The script `start_live_cluster.sh` forwards the backend and VNC ports from all
+pods to your dev container (3001 and 6090‑6092). The generated configuration
+file is automatically picked up by the frontend so entering VR mode lets you
+control all three instances in real time.
+
 ---
 
 🛠️ Stack
