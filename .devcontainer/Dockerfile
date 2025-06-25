@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-22.04
 
-# Install core packages for Lego Loco development
+# Install core packages for Loco LAN development
 ARG KUBECTL_VERSION="v1.33.2"
 ARG KIND_VERSION="v0.23.0"
 ARG HELM_VERSION="v3.14.3"
