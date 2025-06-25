@@ -84,16 +84,16 @@ jobs:
     - name: Run health checks
       run: |
         echo "Running health checks..."
-        chmod +x ./health-check.sh
-        ./health-check.sh --quiet || true
+        chmod +x ./scripts/health-check.sh
+        ./scripts/health-check.sh --quiet || true
 
     - name: Test Docker Compose management script
       run: |
         echo "Testing management script..."
-        chmod +x ./docker-compose.sh
+        chmod +x ./scripts/docker-compose.sh
         
         # Test status command
-        ./docker-compose.sh status || true
+        ./scripts/docker-compose.sh status || true
         
         echo "✅ Management script test passed"
 
