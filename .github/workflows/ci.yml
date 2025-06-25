@@ -24,8 +24,8 @@ jobs:
           # Frontend packages and production build
           cd frontend && npm install && npm run build && cd ..
 
-  # Spin up a Talos cluster and run connectivity tests
-  integration:
+
+  integration-network:
     needs: build
     runs-on: ubuntu-22.04
     container:
@@ -44,6 +44,10 @@ jobs:
           apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
             pulseaudio docker.io tcpdump netcat-openbsd
+      - name: Start Docker daemon
+        run: |
+          dockerd > /tmp/dockerd.log 2>&1 &
+          sleep 5
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
@@ -52,26 +56,101 @@ jobs:
           curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
           install -m 0755 talosctl /usr/local/bin/talosctl
       - name: Create Talos cluster
-        run: |
-          talosctl cluster create --name loco --workers 3
-          talosctl kubeconfig .
-          echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
-      - name: Deploy cluster
-        run: kubectl apply -k kustomize/base
-      - name: Wait for cluster
-        run: kubectl wait --for=condition=Ready pod --all --timeout=300s
+        run: scripts/create_cluster.sh
       - name: Run network tests
         run: bash k8s-tests/test-network.sh
-      - name: Run TCP tests
-        run: bash k8s-tests/test-tcp.sh
-      - name: Run broadcast tests
-        run: bash k8s-tests/test-broadcast.sh
-      - name: Upload integration logs
+      - name: Upload integration network logs
         uses: actions/upload-artifact@v4
         with:
-          name: integration-logs
+          name: integration-network-logs
           path: k8s-tests/logs
-      - name: Destroy Talos cluster
+      - name: Destroy cluster
+        if: always()
+        run: talosctl cluster destroy loco || true
+
+  integration-tcp:
+    needs: build
+    runs-on: ubuntu-22.04
+    container:
+      image: node:20-bullseye
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install system packages
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
+            pulseaudio docker.io tcpdump netcat-openbsd
+      - name: Start Docker daemon
+        run: |
+          dockerd > /tmp/dockerd.log 2>&1 &
+          sleep 5
+      - name: Install Node dependencies
+        run: |
+          cd backend && npm install && cd ..
+      - name: Install talosctl
+        run: |
+          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
+          install -m 0755 talosctl /usr/local/bin/talosctl
+      - name: Create Talos cluster
+        run: scripts/create_cluster.sh
+      - name: Run TCP tests
+        run: bash k8s-tests/test-tcp.sh
+      - name: Upload integration tcp logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-tcp-logs
+          path: k8s-tests/logs
+      - name: Destroy cluster
+        if: always()
+        run: talosctl cluster destroy loco || true
+
+  integration-broadcast:
+    needs: build
+    runs-on: ubuntu-22.04
+    container:
+      image: node:20-bullseye
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install system packages
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
+            pulseaudio docker.io tcpdump netcat-openbsd
+      - name: Start Docker daemon
+        run: |
+          dockerd > /tmp/dockerd.log 2>&1 &
+          sleep 5
+      - name: Install Node dependencies
+        run: |
+          cd backend && npm install && cd ..
+      - name: Install talosctl
+        run: |
+          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
+          install -m 0755 talosctl /usr/local/bin/talosctl
+      - name: Create Talos cluster
+        run: scripts/create_cluster.sh
+      - name: Run broadcast tests
+        run: bash k8s-tests/test-broadcast.sh
+      - name: Upload integration broadcast logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-broadcast-logs
+          path: k8s-tests/logs
+      - name: Destroy cluster
         if: always()
         run: talosctl cluster destroy loco || true
 
@@ -128,6 +207,10 @@ jobs:
           apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
             pulseaudio docker.io tcpdump netcat-openbsd
+      - name: Start Docker daemon
+        run: |
+          dockerd > /tmp/dockerd.log 2>&1 &
+          sleep 5
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
@@ -137,14 +220,7 @@ jobs:
           curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
           install -m 0755 talosctl /usr/local/bin/talosctl
       - name: Create Talos cluster
-        run: |
-          talosctl cluster create --name loco --workers 3
-          talosctl kubeconfig .
-          echo "KUBECONFIG=$PWD/kubeconfig" >> "$GITHUB_ENV"
-      - name: Deploy cluster
-        run: kubectl apply -k kustomize/base
-      - name: Wait for cluster
-        run: kubectl wait --for=condition=Ready pod --all --timeout=300s
+        run: scripts/create_cluster.sh
       - name: Start forwards
         run: scripts/start_live_cluster.sh
       - name: Run websocket tests against cluster
@@ -159,6 +235,7 @@ jobs:
         with:
           name: live-e2e-logs
           path: k8s-tests/logs
-      - name: Destroy Talos cluster
+      - name: Destroy cluster
         if: always()
         run: talosctl cluster destroy loco || true
+

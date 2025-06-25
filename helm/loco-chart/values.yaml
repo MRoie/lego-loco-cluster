@@ -28,6 +28,7 @@ emulator:
   image: qemu-loco
   tag: latest
   imagePullPolicy: IfNotPresent
+
   servicePort: 5901
   diskPVC: win98-disk
   diskReadOnly: false
