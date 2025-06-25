@@ -159,6 +159,10 @@ export default function useWebRTC(targetId) {
 
     return () => {
       cancelled = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       if (videoRef.current) videoRef.current.srcObject = null;
     };
   }, [targetId]);
