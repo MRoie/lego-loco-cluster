@@ -55,8 +55,12 @@ spec:
           mountPath: /dev/net/tun
       volumes:
       - name: disk
+        {{- if .Values.emulator.diskPVC }}
         persistentVolumeClaim:
           claimName: {{ .Values.emulator.diskPVC }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
       - name: dev-net-tun
         hostPath:
           path: /dev/net/tun
