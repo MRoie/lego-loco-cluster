@@ -1,12 +1,11 @@
-// Current boot status for each instance
 {
-  "instance-0": "booting",
-  "instance-1": "booting",
-  "instance-2": "booting",
+  "instance-0": "ready",
+  "instance-1": "ready",
+  "instance-2": "running",
   "instance-3": "booting",
   "instance-4": "booting",
-  "instance-5": "booting",
-  "instance-6": "booting",
+  "instance-5": "ready",
+  "instance-6": "error",
   "instance-7": "booting",
   "instance-8": "booting"
 }

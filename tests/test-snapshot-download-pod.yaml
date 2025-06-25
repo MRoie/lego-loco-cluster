@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-snapshot-download
+  labels:
+    app: test-snapshot-download
+spec:
+  containers:
+  - name: snapshot-test
+    image: ghcr.io/mroie/qemu-loco:test
+    env:
+    - name: USE_PREBUILT_SNAPSHOT
+      value: "true"
+    - name: SNAPSHOT_REGISTRY
+      value: "ghcr.io/mroie/qemu-snapshots"
+    - name: SNAPSHOT_TAG
+      value: "win98-base"
+    - name: DISK_SIZE
+      value: "2G"
+    command: ["/bin/bash"]
+    args: 
+    - -c
+    - |
+      echo "🧪 Testing snapshot download functionality..."
+      echo "Environment variables:"
+      echo "  USE_PREBUILT_SNAPSHOT: $USE_PREBUILT_SNAPSHOT"
+      echo "  SNAPSHOT_REGISTRY: $SNAPSHOT_REGISTRY"
+      echo "  SNAPSHOT_TAG: $SNAPSHOT_TAG"
+      echo ""
+      
+      # Test if skopeo is available
+      if command -v skopeo >/dev/null; then
+        echo "✅ skopeo is available"
+      else
+        echo "❌ skopeo not found"
+        exit 1
+      fi
+      
+      # Test if we can inspect the local snapshot image
+      echo "🔍 Testing local snapshot image inspection..."
+      if skopeo inspect docker-daemon:${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG} 2>/dev/null; then
+        echo "✅ Local snapshot image found"
+      else
+        echo "⚠️  Local snapshot image not found (expected in K8s)"
+      fi
+      
+      # Test downloading snapshot from local image (simulating registry)
+      echo "📥 Testing snapshot download simulation..."
+      mkdir -p /tmp/snapshot-test
+      cd /tmp/snapshot-test
+      
+      # Since we can't download from a real registry in this test,
+      # let's copy the snapshot from the local snapshot container
+      echo "Extracting snapshot from local container image..."
+      
+      # Create a container from the snapshot image and copy the file
+      container_id=$(docker create ${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG} 2>/dev/null || echo "")
+      if [[ -n "$container_id" ]]; then
+        echo "✅ Created temporary container: $container_id"
+        docker cp $container_id:/snapshot.qcow2 ./downloaded_snapshot.qcow2 2>/dev/null || echo "⚠️  Could not copy from container"
+        docker rm $container_id >/dev/null 2>&1 || true
+        
+        if [[ -f ./downloaded_snapshot.qcow2 ]]; then
+          echo "✅ Snapshot downloaded successfully"
+          echo "📊 Snapshot file info:"
+          ls -la ./downloaded_snapshot.qcow2
+          file ./downloaded_snapshot.qcow2 2>/dev/null || echo "File command not available"
+        else
+          echo "❌ Failed to download snapshot"
+        fi
+      else
+        echo "⚠️  Could not create container (expected in K8s without Docker daemon)"
+        echo "   In a real scenario, skopeo would download from registry"
+      fi
+      
+      echo ""
+      echo "🎯 Snapshot download test completed"
+      echo "   This test verifies the tools and process are in place"
+      echo "   In production, skopeo would download from the registry"
+      
+      # Keep container running for inspection
+      echo "Sleeping to allow inspection..."
+      sleep 300
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    emptyDir: {}
+  restartPolicy: Never

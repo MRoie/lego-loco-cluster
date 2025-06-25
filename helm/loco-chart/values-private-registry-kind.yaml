@@ -1,0 +1,48 @@
+# values-private-registry-kind.yaml
+# Configuration for deploying with private container registries in Kind environment
+
+# Enable image pull secrets for private registries
+imagePullSecrets:
+  - ghcr-secret      # GitHub Container Registry authentication
+
+# Registry configurations
+registryConfig:
+  ghcr:
+    enabled: true
+    secretName: "ghcr-secret"
+    server: "ghcr.io"
+
+emulator:
+  image: qemu-loco
+  tag: latest
+  imagePullPolicy: Always  # Always pull from registry for private images
+  
+  # Snapshot configuration for private registry
+  usePrebuiltSnapshot: true
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+  
+  env:
+    USE_PREBUILT_SNAPSHOT: "true"
+    SNAPSHOT_REGISTRY: "ghcr.io/mroie/qemu-snapshots"
+    SNAPSHOT_TAG: "win98-base"
+    DISK_SIZE: "2G"
+    # Disable TAP networking for Kind compatibility
+    DISABLE_TAP: "true"
+    # Use simpler networking
+    NETWORK_MODE: "user"
+
+backend:
+  image: loco-backend
+  tag: latest
+  imagePullPolicy: Always  # Always pull from private registry
+
+frontend:
+  image: loco-frontend
+  tag: latest
+  imagePullPolicy: Always  # Always pull from private registry
+
+# Persistent volume configuration for Kind
+persistence:
+  size: "2Gi"
+  storageClass: "standard"
