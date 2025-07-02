@@ -1,0 +1,51 @@
+{
+    "github.copilot.enable": {
+        "*": true,
+        "yaml": true,
+        "plaintext": true,
+        "markdown": true,
+        "javascript": true,
+        "typescript": true,
+        "json": true,
+        "dockerfile": true,
+        "shellscript": true
+    },
+    "github.copilot.advanced": {
+        "debug.overrideEngine": "codex",
+        "inlineSuggestCount": 3
+    },
+    "editor.inlineSuggest.enabled": true,
+    "editor.suggestOnTriggerCharacters": true,
+    "editor.acceptSuggestionOnEnter": "smart",
+    "editor.quickSuggestions": {
+        "other": true,
+        "comments": true,
+        "strings": true
+    },
+    "files.associations": {
+        "*.js": "javascript",
+        "*.ts": "typescript",
+        "*.jsx": "javascriptreact",
+        "*.tsx": "typescriptreact",
+        "Dockerfile*": "dockerfile",
+        "*.yml": "yaml",
+        "*.yaml": "yaml"
+    },
+    "emmet.includeLanguages": {
+        "javascript": "javascriptreact"
+    },
+    "typescript.preferences.includePackageJsonAutoImports": "auto",
+    "javascript.preferences.includePackageJsonAutoImports": "auto",
+    "files.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/.git": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "**/build": true
+    },
+    "terminal.integrated.defaultProfile.linux": "bash"
+}
