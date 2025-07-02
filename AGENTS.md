@@ -15,7 +15,64 @@ cd backend && npm install && cd ..
 cd frontend && npm install && cd ..
 ```
 
+
 The agent should execute these steps before running any other commands.
+
+## Inspecting the Repository for Remote Environments
+Look for a `.devcontainer` directory to confirm the container configuration. If
+the file contains a line starting with `Remote dev server:` or the
+`REMOTE_DEV_SERVER` environment variable is set, connect to that URL with SSH or
+HTTPS authentication instead of starting a new container. If no remote endpoint
+is found, build the dev container locally.
+
+## Persistent Remote Environment (Optional)
+If you prefer to keep the dev setup running at all times, host the
+`.devcontainer` image on a separate machine and expose a VS Code server
+(for example `code-server` or `openvscode-server`) over HTTPS or an SSH
+tunnel. This provides a persistent workspace so new sessions can attach
+without rebuilding the container.
+
+1. Start the container on the remote host with `docker run` and mount the
+   repository:
+
+   ```bash
+   docker run -d --name loco-dev --privileged \
+     --device=/dev/kvm -p 8443:8443 \
+     -v /path/to/lego-loco-cluster:/workspaces/lego-loco-cluster \
+     mcr.microsoft.com/devcontainers/base:ubuntu-22.04
+   ```
+
+2. Inside the container, install a VS Code server and launch it:
+
+   ```bash
+   curl -fsSL https://code-server.dev/install.sh | sh
+   code-server --bind-addr 0.0.0.0:8443
+   ```
+
+3. Protect the endpoint using HTTPS and authentication (for example with
+   Nginx or Caddy). Record the URL in this file so the agent and
+   collaborators can connect directly:
+
+   ```
+   Remote dev server: https://yourdomain.example.com
+   ```
+
+Ensure the remote host has the packages listed in **Environment Setup** so
+tests and development servers run correctly.
+
+## Joining an Online Codespace
+If someone has a GitHub Codespace running for this project, the address may be
+provided as a `Codespace URL:` line in this file or via the `CODESPACE_URL`
+environment variable. Open that HTTPS link in your browser or run
+`code https://yourspace.github.dev` to attach directly without launching a local
+container.
+
+```text
+Codespace URL: https://yourname-lego-loco-abc123.github.dev
+```
+
+Connecting to the codespace gives you a ready-to-use workspace with all
+dependencies installed.
 
 ## Sequential Prompts for Future Work
 The core development environment is functional, but several features remain. Use the following tasks in order to finish the project. Each item can be used as a Codex prompt:
