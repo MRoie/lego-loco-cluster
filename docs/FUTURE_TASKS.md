@@ -25,6 +25,27 @@ a future Codex prompt.
    - Allow users to select audio output devices per instance.
    - Add reconnect logic to `useWebRTC` for dropped connections and show loading indicators while streams establish.
    - Finalize a production-ready VR scene with minimal latency and controller input mapped to backend hotkeys.
+   - Deploy the `vr-frontend` container so the dashboard can be viewed in WebXR.
+
+6. **Input Proxy Service**
+   - Implement a Go WebSocket service that forwards JSON mouse and keyboard events to QEMU using QMP.
+   - Package the service as `cmd/input-proxy` and run it as a sidecar with each emulator.
+
+7. **Sunshine and Parsec Variants**
+   - Create optional container builds with Sunshine and Parsec for traditional desktop streaming.
+   - Document how to connect using Moonlight and the Parsec client.
+
+8. **Codec Benchmark Harness**
+   - Write `bench.py` to compare x264, VP8 and MJPEG at multiple frame rates.
+   - Store results in `results.csv` and plot a chart for the documentation.
+
+9. **WebXR End-to-End Tests**
+   - Use Playwright to launch the VR dashboard headlessly and verify all streams render above 28 FPS.
+   - Integrate the test with GitHub Actions so failures block merges.
+
+10. **Observability Stack**
+    - Deploy Prometheus and Grafana dashboards showing encode FPS and WebRTC latency.
+    - Add an Alertmanager rule when any stream drops below 20 FPS.
 
 Completing these tasks will produce a robust Windows 98 cluster with automated deployment, reliable streaming and a polished VR experience.
 
