@@ -41,3 +41,9 @@ Start the development stack with:
 ```bash
 ./scripts/dev-start.sh
 ```
+
+Measure VR streaming performance with:
+
+```bash
+make vr-benchmark STREAM_URL=http://localhost:6090/stream
+```
