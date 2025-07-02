@@ -25,6 +25,7 @@ a future Codex prompt.
    - Allow users to select audio output devices per instance.
    - Add reconnect logic to `useWebRTC` for dropped connections and show loading indicators while streams establish.
    - Finalize a production-ready VR scene with minimal latency and controller input mapped to backend hotkeys.
+   - Deploy the `vr-frontend` container so the dashboard can be viewed in WebXR.
 
 Completing these tasks will produce a robust Windows 98 cluster with automated deployment, reliable streaming and a polished VR experience.
 
