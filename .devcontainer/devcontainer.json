@@ -1,5 +1,5 @@
 {
-    "name": "Loco Loco Dev",
+    "name": "Lego Loco Cluster Development",
     "build": {
         "dockerfile": "Dockerfile"
     },
@@ -9,8 +9,91 @@
         "--init"
     ],
     "forwardPorts": [3000, 3001, 5173, 6080, 6090, 6091, 6092],
-    "features": {
-        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "portsAttributes": {
+        "3000": {
+            "label": "Frontend (Vite)",
+            "onAutoForward": "notify"
+        },
+        "3001": {
+            "label": "Backend (Express)",
+            "onAutoForward": "notify"
+        },
+        "5173": {
+            "label": "Vite Dev Server",
+            "onAutoForward": "silent"
+        },
+        "6080": {
+            "label": "QEMU VNC",
+            "onAutoForward": "silent"
+        }
     },
-    "postCreateCommand": "cd backend && npm install && cd ../frontend && npm install && cd .."
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "GitHub.copilot",
+                "GitHub.copilot-chat",
+                "ms-vscode.vscode-json",
+                "bradlc.vscode-tailwindcss",
+                "ms-vscode.vscode-typescript-next",
+                "esbenp.prettier-vscode",
+                "ms-kubernetes-tools.vscode-kubernetes-tools",
+                "ms-vscode-remote.remote-containers",
+                "ms-azuretools.vscode-docker",
+                "redhat.vscode-yaml",
+                "formulahendry.auto-rename-tag",
+                "christian-kohler.path-intellisense",
+                "ms-vscode.vscode-eslint"
+            ],
+            "settings": {
+                "github.copilot.enable": {
+                    "*": true,
+                    "yaml": true,
+                    "plaintext": true,
+                    "markdown": true,
+                    "javascript": true,
+                    "typescript": true,
+                    "json": true,
+                    "dockerfile": true
+                },
+                "github.copilot.advanced": {
+                    "debug.overrideEngine": "codex"
+                },
+                "editor.inlineSuggest.enabled": true,
+                "editor.suggestOnTriggerCharacters": true,
+                "editor.acceptSuggestionOnEnter": "smart",
+                "files.watcherExclude": {
+                    "**/node_modules/**": true,
+                    "**/.git/**": true,
+                    "**/dist/**": true,
+                    "**/build/**": true
+                },
+                "search.exclude": {
+                    "**/node_modules": true,
+                    "**/dist": true,
+                    "**/build": true
+                },
+                "typescript.suggest.autoImports": true,
+                "javascript.suggest.autoImports": true,
+                "editor.formatOnSave": true,
+                "editor.codeActionsOnSave": {
+                    "source.fixAll.eslint": "explicit"
+                },
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "workbench.startupEditor": "readme"
+            }
+        },
+        "codespaces": {
+            "openFiles": [
+                "README.md",
+                "AGENTS.md"
+            ]
+        }
+    },
+    "postCreateCommand": "bash .devcontainer/setup.sh",
+    "postStartCommand": "echo 'Codespace ready! Use GitHub Copilot for AI-assisted coding.'",
+    "remoteUser": "vscode"
 }

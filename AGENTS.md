@@ -4,6 +4,18 @@ This repository uses the Codex agent to build a functional Lego Loco cluster. A 
 
 ## Environment Setup
 Use the `.devcontainer` configuration with VS Code or `devcontainer up` for a ready‑made environment based on `mcr.microsoft.com/devcontainers/base:ubuntu-22.04`. It includes Node.js 22, Docker‑in‑Docker and the Kubernetes tools `kubectl` v1.33.2, `kind` v0.23.0, `helm` v3.14.3 and `talosctl` v1.3.7.
+### GitHub Codespaces (Recommended)
+For the fastest setup with AI coding assistance, use GitHub Codespaces:
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/MRoie/lego-loco-cluster)
+
+The Codespace comes pre-configured with:
+- GitHub Copilot for AI-assisted coding
+- Optimized VS Code settings for development
+- All dependencies pre-installed
+- Debug configurations ready to use
+
+### Local Development
 
 If you cannot use the dev container, run the following commands in the workspace shell instead:
 

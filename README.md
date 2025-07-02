@@ -27,6 +27,13 @@ single command.
 - `docs/FUTURE_TASKS.md` – remaining high level goals
 
 ## Quick Setup
+
+### Option 1: GitHub Codespaces (Recommended)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/MRoie/lego-loco-cluster)
+
+Click the badge above or use the green "Code" button → "Open with Codespaces" for a fully configured development environment with AI coding assistance.
+
+### Option 2: Local Development
 Install system packages and Node dependencies:
 
 ```bash

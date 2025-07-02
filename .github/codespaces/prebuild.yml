@@ -1,0 +1,28 @@
+# GitHub Codespaces Prebuild Configuration
+# This configuration optimizes the development environment for GitHub Codespaces
+
+prebuild:
+  image: "mcr.microsoft.com/devcontainers/base:ubuntu-22.04"
+  
+  # Install system dependencies
+  setup_commands:
+    - apt-get update
+    - apt-get install -y nodejs npm qemu-system-x86 qemu-kvm wine gstreamer1.0-tools pulseaudio docker.io tcpdump curl tar
+    
+  # Pre-install Node.js dependencies for faster startup
+  cache_from:
+    - backend/package-lock.json
+    - frontend/package-lock.json
+    
+  # Environment optimizations
+  env:
+    NODE_ENV: development
+    GITHUB_CODESPACES: true
+    
+  # Port forwarding for development servers
+  ports:
+    - 3000  # Frontend (Vite)
+    - 3001  # Backend (Express)
+    - 5173  # Vite Dev Server
+    - 6080  # QEMU VNC
+    - 9229  # Node.js Debug Port
