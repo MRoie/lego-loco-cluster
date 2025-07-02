@@ -47,3 +47,9 @@ Measure VR streaming performance with:
 ```bash
 make vr-benchmark STREAM_URL=http://localhost:6090/stream
 ```
+
+Compare performance at 1, 3 and 9 emulators:
+
+```bash
+./scripts/benchmark_cluster.sh
+```

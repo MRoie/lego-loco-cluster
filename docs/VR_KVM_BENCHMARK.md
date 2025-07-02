@@ -33,3 +33,11 @@ make vr-benchmark STREAM_URL=http://localhost:6090/stream
 
 This target runs the script with the given stream URL and stores logs under `benchmark_logs/`.
 
+To benchmark the cluster at different sizes, run `scripts/benchmark_cluster.sh`.
+It automatically starts the environment with 1, 3 and 9 containers, measures the
+FPS for each emulator and saves a summary to a timestamped directory.
+
+```bash
+./scripts/benchmark_cluster.sh
+```
+

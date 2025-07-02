@@ -16,8 +16,12 @@ STREAM_URL="$1"
 DURATION="${2:-10}"
 TMPFILE="/tmp/vr_benchmark.mp4"
 
-ffmpeg -y -loglevel error -i "$STREAM_URL" -t "$DURATION" -an -c copy "$TMPFILE" >"$LOG_FILE" 2>&1
-FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of default=noprint_wrappers=1:nokey=1 "$TMPFILE" | awk -F'/' '{ if ($2==0) print 0; else printf "%.2f", $1/$2 }')
+if ffmpeg -y -loglevel error -i "$STREAM_URL" -t "$DURATION" -an -c copy "$TMPFILE" >"$LOG_FILE" 2>&1; then
+  FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of default=noprint_wrappers=1:nokey=1 "$TMPFILE" | awk -F'/' '{ if ($2==0) print 0; else printf "%.2f", $1/$2 }')
+else
+  echo "Failed to record stream" >>"$LOG_FILE"
+  FPS=0
+fi
 rm -f "$TMPFILE"
 
 echo "Average FPS: $FPS"
