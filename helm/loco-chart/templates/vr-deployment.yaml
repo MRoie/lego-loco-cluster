@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "loco.fullname" . }}-vr
+  namespace: {{ include "loco.namespace" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "loco.fullname" . }}-vr
+  template:
+    metadata:
+      labels:
+        app: {{ include "loco.fullname" . }}-vr
+    spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      containers:
+      - name: vr-frontend
+        image: {{ include "loco.image" (dict "root" . "image" .Values.vr.image "tag" .Values.vr.tag) }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: {{ .Values.vr.servicePort }}
+        env:
+        - name: VITE_DEFAULT_VR
+          value: "true"
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/nginx/html/config
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "loco.fullname" . }}-instances
