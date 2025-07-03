@@ -35,3 +35,18 @@ streaming metrics.
 For a detailed outline of upcoming VR features, see `docs/VR_STREAMING_PLAN.md`.
 
 
+
+Future work includes implementing an active container focus system so only the
+selected emulator runs at full speed. See `docs/ACTIVE_STATE_PLAN.md` for the
+roadmap and associated tasks. Use `scripts/set_active.sh` to update the list of
+focused instances during development. The EV3 helper `scripts/ev3_focus_ws.py`
+can change focus using the brick's buttons. When switching focus locally the
+script throttles other containers using Docker CPU quotas so the active
+emulators get full performance.
+Helm deployments can set CPU requests and limits via `emulator.resources` in
+`values.yaml` and Docker Compose includes example quotas for local testing.
+Spatial audio has been added to the VR experience so that each emulator's sound
+originates from its screen position. Instances in the active list are loudest
+while the others play softly for ambient feedback.
+Audio parameters are stored in `config/camu.json` so CAMU-based pipelines can
+produce high fidelity spatial output.

@@ -1,0 +1,7 @@
+{
+  "name": "lego-loco-cluster-root",
+  "private": true,
+  "devDependencies": {
+    "ws": "^8.18.2"
+  }
+}
