@@ -26,4 +26,12 @@ frontend. Configuration files in `config/` are watched automatically. The Docker
 Compose setup runs a minimal stack or the full set of nine emulators. CI
 workflows build the images and run basic network tests.
 
+A VR mode is also available. The `vr-frontend` container exposes the dashboard
+in WebXR so all instances can be viewed in a headset.
+
+The `benchmark/bench.py` script spins up 1, 3 and 9 replicas to gather basic
+streaming metrics.
+
+For a detailed outline of upcoming VR features, see `docs/VR_STREAMING_PLAN.md`.
+
 
