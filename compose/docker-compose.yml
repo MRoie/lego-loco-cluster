@@ -17,6 +17,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_DEFAULT_VR: "false"
     container_name: loco-frontend
     ports:
       - "3000:3000"
@@ -37,6 +39,29 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # VR Frontend Service
+  vr-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_DEFAULT_VR: "true"
+    container_name: loco-vr-frontend
+    ports:
+      - "3002:3000"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=http://localhost:3001
+      - BACKEND_HOST=backend
+      - BACKEND_PORT=3001
+      - FRONTEND_PORT=3000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - loco-network
+    restart: unless-stopped
 
   # Backend Service
   backend:
@@ -84,6 +109,12 @@ services:
     cap_add:
       - NET_ADMIN
     privileged: true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+        reservations:
+          cpus: "0.25"
     networks:
       - loco-network
     restart: unless-stopped
