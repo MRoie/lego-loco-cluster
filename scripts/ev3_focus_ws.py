@@ -4,9 +4,11 @@ from pybricks.parameters import Button
 from pybricks.tools import wait
 import ujson
 import uwebsockets.client as ws
+import urequests
 
 # Backend WebSocket for active focus updates
 BACKEND_WS = 'ws://localhost:3001/active'
+BACKEND_HTTP = 'http://localhost:3001/api/active'
 
 # Ordered list of instance IDs to cycle through
 INSTANCES = [
@@ -25,8 +27,13 @@ def send_active(id):
     try:
         wsock.send(ujson.dumps({'id': id}))
     except OSError:
+        # reconnect and try again
         wsock = ws.connect(BACKEND_WS)
         wsock.send(ujson.dumps({'id': id}))
+    try:
+        urequests.post(BACKEND_HTTP, json={'ids': [id] if id else []})
+    except OSError:
+        pass
 
 while True:
     pressed = brick.buttons.pressed()

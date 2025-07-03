@@ -26,6 +26,7 @@ export default function useSpatialAudio(videoRef, position = [0,0,-3]) {
       src.connect(panner).connect(gain).connect(ctx.destination);
       gainRef.current = gain;
       pannerRef.current = panner;
+      clearInterval(interval); // Clear the interval after successful initialization
     }
     interval = setInterval(setup, 500);
     setup();

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const WebSocket = require('../backend/node_modules/ws');
+const WebSocket = require('ws');
 const http = require('http');
 
 const ws = new WebSocket('ws://localhost:3001/active');

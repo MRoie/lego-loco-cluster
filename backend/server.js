@@ -273,6 +273,18 @@ const activeWss = new WebSocketServer({ noServer: true });
 activeWss.on("connection", (ws) => {
   activeClients.add(ws);
   ws.send(JSON.stringify({ active: readActive() }));
+  ws.on("message", (msg) => {
+    try {
+      const data = JSON.parse(msg);
+      const ids = data.ids || data.id || data.active;
+      if (ids) {
+        writeActive(ids);
+        broadcastActive(Array.isArray(ids) ? ids : [ids]);
+      }
+    } catch (e) {
+      console.error("Active WS message error", e.message);
+    }
+  });
   ws.on("close", () => activeClients.delete(ws));
 });
 
