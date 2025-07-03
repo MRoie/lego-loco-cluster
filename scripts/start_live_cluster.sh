@@ -2,14 +2,22 @@
 # Start port-forwarding to services in the live kind cluster
 set -euo pipefail
 BACKEND_SERVICE="loco-loco-backend"
+FRONTEND_SERVICE="loco-loco-frontend"
+VR_SERVICE="loco-loco-vr"
 EMULATOR_STATEFULSET="loco-loco-emulator"
 
 # Wait for backend service
 kubectl get svc "$BACKEND_SERVICE" >/dev/null
+kubectl get svc "$FRONTEND_SERVICE" >/dev/null || true
+kubectl get svc "$VR_SERVICE" >/dev/null || true
 
 # Start port-forward for backend
 kubectl port-forward svc/$BACKEND_SERVICE 3001:3001 >/tmp/pf_backend.log 2>&1 &
 PIDS=("$!")
+kubectl port-forward svc/$FRONTEND_SERVICE 3000:3000 >/tmp/pf_frontend.log 2>&1 &
+PIDS+=("$!")
+kubectl port-forward svc/$VR_SERVICE 3002:3000 >/tmp/pf_vr.log 2>&1 &
+PIDS+=("$!")
 
 # Determine replica count
 REPLICAS=$(kubectl get statefulset "$EMULATOR_STATEFULSET" -o jsonpath='{.spec.replicas}')
