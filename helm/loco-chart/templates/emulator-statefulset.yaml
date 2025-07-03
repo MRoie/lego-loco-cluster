@@ -39,6 +39,12 @@ spec:
         - name: SNAPSHOT_TAG
           value: {{ .Values.emulator.snapshotTag | quote }}
         {{- end }}
+        - name: ART_RES_ROOT
+          value: "/nfs"
+        - name: GIT_USER_NAME
+          value: {{ .Values.git.userName | quote }}
+        - name: GIT_USER_EMAIL
+          value: {{ .Values.git.userEmail | quote }}
         securityContext:
           privileged: true
           capabilities:
@@ -53,6 +59,12 @@ spec:
           readOnly: {{ .Values.emulator.diskReadOnly }}
         - name: dev-net-tun
           mountPath: /dev/net/tun
+        - name: art-res-nfs
+          mountPath: /nfs
+        resources:
+          {{- if .Values.emulator.resources }}
+          {{- toYaml .Values.emulator.resources | nindent 10 }}
+          {{- end }}
       volumes:
       - name: disk
         {{- if .Values.emulator.diskPVC }}
@@ -65,3 +77,7 @@ spec:
         hostPath:
           path: /dev/net/tun
           type: CharDevice
+      - name: art-res-nfs
+        nfs:
+          server: {{ .Values.artRes.nfs.server }}
+          path: {{ .Values.artRes.nfs.path }}
