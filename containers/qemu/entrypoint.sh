@@ -293,6 +293,14 @@ GSTREAMER_PID=$!
 
 log_success "GStreamer started with PID: $GSTREAMER_PID"
 
+# === STEP 7: Art Resource Watcher ===
+if [ -x /usr/local/bin/watch_art_res.sh ]; then
+  log_info "Starting art resource watcher..."
+  /usr/local/bin/watch_art_res.sh &
+  WATCHER_PID=$!
+  log_success "Art watcher started with PID: $WATCHER_PID"
+fi
+
 # === Container Ready ===
 log_success "Container setup complete!"
 log_info "Services:"
@@ -319,6 +327,11 @@ cleanup() {
   if [ -n "${XVFB_PID:-}" ]; then
     log_info "Stopping Xvfb (PID: $XVFB_PID)"
     kill $XVFB_PID 2>/dev/null || true
+  fi
+
+  if [ -n "${WATCHER_PID:-}" ]; then
+    log_info "Stopping art watcher (PID: $WATCHER_PID)"
+    kill $WATCHER_PID 2>/dev/null || true
   fi
   
   if [ -f "$SNAPSHOT_NAME" ]; then
