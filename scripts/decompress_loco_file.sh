@@ -30,7 +30,7 @@ fi
 
 # Compile Java tool if classes not built
 if [ ! -f "$TMPDIR/Main.class" ]; then
-  javac -d "$TMPDIR" tools/decompressor/*.java
+  javac -d "$TMPDIR" -classpath "tools/decompressor" tools/decompressor/*.java
 fi
 
 java -cp "$TMPDIR" Main "$TMPFILE" "$OUT"
