@@ -10,7 +10,8 @@ single command.
 - Audio passthrough with meters
 - Dockerized Windows 98 images
 - Helm chart for Kubernetes
-- Simple dev container
+ - Simple dev container
+ - Optional VR desktop viewer on port 3002
 
 ## Repository Layout
 - `backend/` – signaling and API server
@@ -42,6 +43,18 @@ Start the development stack with:
 ./scripts/dev-start.sh
 ```
 
+### Scaling Instances
+
+The helper script `scripts/deploy_single.sh` deploys the cluster via Helm. Set
+the `REPLICAS` environment variable to run `1`, `3` or `9` emulator pods:
+
+```bash
+REPLICAS=1 ./scripts/deploy_single.sh   # single instance
+REPLICAS=3 ./scripts/deploy_single.sh   # three instances
+REPLICAS=9 ./scripts/deploy_single.sh   # full grid
+```
+
+
 A future goal is to minimize resource usage by focusing on a configurable list
 of active containers. See `docs/ACTIVE_STATE_PLAN.md` for details. The helper
 script `scripts/set_active.sh` updates the active instance list and notifies all
@@ -60,3 +73,10 @@ dimmed, with a per-instance volume slider available in VR.
 Audio behaviour is controlled by `config/camu.json`. Spatial audio and
 translation quality settings can be tweaked there to ensure the CAMU pipeline
 produces high quality output across all stacks.
+=======
+### VR Desktop Viewer
+
+After the stack is running, a separate `vr-frontend` container serves the VR
+dashboard on port `3002`. Open `http://localhost:3002` in a WebXR compatible
+browser or headset to view all nine instances in VR.
+See `docs/VR_STREAMING_PLAN.md` for the full blueprint.
