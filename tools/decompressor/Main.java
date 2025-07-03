@@ -22,7 +22,7 @@ public class Main
 		System.out.println();
 		System.out.println("*~* Ported from original ASM for accuracy magics! *~*");
 		System.out.println();
-		if(args.length < 1)
+		if(args.length < 2)
 		{
 			System.out.println("Error: Insufficient arguments provided!");
 			System.out.println();
