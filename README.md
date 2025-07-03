@@ -41,3 +41,15 @@ Start the development stack with:
 ```bash
 ./scripts/dev-start.sh
 ```
+
+A future goal is to minimize resource usage by focusing on a single active
+container at a time. See `docs/ACTIVE_STATE_PLAN.md` for details. The helper
+script `scripts/set_active.sh` updates the active instance and notifies all
+connected clients. For hardware control an EV3 brick can run
+`scripts/ev3_focus_ws.py` to cycle and select the focused instance using the
+arrow and center buttons.
+When run locally the script also uses Docker to throttle unfocused emulator
+containers so the active one receives the most CPU time.
+The VR scene now includes spatial audio so each emulator can be heard in
+3D space. The focused instance plays at full volume while others are
+dimmed, with a per-instance volume slider available in VR.

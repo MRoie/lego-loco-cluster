@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useActive } from "./ActiveContext";
 import { motion, AnimatePresence } from "framer-motion";
 import VRScene from "./VRScene";
 import InstanceCard from "./components/InstanceCard";
@@ -6,6 +7,7 @@ import InstanceCard from "./components/InstanceCard";
 
 // Main dashboard component showing the 3×3 grid of instances
 export default function App() {
+  const { activeId, setActiveId } = useActive();
   const [instances, setInstances] = useState([]);
   const [provisionedInstances, setProvisionedInstances] = useState([]);
   const [hotkeys, setHotkeys] = useState({});
@@ -15,6 +17,10 @@ export default function App() {
   const [status, setStatus] = useState({});
   const [focused, setFocused] = useState(null);
   const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(true);
+
+  const postActive = (id) => {
+    setActiveId(id);
+  };
 
   // Fetch instance list and hotkey mapping from the backend
   useEffect(() => {
@@ -52,6 +58,13 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Update active index when activeId or instances change
+  useEffect(() => {
+    if (!activeId || instances.length === 0) return;
+    const idx = instances.findIndex((i) => i.id === activeId);
+    if (idx >= 0) setActive(idx);
+  }, [activeId, instances]);
+
   // Register global hotkeys for focus, zoom and switching instances
   useEffect(() => {
     function handler(e) {
@@ -68,7 +81,10 @@ export default function App() {
       if (hotkeys.focus && hotkeys.focus[combo]) {
         const id = hotkeys.focus[combo];
         const idx = currentInstances.findIndex((i) => i.id === id);
-        if (idx >= 0) setActive(idx);
+        if (idx >= 0) {
+          setActive(idx);
+          postActive(currentInstances[idx].id);
+        }
       } else if (hotkeys.zoom && hotkeys.zoom[combo]) {
         if (hotkeys.zoom[combo] === "zoom-in")
           setZoom((z) => Math.min(z + 0.1, 2));
@@ -76,7 +92,9 @@ export default function App() {
           setZoom((z) => Math.max(z - 0.1, 0.5));
       } else if (hotkeys.switch && hotkeys.switch[combo]) {
         if (hotkeys.switch[combo] === "next-instance") {
-          setActive((a) => (a + 1) % currentInstances.length);
+          const next = (active + 1) % currentInstances.length;
+          setActive(next);
+          postActive(currentInstances[next].id);
         }
       }
     }
@@ -93,6 +111,7 @@ export default function App() {
     window.addEventListener("vncControlReleased", releaseHandler);
     return () => window.removeEventListener("vncControlReleased", releaseHandler);
   }, [focused, instances, provisionedInstances, showOnlyProvisioned]);
+
 
   // Get the instances to display based on filter
   const displayInstances = showOnlyProvisioned ? provisionedInstances : instances;
@@ -147,7 +166,10 @@ export default function App() {
                     <InstanceCard
                       instance={instance}
                       isActive={active === index}
-                      onClick={() => setActive(index)}
+                      onClick={() => {
+                        setActive(index);
+                        postActive(displayInstances[index].id);
+                      }}
                     />
                   ) : (
                     <motion.div

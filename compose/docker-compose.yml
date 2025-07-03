@@ -84,6 +84,12 @@ services:
     cap_add:
       - NET_ADMIN
     privileged: true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+        reservations:
+          cpus: "0.25"
     networks:
       - loco-network
     restart: unless-stopped
