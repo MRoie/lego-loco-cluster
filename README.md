@@ -49,7 +49,6 @@ After the stack is running, a separate `vr-frontend` container serves the VR
 dashboard on port `3002`. Open `http://localhost:3002` in a WebXR compatible
 browser or headset to view all nine instances in VR.
 See `docs/VR_STREAMING_PLAN.md` for the full blueprint.
-
 ### Scaling Instances
 
 The helper script `scripts/deploy_single.sh` deploys the cluster via Helm. Set
@@ -61,6 +60,25 @@ REPLICAS=3 ./scripts/deploy_single.sh   # three instances
 REPLICAS=9 ./scripts/deploy_single.sh   # full grid
 ```
 
+A future goal is to minimize resource usage by focusing on a configurable list
+of active containers. See `docs/ACTIVE_STATE_PLAN.md` for details. The helper
+script `scripts/set_active.sh` updates the active instance list and notifies all
+connected clients. For hardware control an EV3 brick can run
+`scripts/ev3_focus_ws.py` to cycle and select the focused instance using the
+arrow and center buttons.
+When run locally the script also uses Docker to throttle unfocused emulator
+containers so the active ones receive the most CPU time.
+For Kubernetes deployments, CPU requests and limits can be configured via the
+`emulator.resources` section in `helm/loco-chart/values.yaml` and adjusted
+dynamically with `scripts/set_active.sh`.
+The VR scene now includes spatial audio so each emulator can be heard in
+3D space. Instances in the active list play at full volume while others are
+dimmed, with a per-instance volume slider available in VR.
+
+Audio behaviour is controlled by `config/camu.json`. Spatial audio and
+translation quality settings can be tweaked there to ensure the CAMU pipeline
+produces high quality output across all stacks.
+
 ### Codec Benchmark
 
 Run the basic benchmark harness to deploy the cluster at 1, 3 and 9 replicas and
@@ -70,4 +88,3 @@ capture placeholder metrics:
 python3 benchmark/bench.py
 ```
 Results will be stored in `results.csv`.
-
