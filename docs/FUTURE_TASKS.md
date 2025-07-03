@@ -29,3 +29,13 @@ a future Codex prompt.
 Completing these tasks will produce a robust Windows 98 cluster with automated deployment, reliable streaming and a polished VR experience.
 
 
+
+6. **Active Container Focus**
+   - Implement the cross-stack focus system described in `docs/ACTIVE_STATE_PLAN.md`. **(done)**
+   - Expose an API on the backend to update which instance is active. **(done)**
+   - Update the React and VR clients to listen for focus changes and snap the cursor accordingly. **(done)**
+   - Apply CPU quotas to unfocused emulator containers so only the active one runs at full speed. **(added)**
+   - Add CI tests that toggle focus and ensure streaming continues without interruption. **(added)**
+   - Document configuration options for single or multi-focus modes and include deployment examples. **(added)**
+   - Provide an EV3 control script (`scripts/ev3_focus_ws.py`) so hardware buttons can change focus. **(done)**
+   - Expose an on-screen menu in VR to select the active instance using the new `ActiveContext`. **(done)**

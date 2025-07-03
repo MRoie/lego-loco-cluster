@@ -1,5 +1,8 @@
 import 'aframe';
 import React, { useEffect, useState, useRef } from 'react';
+import { useActive } from './ActiveContext';
+import useWebRTC from './hooks/useWebRTC';
+import useSpatialAudio from './hooks/useSpatialAudio';
 import VRReactVNCViewer from './components/VRReactVNCViewer';
 import ControlsConfig from './components/ControlsConfig';
 import VRToast from './components/VRToast';
@@ -11,10 +14,19 @@ function positionForIndex(i, cols, rows) {
   return { x: x * 1.4, y: y * 1.0 };
 }
 
-function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }) {
+function VRTile({ inst, idx, active, setActive, setActiveId, cols, rows, status, onVNCReady, volume, ambientVolume }) {
   const vncRef = useRef(null);
   const planeRef = useRef(null);
   const [textureCreated, setTextureCreated] = useState(false);
+  const { videoRef: rtcVideoRef } = useWebRTC(inst.id);
+  const pos = positionForIndex(idx, cols, rows);
+  const { setVolume } = useSpatialAudio(rtcVideoRef, [pos.x, pos.y, -3]);
+
+
+  useEffect(() => {
+    const finalVol = volume * (active === idx ? 1 : ambientVolume);
+    setVolume(finalVol);
+  }, [volume, active, idx, ambientVolume, setVolume]);
 
   const handleVNCConnect = (instanceId) => {
     console.log(`VR: VNC connected for ${instanceId}`);
@@ -88,6 +100,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
 
   const handleClick = () => {
     setActive(idx);
+    setActiveId(inst.id);
     
     if (vncRef.current) {
       const connectionState = vncRef.current.getConnectionState();
@@ -100,8 +113,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
     }
   };
 
-  const pos = positionForIndex(idx, cols, rows);
-
+  // reuse computed position
   return (
     <>
       <VRReactVNCViewer
@@ -110,6 +122,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
         onConnect={handleVNCConnect}
         onDisconnect={handleVNCDisconnect}
       />
+      <video ref={rtcVideoRef} className="hidden" />
       
       <a-entity
         class="tile"
@@ -146,12 +159,16 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
 }
 
 export default function VRScene({ onExit }) {
+  const { activeId, setActiveId } = useActive();
   const [instances, setInstances] = useState([]);
   const [active, setActive] = useState(0);
   const [info, setInfo] = useState('');
   const [status, setStatus] = useState({});
   const [connectedVNCs, setConnectedVNCs] = useState(new Set());
   const [toast, setToast] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [volumes, setVolumes] = useState([]);
+  const ambientVolume = 0.2;
   const defaultControllerMap = {
     abuttondown: 'F1',
     bbuttondown: 'F2',
@@ -231,6 +248,7 @@ export default function VRScene({ onExit }) {
         if (Array.isArray(data) && data.length) {
           setInstances(data);
           vncRefs.current = new Array(data.length);
+          setVolumes(new Array(data.length).fill(1));
         } else {
           throw new Error('no data');
         }
@@ -240,6 +258,7 @@ export default function VRScene({ onExit }) {
           Array.from({ length: 3 }, (_, i) => ({ id: `placeholder-${i}` }))
         );
         vncRefs.current = new Array(3);
+        setVolumes(new Array(3).fill(1));
         setInfo('Using placeholder streams');
       });
     
@@ -254,12 +273,24 @@ export default function VRScene({ onExit }) {
     return () => clearInterval(interval);
   }, []);
 
+  // Update active index when activeId changes
+  useEffect(() => {
+    if (!activeId || instances.length === 0) return;
+    const idx = instances.findIndex((i) => i.id === activeId);
+    if (idx >= 0) setActive(idx);
+  }, [activeId, instances]);
+
   useEffect(() => {
     const handler = (e) => {
+      if (e.key === 'm' && e.type === 'keydown') {
+        setMenuOpen((m) => !m);
+        return;
+      }
       if (e.key >= '1' && e.key <= '9') {
         const idx = parseInt(e.key) - 1;
         if (idx < instances.length) {
           setActive(idx);
+          setActiveId(instances[idx].id);
         }
       } else if (connectedVNCs.has(active) && vncRefs.current[active]) {
         const vncRef = vncRefs.current[active];
@@ -298,6 +329,10 @@ export default function VRScene({ onExit }) {
     const map = controllerMap;
 
     const handler = (e) => {
+      if (e.type === 'ybuttondown') {
+        setMenuOpen(m => !m);
+        return;
+      }
       const keyName = map[e.type];
       if (!keyName) return;
       const vncRef = vncRefs.current[active];
@@ -357,6 +392,42 @@ export default function VRScene({ onExit }) {
           />
         </div>
       </div>
+
+      <div className="absolute bottom-4 left-4 z-10">
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={volumes[active] || 1}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            setVolumes((vals) => {
+              const arr = [...vals];
+              arr[active] = v;
+              return arr;
+            });
+          }}
+        />
+      </div>
+
+      {menuOpen && (
+        <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-gray-800 bg-opacity-80 p-2 rounded z-10">
+          {instances.map((inst, idx) => (
+            <button
+              key={inst.id}
+              onClick={() => {
+                setActive(idx);
+                setActiveId(inst.id);
+                setMenuOpen(false);
+              }}
+              className="block text-sm text-white px-2 py-1 w-full text-left hover:bg-gray-700"
+            >
+              {inst.id}
+            </button>
+          ))}
+        </div>
+      )}
       
       <a-scene embedded>
         <a-assets>
@@ -370,9 +441,12 @@ export default function VRScene({ onExit }) {
               idx={idx}
               active={active}
               setActive={setActive}
+              setActiveId={setActiveId}
               cols={cols}
               rows={rows}
               status={status[inst.id]}
+              volume={volumes[idx] || 1}
+              ambientVolume={ambientVolume}
               onVNCReady={handleVNCReady}
             />
           ))}

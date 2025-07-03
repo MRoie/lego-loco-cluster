@@ -10,6 +10,9 @@ const url = require("url");
 const app = express();
 const server = http.createServer(app);
 
+// Parse JSON bodies for API endpoints
+app.use(express.json());
+
 // simple health endpoint for Kubernetes-style checks
 app.get("/health", (req, res) => {
   console.log("Health check requested - live reloading test!");
@@ -116,6 +119,48 @@ app.get("/api/instances/provisioned", (req, res) => {
   }
 });
 
+// ---------------- Active Instance State ----------------
+const ACTIVE_FILE = path.join(FINAL_CONFIG_DIR, "active.json");
+function readActive() {
+  try {
+    const data = fs.readFileSync(ACTIVE_FILE, "utf-8");
+    return JSON.parse(data).active || null;
+  } catch (e) {
+    console.error("Failed to read active state:", e.message);
+    return null;
+  }
+}
+
+function writeActive(id) {
+  try {
+    fs.writeFileSync(ACTIVE_FILE, JSON.stringify({ active: id }, null, 2));
+  } catch (e) {
+    console.error("Failed to write active state:", e.message);
+  }
+}
+
+// Broadcast helpers
+const activeClients = new Set();
+function broadcastActive(id) {
+  for (const ws of activeClients) {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({ active: id }));
+    }
+  }
+}
+
+app.get("/api/active", (req, res) => {
+  res.json({ active: readActive() });
+});
+
+app.post("/api/active", (req, res) => {
+  const id = req.body.id || req.body.active;
+  if (!id) return res.status(400).json({ error: "id required" });
+  writeActive(id);
+  broadcastActive(id);
+  res.json({ active: id });
+});
+
 // Generic proxy for VNC and WebRTC traffic
 const proxy = httpProxy.createProxyServer({ ws: true, changeOrigin: true });
 
@@ -219,6 +264,14 @@ vncWss.on("error", (err) => {
   console.error("VNC WebSocket server error", err.message);
 });
 
+// WebSocket server for active focus updates
+const activeWss = new WebSocketServer({ noServer: true });
+activeWss.on("connection", (ws) => {
+  activeClients.add(ws);
+  ws.send(JSON.stringify({ active: readActive() }));
+  ws.on("close", () => activeClients.delete(ws));
+});
+
 // Handle WebSocket upgrades for VNC connections
 server.on("upgrade", (req, socket, head) => {
   console.log(`WebSocket upgrade request: ${req.url}`);
@@ -243,6 +296,14 @@ server.on("upgrade", (req, socket, head) => {
     return;
   }
   
+  // Active focus WebSocket
+  if (req.url === "/active") {
+    activeWss.handleUpgrade(req, socket, head, (ws) => {
+      activeWss.emit("connection", ws, req);
+    });
+    return;
+  }
+
   // Handle other WebSocket upgrades
   console.log("Unknown WebSocket upgrade, ignoring");
   socket.destroy();
@@ -254,6 +315,7 @@ console.log("WebSocket support added");
 server.listen(3001, () => {
   console.log("Backend running on http://localhost:3001");
   console.log("Config directory:", FINAL_CONFIG_DIR);
+  console.log("Current active instance:", readActive());
   
   // Test config loading
   try {
