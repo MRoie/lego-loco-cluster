@@ -1,4 +1,4 @@
-# Lego Loco Cluster - Makefile for Development
+	# Lego Loco Cluster - Makefile for Development
 
 .PHONY: help setup up down logs status restart clean build health test cleanup-ports
 .DEFAULT_GOAL := help
@@ -106,6 +106,9 @@ test: ## Run basic connectivity tests
 	@curl -s -o /dev/null -w "Backend: %{http_code}\n" http://localhost:3001/health || echo "Backend: FAIL"
 	@echo "Testing registry..."
 	@curl -s -o /dev/null -w "Registry: %{http_code}\n" http://localhost:5000/v2/ || echo "Registry: FAIL"
+
+vr-benchmark: ## Measure emulator FPS using benchmark_vr.sh
+	-@STREAM_URL=${STREAM_URL-http://localhost:6090/stream} scripts/benchmark_vr.sh "$${STREAM_URL}"
 
 shell-frontend: ## Open shell in frontend container
 	@docker-compose $(COMPOSE_FILES) exec frontend sh
