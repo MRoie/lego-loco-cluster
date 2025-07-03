@@ -46,7 +46,7 @@ The tasks below should be completed after the current milestones:
  - Apply front‑end state management to react to focus changes. **(done)**
  - Add command line utilities for cluster operators to change the active instance. See `scripts/set_active.sh`. **(done)**
  - Create regression tests covering focus switching and resource scaling. **(added)**
- - Update Helm values and Docker Compose files with CPU limit examples. **(added)**
+ - Update Helm values and Docker Compose files with CPU limit examples. **(added)** Helm `values.yaml` now exposes `emulator.resources` so deployments can set CPU requests and limits.
  - Expand documentation to include a walkthrough of the active container system. **(added)**
 
 ## API Usage

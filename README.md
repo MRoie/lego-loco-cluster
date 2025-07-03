@@ -50,6 +50,9 @@ connected clients. For hardware control an EV3 brick can run
 arrow and center buttons.
 When run locally the script also uses Docker to throttle unfocused emulator
 containers so the active ones receive the most CPU time.
+For Kubernetes deployments, CPU requests and limits can be configured via the
+`emulator.resources` section in `helm/loco-chart/values.yaml` and adjusted
+dynamically with `scripts/set_active.sh`.
 The VR scene now includes spatial audio so each emulator can be heard in
 3D space. Instances in the active list play at full volume while others are
 dimmed, with a per-instance volume slider available in VR.
