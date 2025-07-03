@@ -7,7 +7,7 @@ import InstanceCard from "./components/InstanceCard";
 
 // Main dashboard component showing the 3×3 grid of instances
 export default function App() {
-  const { activeId, setActiveId } = useActive();
+  const { activeIds, setActiveIds } = useActive();
   const [instances, setInstances] = useState([]);
   const [provisionedInstances, setProvisionedInstances] = useState([]);
   const [hotkeys, setHotkeys] = useState({});
@@ -19,7 +19,7 @@ export default function App() {
   const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(true);
 
   const postActive = (id) => {
-    setActiveId(id);
+    setActiveIds([id]);
   };
 
   // Fetch instance list and hotkey mapping from the backend
@@ -58,12 +58,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Update active index when activeId or instances change
+  // Update active index when activeIds or instances change
   useEffect(() => {
-    if (!activeId || instances.length === 0) return;
-    const idx = instances.findIndex((i) => i.id === activeId);
+    if (!activeIds.length || instances.length === 0) return;
+    const idx = instances.findIndex((i) => i.id === activeIds[0]);
     if (idx >= 0) setActive(idx);
-  }, [activeId, instances]);
+  }, [activeIds, instances]);
 
   // Register global hotkeys for focus, zoom and switching instances
   useEffect(() => {

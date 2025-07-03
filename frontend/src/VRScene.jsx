@@ -14,7 +14,7 @@ function positionForIndex(i, cols, rows) {
   return { x: x * 1.4, y: y * 1.0 };
 }
 
-function VRTile({ inst, idx, active, setActive, setActiveId, cols, rows, status, onVNCReady, volume, ambientVolume }) {
+function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds }) {
   const vncRef = useRef(null);
   const planeRef = useRef(null);
   const [textureCreated, setTextureCreated] = useState(false);
@@ -24,9 +24,9 @@ function VRTile({ inst, idx, active, setActive, setActiveId, cols, rows, status,
 
 
   useEffect(() => {
-    const finalVol = volume * (active === idx ? 1 : ambientVolume);
+    const finalVol = volume * (activeIds.includes(inst.id) ? 1 : ambientVolume);
     setVolume(finalVol);
-  }, [volume, active, idx, ambientVolume, setVolume]);
+  }, [volume, activeIds, inst.id, ambientVolume, setVolume]);
 
   const handleVNCConnect = (instanceId) => {
     console.log(`VR: VNC connected for ${instanceId}`);
@@ -100,7 +100,7 @@ function VRTile({ inst, idx, active, setActive, setActiveId, cols, rows, status,
 
   const handleClick = () => {
     setActive(idx);
-    setActiveId(inst.id);
+    setActiveIds([inst.id]);
     
     if (vncRef.current) {
       const connectionState = vncRef.current.getConnectionState();
@@ -159,7 +159,7 @@ function VRTile({ inst, idx, active, setActive, setActiveId, cols, rows, status,
 }
 
 export default function VRScene({ onExit }) {
-  const { activeId, setActiveId } = useActive();
+  const { activeIds, setActiveIds } = useActive();
   const [instances, setInstances] = useState([]);
   const [active, setActive] = useState(0);
   const [info, setInfo] = useState('');
@@ -273,12 +273,12 @@ export default function VRScene({ onExit }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Update active index when activeId changes
+  // Update active index when activeIds change
   useEffect(() => {
-    if (!activeId || instances.length === 0) return;
-    const idx = instances.findIndex((i) => i.id === activeId);
+    if (!activeIds.length || instances.length === 0) return;
+    const idx = instances.findIndex((i) => i.id === activeIds[0]);
     if (idx >= 0) setActive(idx);
-  }, [activeId, instances]);
+  }, [activeIds, instances]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -290,7 +290,7 @@ export default function VRScene({ onExit }) {
         const idx = parseInt(e.key) - 1;
         if (idx < instances.length) {
           setActive(idx);
-          setActiveId(instances[idx].id);
+          setActiveIds([instances[idx].id]);
         }
       } else if (connectedVNCs.has(active) && vncRefs.current[active]) {
         const vncRef = vncRefs.current[active];
@@ -418,7 +418,7 @@ export default function VRScene({ onExit }) {
               key={inst.id}
               onClick={() => {
                 setActive(idx);
-                setActiveId(inst.id);
+                setActiveIds([inst.id]);
                 setMenuOpen(false);
               }}
               className="block text-sm text-white px-2 py-1 w-full text-left hover:bg-gray-700"
@@ -441,7 +441,8 @@ export default function VRScene({ onExit }) {
               idx={idx}
               active={active}
               setActive={setActive}
-              setActiveId={setActiveId}
+              setActiveIds={setActiveIds}
+              activeIds={activeIds}
               cols={cols}
               rows={rows}
               status={status[inst.id]}

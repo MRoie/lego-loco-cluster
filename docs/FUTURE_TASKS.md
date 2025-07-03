@@ -39,3 +39,4 @@ Completing these tasks will produce a robust Windows 98 cluster with automated d
    - Document configuration options for single or multi-focus modes and include deployment examples. **(added)**
    - Provide an EV3 control script (`scripts/ev3_focus_ws.py`) so hardware buttons can change focus. **(done)**
    - Expose an on-screen menu in VR to select the active instance using the new `ActiveContext`. **(done)**
+   - Support multiple active instances with spatial audio synced across clients. **(added)**

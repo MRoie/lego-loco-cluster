@@ -124,16 +124,20 @@ const ACTIVE_FILE = path.join(FINAL_CONFIG_DIR, "active.json");
 function readActive() {
   try {
     const data = fs.readFileSync(ACTIVE_FILE, "utf-8");
-    return JSON.parse(data).active || null;
+    const val = JSON.parse(data).active;
+    if (Array.isArray(val)) return val;
+    if (val) return [val];
+    return [];
   } catch (e) {
     console.error("Failed to read active state:", e.message);
-    return null;
+    return [];
   }
 }
 
-function writeActive(id) {
+function writeActive(ids) {
   try {
-    fs.writeFileSync(ACTIVE_FILE, JSON.stringify({ active: id }, null, 2));
+    const arr = Array.isArray(ids) ? ids.slice(0, 9) : [ids];
+    fs.writeFileSync(ACTIVE_FILE, JSON.stringify({ active: arr }, null, 2));
   } catch (e) {
     console.error("Failed to write active state:", e.message);
   }
@@ -141,10 +145,10 @@ function writeActive(id) {
 
 // Broadcast helpers
 const activeClients = new Set();
-function broadcastActive(id) {
+function broadcastActive(ids) {
   for (const ws of activeClients) {
     if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({ active: id }));
+      ws.send(JSON.stringify({ active: ids }));
     }
   }
 }
@@ -154,11 +158,11 @@ app.get("/api/active", (req, res) => {
 });
 
 app.post("/api/active", (req, res) => {
-  const id = req.body.id || req.body.active;
-  if (!id) return res.status(400).json({ error: "id required" });
-  writeActive(id);
-  broadcastActive(id);
-  res.json({ active: id });
+  const ids = req.body.ids || req.body.active || req.body.id;
+  if (!ids) return res.status(400).json({ error: "id required" });
+  writeActive(ids);
+  broadcastActive(Array.isArray(ids) ? ids : [ids]);
+  res.json({ active: Array.isArray(ids) ? ids : [ids] });
 });
 
 // Generic proxy for VNC and WebRTC traffic
@@ -315,7 +319,7 @@ console.log("WebSocket support added");
 server.listen(3001, () => {
   console.log("Backend running on http://localhost:3001");
   console.log("Config directory:", FINAL_CONFIG_DIR);
-  console.log("Current active instance:", readActive());
+  console.log("Current active instances:", readActive());
   
   // Test config loading
   try {

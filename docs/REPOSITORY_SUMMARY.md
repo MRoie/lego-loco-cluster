@@ -30,11 +30,13 @@ workflows build the images and run basic network tests.
 
 Future work includes implementing an active container focus system so only the
 selected emulator runs at full speed. See `docs/ACTIVE_STATE_PLAN.md` for the
-roadmap and associated tasks. Use `scripts/set_active.sh` to update the focused
-instance during development. The EV3 helper `scripts/ev3_focus_ws.py` can
-change focus using the brick's buttons. When switching focus locally the script
-throttles other containers using Docker CPU quotas so the active emulator gets
-full performance.
+roadmap and associated tasks. Use `scripts/set_active.sh` to update the list of
+focused instances during development. The EV3 helper `scripts/ev3_focus_ws.py`
+can change focus using the brick's buttons. When switching focus locally the
+script throttles other containers using Docker CPU quotas so the active
+emulators get full performance.
 Spatial audio has been added to the VR experience so that each emulator's sound
-originates from its screen position. The focused instance is loudest while the
-others play softly for ambient feedback.
+originates from its screen position. Instances in the active list are loudest
+while the others play softly for ambient feedback.
+Audio parameters are stored in `config/camu.json` so CAMU-based pipelines can
+produce high fidelity spatial output.

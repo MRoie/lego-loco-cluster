@@ -42,14 +42,18 @@ Start the development stack with:
 ./scripts/dev-start.sh
 ```
 
-A future goal is to minimize resource usage by focusing on a single active
-container at a time. See `docs/ACTIVE_STATE_PLAN.md` for details. The helper
-script `scripts/set_active.sh` updates the active instance and notifies all
+A future goal is to minimize resource usage by focusing on a configurable list
+of active containers. See `docs/ACTIVE_STATE_PLAN.md` for details. The helper
+script `scripts/set_active.sh` updates the active instance list and notifies all
 connected clients. For hardware control an EV3 brick can run
 `scripts/ev3_focus_ws.py` to cycle and select the focused instance using the
 arrow and center buttons.
 When run locally the script also uses Docker to throttle unfocused emulator
-containers so the active one receives the most CPU time.
+containers so the active ones receive the most CPU time.
 The VR scene now includes spatial audio so each emulator can be heard in
-3D space. The focused instance plays at full volume while others are
+3D space. Instances in the active list play at full volume while others are
 dimmed, with a per-instance volume slider available in VR.
+
+Audio behaviour is controlled by `config/camu.json`. Spatial audio and
+translation quality settings can be tweaked there to ensure the CAMU pipeline
+produces high quality output across all stacks.
