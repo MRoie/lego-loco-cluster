@@ -42,7 +42,7 @@ Start the development stack with:
 ./scripts/dev-start.sh
 ```
 
-## Loco Tools
+
 Additional helper scripts live in the `scripts/` directory. Use
 `scripts/decompress_loco_file.sh` to fetch an asset from any LAN URL and
 decompress it with the bundled Java utility. Decoded files are copied to the
@@ -55,13 +55,6 @@ share and `containers/qemu/watch_art_res.sh` automatically commits changes in
 ```bash
 ./scripts/decompress_loco_file.sh http://lan-host/file.dat
 ```
-
-### VR Desktop Viewer
-
-After the stack is running, a separate `vr-frontend` container serves the VR
-dashboard on port `3002`. Open `http://localhost:3002` in a WebXR compatible
-browser or headset to view all nine instances in VR.
-See `docs/VR_STREAMING_PLAN.md` for the full blueprint.
 
 ### Scaling Instances
 
@@ -92,3 +85,20 @@ dimmed, with a per-instance volume slider available in VR.
 Audio behaviour is controlled by `config/qemu.json`. Spatial audio and
 translation quality settings can be tweaked there to ensure the QEMU pipeline
 produces high quality output across all stacks.
+
+### Codec Benchmark
+
+Run the basic benchmark harness to deploy the cluster at 1, 3 and 9 replicas and
+capture placeholder metrics:
+
+```bash
+python3 benchmark/bench.py
+```
+Results will be stored in `results.csv`.
+
+### VR Desktop Viewer
+
+After the stack is running, a separate `vr-frontend` container serves the VR
+dashboard on port `3002`. Open `http://localhost:3002` in a WebXR compatible
+browser or headset to view all nine instances in VR.
+See `docs/VR_STREAMING_PLAN.md` for the full blueprint.
