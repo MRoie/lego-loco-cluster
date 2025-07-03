@@ -53,6 +53,10 @@ spec:
           readOnly: {{ .Values.emulator.diskReadOnly }}
         - name: dev-net-tun
           mountPath: /dev/net/tun
+        resources:
+          {{- if .Values.emulator.resources }}
+          {{- toYaml .Values.emulator.resources | nindent 10 }}
+          {{- end }}
       volumes:
       - name: disk
         {{- if .Values.emulator.diskPVC }}
