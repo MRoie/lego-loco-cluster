@@ -89,6 +89,6 @@ The VR scene now includes spatial audio so each emulator can be heard in
 3D space. Instances in the active list play at full volume while others are
 dimmed, with a per-instance volume slider available in VR.
 
-Audio behaviour is controlled by `config/camu.json`. Spatial audio and
-translation quality settings can be tweaked there to ensure the CAMU pipeline
+Audio behaviour is controlled by `config/qemu.json`. Spatial audio and
+translation quality settings can be tweaked there to ensure the QEMU pipeline
 produces high quality output across all stacks.
