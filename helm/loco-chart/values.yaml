@@ -17,7 +17,7 @@ registryConfig:
     enabled: false
     secretName: "ghcr-secret"
     server: "ghcr.io"
-  
+
   # JFrog Artifactory
   jfrog:
     enabled: false
@@ -32,7 +32,7 @@ emulator:
   servicePort: 5901
   diskPVC: win98-disk
   diskReadOnly: false
-  
+
   # Snapshot configuration
   usePrebuiltSnapshot: false
   snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
@@ -44,7 +44,7 @@ emulator:
       cpu: "1"
     requests:
       cpu: "0.25"
-  
+
   # Additional environment variables
   env: {}
     # USE_PREBUILT_SNAPSHOT: "true"
@@ -70,6 +70,7 @@ artRes:
   nfs:
     server: "nfs-server.default.svc.cluster.local"
     path: "/exports/art"
+
 vr:
   enabled: true
   image: loco-frontend
