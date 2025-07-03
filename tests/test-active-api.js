@@ -15,7 +15,7 @@ function setActive(id, cb) {
   const req = http.request('http://localhost:3001/api/active', {method:'POST', headers:{'Content-Type':'application/json'}}, res => {
     res.resume(); res.on('end', () => cb());
   });
-  req.write(JSON.stringify({id}));
+  req.write(JSON.stringify({ids:[id]}));
   req.end();
 }
 
@@ -24,15 +24,15 @@ getActive((err, orig) => {
   console.log('Current active:', orig);
   const testId = 'instance-1';
   setActive(testId, () => {
-    getActive((err2, id) => {
+    getActive((err2, ids) => {
       if (err2) return console.error('Failed to read active after set', err2);
-      console.log('Updated active:', id);
-      if (id !== testId) {
+      console.log('Updated active:', ids);
+      if (!Array.isArray(ids) || ids[0] !== testId) {
         console.error('❌ Active ID mismatch');
         process.exit(1);
       } else {
         // restore original
-        if (orig && orig !== testId) setActive(orig, () => process.exit(0));
+        if (orig && orig[0] !== testId) setActive(orig[0], () => process.exit(0));
         else process.exit(0);
       }
     });

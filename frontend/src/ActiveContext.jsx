@@ -1,23 +1,24 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-const ActiveContext = createContext({ activeId: null, setActiveId: () => {} });
+const ActiveContext = createContext({ activeIds: [], setActiveIds: () => {} });
 
 export function ActiveProvider({ children }) {
-  const [activeId, setActiveIdState] = useState(null);
+  const [activeIds, setActiveIdsState] = useState([]);
 
   const fetchActive = useCallback(() => {
     fetch('/api/active')
       .then(r => r.json())
-      .then(d => setActiveIdState(d.active))
+      .then(d => setActiveIdsState(d.active || []))
       .catch(() => {});
   }, []);
 
-  const setActiveId = useCallback(id => {
-    setActiveIdState(id);
+  const setActiveIds = useCallback(ids => {
+    const arr = Array.isArray(ids) ? ids : [ids];
+    setActiveIdsState(arr);
     fetch('/api/active', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
+      body: JSON.stringify({ ids: arr })
     }).catch(() => {});
   }, []);
 
@@ -28,14 +29,14 @@ export function ActiveProvider({ children }) {
     ws.onmessage = e => {
       try {
         const msg = JSON.parse(e.data);
-        setActiveIdState(msg.active);
+        if (Array.isArray(msg.active)) setActiveIdsState(msg.active);
       } catch {}
     };
     return () => ws.close();
   }, [fetchActive]);
 
   return (
-    <ActiveContext.Provider value={{ activeId, setActiveId }}>
+    <ActiveContext.Provider value={{ activeIds, setActiveIds }}>
       {children}
     </ActiveContext.Provider>
   );

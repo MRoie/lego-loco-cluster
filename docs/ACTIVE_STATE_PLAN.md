@@ -1,9 +1,10 @@
 # Active Container Focus Plan
 
-This document outlines the approach for minimizing resource usage by running only
-focused emulator containers at full speed. The active state must be shared
-across the entire stack so the frontend, VR mode, backend and Kubernetes cluster
-always agree on which container is currently focused.
+This document outlines the approach for minimizing resource usage by running
+only focused emulator containers at full speed. The active state is now a list
+of one or more container IDs that should receive input and full resources. This
+list must be shared across the entire stack so the frontend, VR mode, backend
+and Kubernetes cluster always agree which containers are active.
 
 ## Goals
 - Synchronize the active container ID between the web UI, VR interface and backend.
@@ -35,6 +36,9 @@ always agree on which container is currently focused.
 - A new script `scripts/ev3_focus_ws.py` runs on an EV3 brick. The left and
   right buttons cycle through instances while the center button sends the
   selection to the backend. Holding the center button clears focus.
+- Spatial audio in VR now reads the active list so only focused instances play
+  at full volume. Up to nine instances are supported with per-tile volume
+  controls.
 
 ## Future Work
 The tasks below should be completed after the current milestones:

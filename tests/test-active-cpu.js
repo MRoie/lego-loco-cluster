@@ -12,7 +12,7 @@ function run(cmd) {
 const id = 'instance-0';
 run(`./scripts/set_active.sh ${id}`);
 const data = JSON.parse(fs.readFileSync('config/active.json','utf-8'));
-if (data.active !== id) {
+if (!Array.isArray(data.active) || data.active[0] !== id) {
   console.error('Active file not updated');
   process.exit(1);
 }
