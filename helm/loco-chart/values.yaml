@@ -54,3 +54,20 @@ frontend:
   image: loco-frontend
   tag: latest
   servicePort: 3000
+
+git:
+  userName: "Loco Watcher"
+  userEmail: "watcher@example.com"
+
+artRes:
+  nfs:
+    server: "nfs-server.default.svc.cluster.local"
+    path: "/exports/art"
+
+vr:
+  enabled: true
+  image: loco-frontend
+  tag: latest
+  servicePort: 3000
+  buildArgs:
+    VITE_DEFAULT_VR: "true"
