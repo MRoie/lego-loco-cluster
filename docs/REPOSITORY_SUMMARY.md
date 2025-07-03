@@ -29,13 +29,6 @@ workflows build the images and run basic network tests.
 A VR mode is also available. The `vr-frontend` container exposes the dashboard
 in WebXR so all instances can be viewed in a headset.
 
-The `benchmark/bench.py` script spins up 1, 3 and 9 replicas to gather basic
-streaming metrics.
-
-For a detailed outline of upcoming VR features, see `docs/VR_STREAMING_PLAN.md`.
-
-
-
 Future work includes implementing an active container focus system so only the
 selected emulator runs at full speed. See `docs/ACTIVE_STATE_PLAN.md` for the
 roadmap and associated tasks. Use `scripts/set_active.sh` to update the list of

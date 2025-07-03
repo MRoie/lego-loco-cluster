@@ -8,8 +8,8 @@ EMULATOR_STATEFULSET="loco-loco-emulator"
 
 # Wait for backend service
 kubectl get svc "$BACKEND_SERVICE" >/dev/null
-kubectl get svc "$FRONTEND_SERVICE" >/dev/null || true
-kubectl get svc "$VR_SERVICE" >/dev/null || true
+kubectl get svc "$FRONTEND_SERVICE" >/dev/null
+kubectl get svc "$VR_SERVICE" >/dev/null
 
 # Start port-forward for backend
 kubectl port-forward svc/$BACKEND_SERVICE 3001:3001 >/tmp/pf_backend.log 2>&1 &
