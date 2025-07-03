@@ -22,6 +22,8 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 # Builder stage for production
 FROM base as builder
+ARG VITE_DEFAULT_VR=false
+ENV VITE_DEFAULT_VR=${VITE_DEFAULT_VR}
 
 # Install dependencies
 RUN npm install
@@ -29,8 +31,8 @@ RUN npm install
 # Copy application code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the application with optional VR mode
+RUN if [ "$VITE_DEFAULT_VR" = "true" ]; then npm run build:vr; else npm run build; fi
 
 # Production stage
 FROM nginx:alpine AS production

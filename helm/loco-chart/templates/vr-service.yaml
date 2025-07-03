@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "loco.fullname" . }}-vr
+  namespace: {{ include "loco.namespace" . }}
+spec:
+  selector:
+    app: {{ include "loco.fullname" . }}-vr
+  ports:
+  - protocol: TCP
+    port: {{ .Values.vr.servicePort }}
+    targetPort: {{ .Values.vr.servicePort }}

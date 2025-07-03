@@ -10,7 +10,8 @@ single command.
 - Audio passthrough with meters
 - Dockerized Windows 98 images
 - Helm chart for Kubernetes
-- Simple dev container
+ - Simple dev container
+ - Optional VR desktop viewer on port 3002
 
 ## Repository Layout
 - `backend/` – signaling and API server
@@ -41,3 +42,21 @@ Start the development stack with:
 ```bash
 ./scripts/dev-start.sh
 ```
+
+### VR Desktop Viewer
+
+After the stack is running, a separate `vr-frontend` container serves the VR
+dashboard on port `3002`. Open `http://localhost:3002` in a WebXR compatible
+browser or headset to view all nine instances in VR.
+
+### Scaling Instances
+
+The helper script `scripts/deploy_single.sh` deploys the cluster via Helm. Set
+the `REPLICAS` environment variable to run `1`, `3` or `9` emulator pods:
+
+```bash
+REPLICAS=1 ./scripts/deploy_single.sh   # single instance
+REPLICAS=3 ./scripts/deploy_single.sh   # three instances
+REPLICAS=9 ./scripts/deploy_single.sh   # full grid
+```
+

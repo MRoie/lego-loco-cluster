@@ -143,6 +143,7 @@ docker-compose -f compose/docker-compose.yml -f compose/docker-compose.dev.yml r
 2. **WebSocket Testing**: Test VNC connections with live emulators  
 3. **Production Deployment**: Deploy to Kubernetes cluster
 4. **Monitoring**: Add development metrics and logging
+5. **VR Viewer**: Use the new `vr-frontend` container to test the dashboard in WebXR
 
 ---
 
