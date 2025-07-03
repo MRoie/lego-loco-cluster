@@ -8,11 +8,12 @@ RUN apt-get update && \
         gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
         gstreamer1.0-plugins-ugly gstreamer1.0-libav \
         x11-utils xdotool iproute2 xvfb net-tools \
-        curl wget skopeo && \
+        curl wget skopeo git inotify-tools nfs-common rsync && \
     rm -rf /var/lib/apt/lists/*
 
 # ---- Copy entrypoint ----
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY watch_art_res.sh /usr/local/bin/watch_art_res.sh
+RUN chmod +x /entrypoint.sh /usr/local/bin/watch_art_res.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

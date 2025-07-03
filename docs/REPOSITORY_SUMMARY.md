@@ -29,6 +29,9 @@ workflows build the images and run basic network tests.
 A VR mode is also available. The `vr-frontend` container exposes the dashboard
 in WebXR so all instances can be viewed in a headset.
 
+For a detailed outline of upcoming VR features, see `docs/VR_STREAMING_PLAN.md`.
+
+
 Future work includes implementing an active container focus system so only the
 selected emulator runs at full speed. See `docs/ACTIVE_STATE_PLAN.md` for the
 roadmap and associated tasks. Use `scripts/set_active.sh` to update the list of
@@ -41,5 +44,6 @@ Helm deployments can set CPU requests and limits via `emulator.resources` in
 Spatial audio has been added to the VR experience so that each emulator's sound
 originates from its screen position. Instances in the active list are loudest
 while the others play softly for ambient feedback.
-Audio parameters are stored in `config/camu.json` so CAMU-based pipelines can
+
+Audio parameters are stored in `config/qemu.json` so QEMU-based pipelines can
 produce high fidelity spatial output.
