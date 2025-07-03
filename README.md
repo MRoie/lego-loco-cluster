@@ -43,12 +43,12 @@ Start the development stack with:
 ```
 
 ## Loco Tools
-Additional helper scripts live in the `scripts/` directory. Use `scripts/decompress_loco_file.sh` to fetch an asset from any LAN URL and decompress it with the bundled Java utility.
+Additional helper scripts live in the `scripts/` directory. Use `scripts/decompress_loco_file.sh` to fetch an asset from any LAN URL and decompress it with the bundled Java utility. Decoded files are copied to the `net-shares/` directory so other pods can access them over the network.
 
 Game assets are synchronized through a new watcher. Each emulator pod mounts an
 NFS share and `containers/qemu/watch_art_res.sh` automatically commits changes in
 `<nfs>/<pod>/art/res` back to Git.
 
 ```bash
-./scripts/decompress_loco_file.sh http://lan-host/file.dat decompressed.dat
+./scripts/decompress_loco_file.sh http://lan-host/file.dat
 ```

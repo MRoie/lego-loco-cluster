@@ -1,16 +1,23 @@
 #!/bin/bash
 # Decompress a LEGO Loco asset from a network source
-# Usage: decompress_loco_file.sh <source> <output>
+# Usage: decompress_loco_file.sh <source> [output]
 
 set -e
 
-if [ $# -lt 2 ]; then
-  echo "Usage: $0 <source> <output>" >&2
+if [ $# -lt 1 ]; then
+  echo "Usage: $0 <source> [output]" >&2
   exit 1
 fi
 
 SRC="$1"
-OUT="$2"
+NET_SHARE_DIR="${NET_SHARE_DIR:-$(dirname "$0")/../net-shares}"
+mkdir -p "$NET_SHARE_DIR"
+
+if [ $# -ge 2 ]; then
+  OUT="$2"
+else
+  OUT="$NET_SHARE_DIR/$(basename "$SRC" .dat).decoded"
+fi
 
 TMPDIR=$(mktemp -d)
 TMPFILE="$TMPDIR/input.bin"
@@ -27,5 +34,11 @@ if [ ! -f "$TMPDIR/Main.class" ]; then
 fi
 
 java -cp "$TMPDIR" Main "$TMPFILE" "$OUT"
+
+# Copy result to network share if it's outside NET_SHARE_DIR
+DEST="$NET_SHARE_DIR/$(basename "$OUT")"
+if [ "$OUT" != "$DEST" ]; then
+  cp "$OUT" "$DEST"
+fi
 
 rm -rf "$TMPDIR"
