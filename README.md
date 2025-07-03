@@ -49,6 +49,8 @@ After the stack is running, a separate `vr-frontend` container serves the VR
 dashboard on port `3002`. Open `http://localhost:3002` in a WebXR compatible
 browser or headset to view all nine instances in VR.
 See `docs/VR_STREAMING_PLAN.md` for the full blueprint.
+
+
 ### Scaling Instances
 
 The helper script `scripts/deploy_single.sh` deploys the cluster via Helm. Set
@@ -88,3 +90,11 @@ capture placeholder metrics:
 python3 benchmark/bench.py
 ```
 Results will be stored in `results.csv`.
+=======
+=======
+### VR Desktop Viewer
+
+After the stack is running, a separate `vr-frontend` container serves the VR
+dashboard on port `3002`. Open `http://localhost:3002` in a WebXR compatible
+browser or headset to view all nine instances in VR.
+See `docs/VR_STREAMING_PLAN.md` for the full blueprint.

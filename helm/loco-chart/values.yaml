@@ -69,6 +69,6 @@ vr:
   servicePort: 3000
   buildArgs:
     VITE_DEFAULT_VR: "true"
-
+    
 stunner:
   enabled: true
