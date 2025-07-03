@@ -125,7 +125,7 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
       <video ref={rtcVideoRef} className="hidden" />
       
       <a-entity
-        class="tile"
+        className="tile"
         position={`${pos.x} ${pos.y} -3`}
         geometry="primitive: plane; width: 1.2; height: 0.9"
         material={`color: ${active === idx ? '#555' : '#222'}`}
