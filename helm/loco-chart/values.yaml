@@ -37,6 +37,13 @@ emulator:
   usePrebuiltSnapshot: false
   snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
   snapshotTag: "win98-base"
+
+  # CPU resources for emulator pods
+  resources:
+    limits:
+      cpu: "1"
+    requests:
+      cpu: "0.25"
   
   # Additional environment variables
   env: {}

@@ -35,6 +35,8 @@ focused instances during development. The EV3 helper `scripts/ev3_focus_ws.py`
 can change focus using the brick's buttons. When switching focus locally the
 script throttles other containers using Docker CPU quotas so the active
 emulators get full performance.
+Helm deployments can set CPU requests and limits via `emulator.resources` in
+`values.yaml` and Docker Compose includes example quotas for local testing.
 Spatial audio has been added to the VR experience so that each emulator's sound
 originates from its screen position. Instances in the active list are loudest
 while the others play softly for ambient feedback.
