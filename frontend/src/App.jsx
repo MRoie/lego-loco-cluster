@@ -13,7 +13,8 @@ export default function App() {
   const [hotkeys, setHotkeys] = useState({});
   const [active, setActive] = useState(0);
   const [zoom, setZoom] = useState(1);
-  const [vrMode, setVrMode] = useState(false);
+  const defaultVr = import.meta.env.VITE_DEFAULT_VR === 'true';
+  const [vrMode, setVrMode] = useState(defaultVr);
   const [status, setStatus] = useState({});
   const [focused, setFocused] = useState(null);
   const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(true);

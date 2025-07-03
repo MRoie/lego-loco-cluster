@@ -61,3 +61,11 @@ frontend:
   image: loco-frontend
   tag: latest
   servicePort: 3000
+
+vr:
+  enabled: true
+  image: loco-frontend
+  tag: latest
+  servicePort: 3000
+  buildArgs:
+    VITE_DEFAULT_VR: "true"
