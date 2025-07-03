@@ -44,6 +44,7 @@ emulator:
       cpu: "1"
     requests:
       cpu: "0.25"
+  
   # Additional environment variables
   env: {}
     # USE_PREBUILT_SNAPSHOT: "true"
@@ -69,6 +70,7 @@ artRes:
   nfs:
     server: "nfs-server.default.svc.cluster.local"
     path: "/exports/art"
+
 vr:
   enabled: true
   image: loco-frontend
@@ -76,3 +78,6 @@ vr:
   servicePort: 3000
   buildArgs:
     VITE_DEFAULT_VR: "true"
+    
+stunner:
+  enabled: true
