@@ -2,8 +2,7 @@
 
 Loco LAN runs multiple instances of Lego Loco inside emulated Windows 98 environments.
 A web dashboard streams each emulator and provides keyboard, mouse and audio control.
-The stack uses Docker and Kubernetes so you can spin up the whole cluster with a
-single command.
+The stack uses Docker and Kubernetes so you can spin up the whole cluster with a single command.
 
 ## Features
 - 3×3 grid of WebRTC streams
@@ -43,13 +42,19 @@ Start the development stack with:
 ./scripts/dev-start.sh
 ```
 
-### VR Desktop Viewer
 
-After the stack is running, a separate `vr-frontend` container serves the VR
-dashboard on port `3002`. Open `http://localhost:3002` in a WebXR compatible
-browser or headset to view all nine instances in VR.
-See `docs/VR_STREAMING_PLAN.md` for the full blueprint.
+Additional helper scripts live in the `scripts/` directory. Use
+`scripts/decompress_loco_file.sh` to fetch an asset from any LAN URL and
+decompress it with the bundled Java utility. Decoded files are copied to the
+`net-shares/` directory so other pods can access them over the network.
 
+Game assets are synchronized through a watcher. Each emulator pod mounts an NFS
+share and `containers/qemu/watch_art_res.sh` automatically commits changes in
+`<nfs>/<pod>/art/res` back to Git.
+
+```bash
+./scripts/decompress_loco_file.sh http://lan-host/file.dat
+```
 
 ### Scaling Instances
 
@@ -77,8 +82,8 @@ The VR scene now includes spatial audio so each emulator can be heard in
 3D space. Instances in the active list play at full volume while others are
 dimmed, with a per-instance volume slider available in VR.
 
-Audio behaviour is controlled by `config/camu.json`. Spatial audio and
-translation quality settings can be tweaked there to ensure the CAMU pipeline
+Audio behaviour is controlled by `config/qemu.json`. Spatial audio and
+translation quality settings can be tweaked there to ensure the QEMU pipeline
 produces high quality output across all stacks.
 
 ### Codec Benchmark
@@ -90,8 +95,7 @@ capture placeholder metrics:
 python3 benchmark/bench.py
 ```
 Results will be stored in `results.csv`.
-=======
-=======
+
 ### VR Desktop Viewer
 
 After the stack is running, a separate `vr-frontend` container serves the VR

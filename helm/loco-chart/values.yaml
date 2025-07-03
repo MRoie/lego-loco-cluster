@@ -17,7 +17,7 @@ registryConfig:
     enabled: false
     secretName: "ghcr-secret"
     server: "ghcr.io"
-  
+
   # JFrog Artifactory
   jfrog:
     enabled: false
@@ -32,7 +32,7 @@ emulator:
   servicePort: 5901
   diskPVC: win98-disk
   diskReadOnly: false
-  
+
   # Snapshot configuration
   usePrebuiltSnapshot: false
   snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
@@ -61,6 +61,15 @@ frontend:
   image: loco-frontend
   tag: latest
   servicePort: 3000
+
+git:
+  userName: "Loco Watcher"
+  userEmail: "watcher@example.com"
+
+artRes:
+  nfs:
+    server: "nfs-server.default.svc.cluster.local"
+    path: "/exports/art"
 
 vr:
   enabled: true
