@@ -3,7 +3,7 @@ name: loco
 version: 0.1.1
 appVersion: "1.0"
 description: Lego Loco emulator cluster
-dependencies:
-  - name: stunner
-    version: "0.18.1"
-    repository: "https://stunner.io/helm-charts"
+# dependencies:
+#   - name: stunner
+#     version: "0.18.1"
+#     repository: "https://stunner.io/helm-charts"

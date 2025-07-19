@@ -3,6 +3,12 @@ namespace: loco
 
 imageRepo: "ghcr.io/mroie"
 
+# Storage configuration
+storage:
+  class: "standard"  # Default storage class for PVCs
+  nfsSize: "10Gi"
+  diskSize: "10Gi"
+
 # Image pull secrets for private registries
 # Uncomment and configure as needed
 imagePullSecrets: []
@@ -68,8 +74,8 @@ git:
 
 artRes:
   nfs:
-    server: "nfs-server.default.svc.cluster.local"
-    path: "/exports/art"
+    server: nfs-server
+    path: /exports/art
 
 vr:
   enabled: true
@@ -81,3 +87,8 @@ vr:
     
 stunner:
   enabled: true
+
+nfs:
+  enabled: true
+  size: 10Gi
+  image: itsthenetwork/nfs-server-alpine:latest
