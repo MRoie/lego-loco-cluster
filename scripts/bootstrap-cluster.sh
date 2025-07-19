@@ -112,7 +112,11 @@ check_cluster_status() {
     log_info "Checking cluster status..."
     if ! minikube status &> /dev/null; then
         log_warning "Minikube cluster is not running. Starting cluster with enhanced resources..."
-        minikube start --cpus=4 --memory=8192 --disk-size=20g --driver=docker --docker-env HTTPS_PROXY
+        if [ -n "$HTTPS_PROXY" ]; then
+            minikube start --cpus=4 --memory=8192 --disk-size=20g --driver=docker --docker-env HTTPS_PROXY
+        else
+            minikube start --cpus=4 --memory=8192 --disk-size=20g --driver=docker
+        fi
     else
         log_info "Minikube cluster is running"
     fi
