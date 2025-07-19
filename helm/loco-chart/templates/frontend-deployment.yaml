@@ -25,6 +25,31 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: {{ .Values.frontend.servicePort }}
+        startupProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.frontend.servicePort }}
+          failureThreshold: 18
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.frontend.servicePort }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.frontend.servicePort }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        env:
+        - name: BACKEND_HOST
+          value: "{{ include "loco.fullname" . }}-backend"
+        - name: BACKEND_PORT
+          value: "{{ .Values.backend.servicePort }}"
+        - name: FRONTEND_PORT
+          value: "{{ .Values.frontend.servicePort }}"
         volumeMounts:
         - name: config
           mountPath: /usr/share/nginx/html/config

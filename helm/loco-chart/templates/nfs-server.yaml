@@ -1,0 +1,87 @@
+{{- if .Values.nfs.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+    - name: nfs
+      port: 2049
+    - name: mountd
+      port: 20048
+    - name: rpcbind
+      port: 111
+  selector:
+    app: nfs-server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nfs-server
+  template:
+    metadata:
+      labels:
+        app: nfs-server
+    spec:
+      # Init container to create required directories
+      initContainers:
+      - name: init-nfs-directories
+        image: busybox:1.35
+        command: ['sh', '-c', 'mkdir -p /exports/art && chmod 777 /exports/art && echo "NFS directories created successfully"']
+        volumeMounts:
+          - name: nfs-persistent-storage
+            mountPath: /exports
+      containers:
+      - name: nfs-server
+        {{- if .Values.storage.strategy.hybrid.enabled }}
+        {{- if .Values.storage.strategy.hybrid.nfs.enabled }}
+        image: {{ .Values.storage.strategy.hybrid.nfs.image | default .Values.nfs.image }}
+        {{- else }}
+        image: {{ .Values.nfs.image | default "itsthenetwork/nfs-server-alpine:latest" }}
+        {{- end }}
+        {{- else }}
+        image: {{ .Values.nfs.image | default "itsthenetwork/nfs-server-alpine:latest" }}
+        {{- end }}
+        ports:
+          - name: nfs
+            containerPort: 2049
+          - name: mountd
+            containerPort: 20048
+          - name: rpcbind
+            containerPort: 111
+        securityContext:
+          privileged: true
+        env:
+          - name: SHARED_DIRECTORY
+            value: /exports
+        volumeMounts:
+          - name: nfs-persistent-storage
+            mountPath: /exports
+      volumes:
+        - name: nfs-persistent-storage
+          persistentVolumeClaim:
+            claimName: nfs-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-pvc
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.storage.class }}
+  storageClassName: {{ .Values.storage.class }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.nfsSize | default "10Gi" }}
+{{- end }} 

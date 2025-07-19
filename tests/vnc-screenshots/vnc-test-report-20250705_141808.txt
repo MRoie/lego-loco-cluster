@@ -1,0 +1,21 @@
+=== VNC Cluster Connectivity Test Report ===
+Generated: Sat Jul  5 14:18:08 EDT 2025
+
+[0;32m[2025-07-05 14:18:08][0m Starting VNC cluster connectivity tests...
+[0;32m[2025-07-05 14:18:08][0m Checking minikube status...
+[0;32m[2025-07-05 14:18:09] SUCCESS:[0m Minikube is running
+[0;32m[2025-07-05 14:18:09][0m Checking cluster status...
+NAME                                  READY   STATUS              RESTARTS      AGE     IP            NODE       NOMINATED NODE   READINESS GATES
+loco-loco-backend-8cbc68c94-29dqg     1/1     Running             0             9m28s   10.244.0.13   minikube   <none>           <none>
+loco-loco-emulator-0                  0/1     ContainerCreating   0             16m     <none>        minikube   <none>           <none>
+loco-loco-frontend-6d98b96875-lpnsc   1/1     Running             0             9m28s   10.244.0.12   minikube   <none>           <none>
+loco-loco-vr-d7dc686d5-r2nmw          0/1     CrashLoopBackOff    8 (46s ago)   16m     10.244.0.11   minikube   <none>           <none>
+
+[0;32m[2025-07-05 14:18:09][0m Checking services...
+NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+loco-loco-backend    NodePort    10.100.156.242   <none>        3001:32707/TCP   16m
+loco-loco-emulator   ClusterIP   None             <none>        5901/TCP         16m
+loco-loco-frontend   NodePort    10.96.146.180    <none>        3000:31771/TCP   16m
+loco-loco-vr         ClusterIP   10.103.115.221   <none>        3000/TCP         16m
+
+[0;32m[2025-07-05 14:18:09][0m Getting frontend service URL...

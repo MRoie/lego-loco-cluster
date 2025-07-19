@@ -28,6 +28,12 @@ spec:
         env:
         - name: VITE_DEFAULT_VR
           value: "true"
+        - name: BACKEND_HOST
+          value: "{{ include "loco.fullname" . }}-backend"
+        - name: BACKEND_PORT
+          value: "{{ .Values.backend.servicePort }}"
+        - name: FRONTEND_PORT
+          value: "{{ .Values.vr.servicePort }}"
         volumeMounts:
         - name: config
           mountPath: /usr/share/nginx/html/config
