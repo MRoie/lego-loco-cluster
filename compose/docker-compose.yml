@@ -15,7 +15,7 @@ services:
   # Frontend Service
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile
       args:
         VITE_DEFAULT_VR: "false"
@@ -43,7 +43,7 @@ services:
   # VR Frontend Service
   vr-frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile
       args:
         VITE_DEFAULT_VR: "true"
@@ -66,7 +66,7 @@ services:
   # Backend Service
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
     container_name: loco-backend
     ports:
@@ -88,7 +88,7 @@ services:
   # QEMU Emulator Instance 0
   emulator-0:
     build:
-      context: ./containers/qemu
+      context: ../containers/qemu
       dockerfile: Dockerfile
     container_name: loco-emulator-0
     ports:
@@ -122,7 +122,7 @@ services:
   # QEMU Emulator Instance 1
   emulator-1:
     build:
-      context: ./containers/qemu
+      context: ../containers/qemu-softgpu
       dockerfile: Dockerfile
     container_name: loco-emulator-1
     ports:
@@ -150,7 +150,7 @@ services:
   # QEMU Emulator Instance 2
   emulator-2:
     build:
-      context: ./containers/qemu
+      context: ../containers/qemu-softgpu
       dockerfile: Dockerfile
     container_name: loco-emulator-2
     ports:
@@ -178,7 +178,7 @@ services:
   # QEMU Emulator Instance 3
   emulator-3:
     build:
-      context: ./containers/qemu
+      context: ../containers/qemu-softgpu
       dockerfile: Dockerfile
     container_name: loco-emulator-3
     ports:
@@ -206,7 +206,7 @@ services:
   # QEMU Emulator Instance 4
   emulator-4:
     build:
-      context: ./containers/qemu
+      context: ../containers/qemu-softgpu
       dockerfile: Dockerfile
     container_name: loco-emulator-4
     ports:
@@ -234,7 +234,7 @@ services:
   # QEMU Emulator Instance 5
   emulator-5:
     build:
-      context: ./containers/qemu
+      context: ../containers/qemu-softgpu
       dockerfile: Dockerfile
     container_name: loco-emulator-5
     ports:
@@ -262,7 +262,7 @@ services:
   # QEMU Emulator Instance 6
   emulator-6:
     build:
-      context: ./containers/qemu
+      context: ../containers/qemu-softgpu
       dockerfile: Dockerfile
     container_name: loco-emulator-6
     ports:
@@ -290,7 +290,7 @@ services:
   # QEMU Emulator Instance 7
   emulator-7:
     build:
-      context: ./containers/qemu
+      context: ../containers/qemu-softgpu
       dockerfile: Dockerfile
     container_name: loco-emulator-7
     ports:
@@ -318,7 +318,7 @@ services:
   # QEMU Emulator Instance 8
   emulator-8:
     build:
-      context: ./containers/qemu
+      context: ../containers/qemu-softgpu
       dockerfile: Dockerfile
     container_name: loco-emulator-8
     ports:

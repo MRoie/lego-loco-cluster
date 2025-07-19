@@ -20,6 +20,31 @@ spec:
         - name: {{ . }}
       {{- end }}
       {{- end }}
+      
+      # Init container for storage initialization
+      {{- if .Values.storage.strategy.hostPath.enabled }}
+      initContainers:
+      - name: init-hostpath-storage
+        image: busybox:1.35
+        command: ['sh', '-c']
+        args:
+        - |
+          # Create shared directory with proper permissions
+          mkdir -p {{ .Values.storage.strategy.hostPath.path }}
+          chmod {{ .Values.storage.strategy.hostPath.permissions }} {{ .Values.storage.strategy.hostPath.path }}
+          
+          # Create art subdirectory
+          mkdir -p {{ .Values.storage.strategy.hostPath.path }}/art
+          chmod {{ .Values.storage.strategy.hostPath.permissions }} {{ .Values.storage.strategy.hostPath.path }}/art
+          
+          echo "HostPath storage initialized successfully"
+          echo "Path: {{ .Values.storage.strategy.hostPath.path }}"
+          ls -la {{ .Values.storage.strategy.hostPath.path }}
+        volumeMounts:
+          - name: hostpath-storage
+            mountPath: {{ .Values.storage.strategy.hostPath.path }}
+      {{- end }}
+      
       containers:
       - name: emulator
         image: {{ include "loco.image" (dict "root" . "image" .Values.emulator.image "tag" .Values.emulator.tag) }}
@@ -59,8 +84,33 @@ spec:
           readOnly: {{ .Values.emulator.diskReadOnly }}
         - name: dev-net-tun
           mountPath: /dev/net/tun
+        
+        {{- if .Values.storage.strategy.hostPath.enabled }}
+        # Option 1: HostPath Direct Mounts
+        - name: hostpath-storage
+          mountPath: /nfs
+        {{- else if .Values.storage.strategy.hybrid.enabled }}
+        # Option 8: Hybrid Storage Strategy
+        {{- if eq .Values.storage.strategy.hybrid.primary "hostPath" }}
+        - name: hostpath-storage
+          mountPath: /nfs
+        {{- else if eq .Values.storage.strategy.hybrid.primary "emptyDir" }}
+        - name: emptydir-storage
+          mountPath: /nfs
+        {{- else if eq .Values.storage.strategy.hybrid.primary "configMap" }}
+        - name: configmap-storage
+          mountPath: /nfs
+        {{- else }}
+        # Default to NFS
         - name: art-res-nfs
           mountPath: /nfs
+        {{- end }}
+        {{- else }}
+        # Default NFS mount
+        - name: art-res-nfs
+          mountPath: /nfs
+        {{- end }}
+        
         resources:
           {{- if .Values.emulator.resources }}
           {{- toYaml .Values.emulator.resources | nindent 10 }}
@@ -77,7 +127,44 @@ spec:
         hostPath:
           path: /dev/net/tun
           type: CharDevice
+      
+      {{- if .Values.storage.strategy.hostPath.enabled }}
+      # Option 1: HostPath Direct Mounts
+      - name: hostpath-storage
+        hostPath:
+          path: {{ .Values.storage.strategy.hostPath.path }}
+          type: DirectoryOrCreate
+      {{- else if .Values.storage.strategy.hybrid.enabled }}
+      # Option 8: Hybrid Storage Strategy
+      {{- if eq .Values.storage.strategy.hybrid.primary "hostPath" }}
+      - name: hostpath-storage
+        hostPath:
+          path: {{ .Values.storage.strategy.hostPath.path | default "/tmp/loco-art-shared" }}
+          type: DirectoryOrCreate
+      {{- else if eq .Values.storage.strategy.hybrid.primary "emptyDir" }}
+      - name: emptydir-storage
+        emptyDir:
+          {{- if .Values.storage.strategy.hybrid.emptyDir.medium }}
+          medium: {{ .Values.storage.strategy.hybrid.emptyDir.medium }}
+          {{- end }}
+          {{- if .Values.storage.strategy.hybrid.emptyDir.sizeLimit }}
+          sizeLimit: {{ .Values.storage.strategy.hybrid.emptyDir.sizeLimit }}
+          {{- end }}
+      {{- else if eq .Values.storage.strategy.hybrid.primary "configMap" }}
+      - name: configmap-storage
+        configMap:
+          name: {{ .Values.storage.strategy.hybrid.configMap.name }}
+      {{- else }}
+      # Default to NFS
       - name: art-res-nfs
         nfs:
           server: {{ .Values.artRes.nfs.server }}
           path: {{ .Values.artRes.nfs.path }}
+      {{- end }}
+      {{- else }}
+      # Default NFS volume
+      - name: art-res-nfs
+        nfs:
+          server: {{ .Values.artRes.nfs.server }}
+          path: {{ .Values.artRes.nfs.path }}
+      {{- end }}

@@ -1,0 +1,132 @@
+# Minikube configuration with HostPath storage strategy (Option 1)
+replicas: 1
+namespace: loco
+
+# Storage configuration for minikube with hostPath
+storage:
+  class: "standard"  # minikube default storage class
+  nfsSize: "10Gi"
+  diskSize: "10Gi"
+  
+  # Storage strategy configuration - HostPath Direct Mounts
+  strategy:
+    # Option 1: HostPath Direct Mounts (RECOMMENDED for minikube)
+    hostPath:
+      enabled: true
+      path: "/tmp/loco-art-shared"
+      createOnStartup: true
+      permissions: "777"
+    
+    # Option 8: Hybrid Storage with Multiple Backends
+    hybrid:
+      enabled: false
+      primary: "hostPath"
+      fallback: "emptyDir"
+      
+      nfs:
+        enabled: false
+        image: "erichough/nfs-server:latest"
+        server: "nfs-server.loco.svc.cluster.local"
+        path: "/exports/art"
+        alternatives:
+          - "itsthenetwork/nfs-server-alpine:latest"
+          - "erichough/nfs-server:latest"
+          - "k8s.gcr.io/volume-nfs:0.8"
+      
+      emptyDir:
+        enabled: false
+        medium: "Memory"
+        sizeLimit: "1Gi"
+      
+      configMap:
+        enabled: false
+        name: "art-res-config"
+        dataKey: "shared-data"
+
+# Use local images (no image repo prefix)
+imageRepo: ""
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+
+# Registry configurations for different environments
+registryConfig:
+  ghcr:
+    enabled: false
+    secretName: "ghcr-secret"
+    server: "ghcr.io"
+  jfrog:
+    enabled: false
+    secretName: "jfrog-secret"
+    server: ""
+
+emulator:
+  image: compose-emulator-0
+  tag: latest
+  imagePullPolicy: Never  # Use local images
+
+  servicePort: 5901
+  diskPVC: win98-disk
+  diskReadOnly: false
+
+  # Snapshot configuration - now enabled since disk image is built-in
+  usePrebuiltSnapshot: true
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+
+  # CPU resources for emulator pods
+  resources:
+    limits:
+      cpu: "1"
+    requests:
+      cpu: "0.25"
+  
+  # Additional environment variables (only non-duplicate ones)
+  env:
+    BRIDGE: "loco-br"
+    TAP_IF: "tap0"
+    DISK: "/images/win98.qcow2"
+    DISPLAY_NUM: "99"
+
+backend:
+  image: compose-backend
+  tag: latest
+  imagePullPolicy: Never
+  servicePort: 3001
+
+frontend:
+  image: compose-frontend
+  tag: latest
+  imagePullPolicy: Never
+  servicePort: 3000
+  env:
+    BACKEND_HOST: "loco-loco-backend"
+    BACKEND_PORT: "3001"
+    FRONTEND_PORT: "3000"
+
+git:
+  userName: "Loco Watcher"
+  userEmail: "watcher@example.com"
+
+artRes:
+  nfs:
+    server: nfs-server.loco.svc.cluster.local
+    path: /exports/art
+
+vr:
+  enabled: true
+  image: compose-vr-frontend
+  tag: latest
+  imagePullPolicy: Never
+  servicePort: 3000
+  buildArgs:
+    VITE_DEFAULT_VR: "true"
+    
+stunner:
+  enabled: false
+
+# Disable NFS server since we're using hostPath
+nfs:
+  enabled: false
+  size: 10Gi
+  image: itsthenetwork/nfs-server-alpine:latest 

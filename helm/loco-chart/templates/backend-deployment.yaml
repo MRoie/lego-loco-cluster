@@ -25,6 +25,24 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: {{ .Values.backend.servicePort }}
+        startupProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.backend.servicePort }}
+          failureThreshold: 18
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.backend.servicePort }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.backend.servicePort }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
         volumeMounts:
         - name: instances-config
           mountPath: /app/config/instances.json
