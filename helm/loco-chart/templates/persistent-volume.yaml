@@ -1,14 +1,19 @@
+{{- if .Values.emulator.diskPVC }}
 apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: {{ .Values.emulator.diskPVC }}-pv
+  namespace: {{ include "loco.namespace" . }}
 spec:
   capacity:
-    storage: 10Gi
+    storage: {{ .Values.storage.diskSize | default "10Gi" }}
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
-  storageClassName: ""
+  {{- if .Values.storage.class }}
+  storageClassName: {{ .Values.storage.class }}
+  {{- end }}
   hostPath:
     path: /tmp/{{ .Values.emulator.diskPVC }}
     type: DirectoryOrCreate
+{{- end }}

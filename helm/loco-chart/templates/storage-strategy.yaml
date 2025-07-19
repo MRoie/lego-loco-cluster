@@ -1,0 +1,53 @@
+{{- if .Values.storage.strategy.hostPath.enabled }}
+---
+# Option 1: HostPath Direct Mounts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "loco.fullname" . }}-storage-init
+  namespace: {{ include "loco.namespace" . }}
+data:
+  init-storage.sh: |
+    #!/bin/sh
+    set -e
+    
+    # Create shared directory with proper permissions
+    mkdir -p {{ .Values.storage.strategy.hostPath.path }}
+    chmod {{ .Values.storage.strategy.hostPath.permissions }} {{ .Values.storage.strategy.hostPath.path }}
+    
+    # Create art subdirectory
+    mkdir -p {{ .Values.storage.strategy.hostPath.path }}/art
+    chmod {{ .Values.storage.strategy.hostPath.permissions }} {{ .Values.storage.strategy.hostPath.path }}/art
+    
+    echo "HostPath storage initialized successfully"
+    echo "Path: {{ .Values.storage.strategy.hostPath.path }}"
+    ls -la {{ .Values.storage.strategy.hostPath.path }}
+{{- end }}
+
+{{- if .Values.storage.strategy.hybrid.enabled }}
+---
+# Option 8: Hybrid Storage Strategy
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "loco.fullname" . }}-hybrid-storage
+  namespace: {{ include "loco.namespace" . }}
+data:
+  storage-strategy: {{ .Values.storage.strategy.hybrid.primary }}
+  fallback-strategy: {{ .Values.storage.strategy.hybrid.fallback }}
+  
+  {{- if .Values.storage.strategy.hybrid.nfs.enabled }}
+  nfs-server: {{ .Values.storage.strategy.hybrid.nfs.server }}
+  nfs-path: {{ .Values.storage.strategy.hybrid.nfs.path }}
+  {{- end }}
+  
+  {{- if .Values.storage.strategy.hybrid.emptyDir.enabled }}
+  empty-dir-medium: {{ .Values.storage.strategy.hybrid.emptyDir.medium }}
+  empty-dir-size-limit: {{ .Values.storage.strategy.hybrid.emptyDir.sizeLimit }}
+  {{- end }}
+  
+  {{- if .Values.storage.strategy.hybrid.configMap.enabled }}
+  config-map-name: {{ .Values.storage.strategy.hybrid.configMap.name }}
+  config-map-key: {{ .Values.storage.strategy.hybrid.configMap.dataKey }}
+  {{- end }}
+{{- end }} 

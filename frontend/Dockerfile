@@ -35,7 +35,10 @@ COPY . .
 RUN if [ "$VITE_DEFAULT_VR" = "true" ]; then npm run build:vr; else npm run build; fi
 
 # Production stage
-FROM nginx:alpine AS production
+FROM node:18-slim AS production
+
+# Install nginx and gettext
+RUN apt-get update && apt-get install -y nginx gettext-base && rm -rf /var/lib/apt/lists/*
 
 # Copy built app
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -46,9 +49,6 @@ RUN mkdir -p /usr/share/nginx/html/config
 # Copy nginx configurations (both static and template)
 COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/nginx.conf.template /etc/nginx/templates/default.conf.template
-
-# Install envsubst for template processing
-RUN apk add --no-cache gettext
 
 # Create entrypoint script
 COPY --from=builder /app/docker-entrypoint.sh /docker-entrypoint.sh

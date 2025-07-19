@@ -6,8 +6,12 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  {{- if .Values.storage.class }}
+  storageClassName: {{ .Values.storage.class }}
+  {{- end }}
   resources:
     requests:
-      storage: 10Gi
-  storageClassName: ""
+      storage: {{ .Values.storage.diskSize | default "10Gi" }}
+  {{- if .Values.emulator.diskPVC }}
   volumeName: {{ .Values.emulator.diskPVC }}-pv
+  {{- end }}

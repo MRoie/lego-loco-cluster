@@ -8,3 +8,4 @@ containers/**/win98.*
 *.tar.gz
 images/*.tar.gz
 images/*
+compose/*.tar
