@@ -6,6 +6,7 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
+const StreamQualityMonitor = require("./services/streamQualityMonitor");
 
 const app = express();
 const server = http.createServer(app);
@@ -27,6 +28,9 @@ const K8S_CONFIG_DIR = "/app/config";
 const FINAL_CONFIG_DIR = fs.existsSync(K8S_CONFIG_DIR) ? K8S_CONFIG_DIR : CONFIG_DIR;
 
 console.log("Using config directory:", FINAL_CONFIG_DIR);
+
+// Initialize stream quality monitor after config directory is determined
+const qualityMonitor = new StreamQualityMonitor(FINAL_CONFIG_DIR);
 
 // Serve frontend static build
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
@@ -116,6 +120,67 @@ app.get("/api/instances/provisioned", (req, res) => {
   } catch (e) {
     console.error("Provisioned instances config error:", e.message);
     res.status(503).json([]);
+  }
+});
+
+// ========== STREAM QUALITY MONITORING API ==========
+
+// Get quality metrics for all instances
+app.get("/api/quality/metrics", (req, res) => {
+  try {
+    const metrics = qualityMonitor.getAllMetrics();
+    res.json(metrics);
+  } catch (e) {
+    console.error("Failed to get quality metrics:", e.message);
+    res.status(500).json({ error: "Failed to get quality metrics" });
+  }
+});
+
+// Get quality metrics for a specific instance
+app.get("/api/quality/metrics/:instanceId", (req, res) => {
+  try {
+    const { instanceId } = req.params;
+    const metrics = qualityMonitor.getInstanceMetrics(instanceId);
+    
+    if (!metrics) {
+      return res.status(404).json({ error: "Instance not found or not monitored" });
+    }
+    
+    res.json(metrics);
+  } catch (e) {
+    console.error(`Failed to get quality metrics for ${req.params.instanceId}:`, e.message);
+    res.status(500).json({ error: "Failed to get instance quality metrics" });
+  }
+});
+
+// Get quality summary across all instances
+app.get("/api/quality/summary", (req, res) => {
+  try {
+    const summary = qualityMonitor.getQualitySummary();
+    res.json(summary);
+  } catch (e) {
+    console.error("Failed to get quality summary:", e.message);
+    res.status(500).json({ error: "Failed to get quality summary" });
+  }
+});
+
+// Start/stop quality monitoring
+app.post("/api/quality/monitor/:action", (req, res) => {
+  try {
+    const { action } = req.params;
+    
+    if (action === 'start') {
+      qualityMonitor.start();
+      res.json({ status: 'started', message: 'Quality monitoring started' });
+    } else if (action === 'stop') {
+      qualityMonitor.stop();
+      res.json({ status: 'stopped', message: 'Quality monitoring stopped' });
+    } else {
+      res.status(400).json({ error: 'Invalid action. Use start or stop' });
+    }
+  } catch (e) {
+    console.error(`Failed to ${req.params.action} quality monitoring:`, e.message);
+    res.status(500).json({ error: `Failed to ${req.params.action} quality monitoring` });
   }
 });
 
@@ -332,6 +397,10 @@ server.listen(3001, () => {
   console.log("Backend running on http://localhost:3001");
   console.log("Config directory:", FINAL_CONFIG_DIR);
   console.log("Current active instances:", readActive());
+  
+  // Start quality monitoring
+  console.log("🔍 Starting stream quality monitoring service...");
+  qualityMonitor.start();
   
   // Test config loading
   try {

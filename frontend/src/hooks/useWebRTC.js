@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 /**
  * Establish a WebRTC connection for the given target instance ID.
- * Returns a video ref and current audio level for UI binding.
+ * Returns a video ref, current audio level, and connection quality metrics for UI binding.
  */
 export default function useWebRTC(targetId) {
   // <video> element that will display the incoming stream
@@ -10,11 +10,21 @@ export default function useWebRTC(targetId) {
   // simple numeric audio meter 0-1 updated from Web Audio API
   const [audioLevel, setAudioLevel] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Connection quality metrics
+  const [connectionQuality, setConnectionQuality] = useState({
+    bitrate: 0,
+    packetLoss: 0,
+    latency: 0,
+    frameRate: 0,
+    resolution: null,
+    connectionState: 'disconnected'
+  });
 
   useEffect(() => {
     if (!targetId) return;
     let cancelled = false;
     let reconnectTimer = null;
+    let statsTimer = null;
 
     const scheduleReconnect = () => {
       if (cancelled || reconnectTimer) return;
@@ -23,6 +33,69 @@ export default function useWebRTC(targetId) {
         reconnectTimer = null;
         connect();
       }, 1000);
+    };
+
+    // Monitor WebRTC stats for quality metrics
+    const monitorStats = (pc) => {
+      if (!pc || cancelled) return;
+      
+      statsTimer = setInterval(async () => {
+        try {
+          const stats = await pc.getStats();
+          const qualityMetrics = extractQualityMetrics(stats);
+          setConnectionQuality(prev => ({
+            ...prev,
+            ...qualityMetrics,
+            connectionState: pc.connectionState
+          }));
+        } catch (error) {
+          console.warn('Failed to get WebRTC stats:', error);
+        }
+      }, 1000); // Update stats every second
+    };
+
+    // Extract quality metrics from RTCStats
+    const extractQualityMetrics = (stats) => {
+      const metrics = {
+        bitrate: 0,
+        packetLoss: 0,
+        latency: 0,
+        frameRate: 0,
+        resolution: null
+      };
+
+      stats.forEach((report) => {
+        if (report.type === 'inbound-rtp' && report.mediaType === 'video') {
+          // Video quality metrics
+          if (report.bytesReceived && report.timestamp) {
+            const bitrate = Math.round((report.bytesReceived * 8) / (report.timestamp / 1000));
+            metrics.bitrate = bitrate;
+          }
+          
+          if (report.framesDecoded && report.timestamp) {
+            metrics.frameRate = Math.round(report.framesDecoded / (report.timestamp / 1000));
+          }
+          
+          if (report.frameWidth && report.frameHeight) {
+            metrics.resolution = `${report.frameWidth}x${report.frameHeight}`;
+          }
+          
+          // Packet loss calculation
+          if (report.packetsLost && report.packetsReceived) {
+            const totalPackets = report.packetsLost + report.packetsReceived;
+            metrics.packetLoss = totalPackets > 0 ? (report.packetsLost / totalPackets) * 100 : 0;
+          }
+        }
+
+        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+          // Latency from RTT
+          if (report.currentRoundTripTime) {
+            metrics.latency = Math.round(report.currentRoundTripTime * 1000); // Convert to ms
+          }
+        }
+      });
+
+      return metrics;
     };
 
     async function connect() {
@@ -112,8 +185,20 @@ export default function useWebRTC(targetId) {
         };
 
         pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          setConnectionQuality(prev => ({
+            ...prev,
+            connectionState: pc.connectionState
+          }));
+          
+          if (pc.connectionState === 'connected') {
+            // Start monitoring stats when connected
+            monitorStats(pc);
+          } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
             console.log('Peer connection lost, reconnecting');
+            if (statsTimer) {
+              clearInterval(statsTimer);
+              statsTimer = null;
+            }
             ws.close();
             pc.close();
             scheduleReconnect();
@@ -149,6 +234,10 @@ export default function useWebRTC(targetId) {
         };
 
         return () => {
+          if (statsTimer) {
+            clearInterval(statsTimer);
+            statsTimer = null;
+          }
           ws.close();
           pc.close();
           if (audioCtx) audioCtx.close();
@@ -163,9 +252,22 @@ export default function useWebRTC(targetId) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
+      if (statsTimer) {
+        clearInterval(statsTimer);
+        statsTimer = null;
+      }
       if (videoRef.current) videoRef.current.srcObject = null;
+      // Reset quality metrics
+      setConnectionQuality({
+        bitrate: 0,
+        packetLoss: 0,
+        latency: 0,
+        frameRate: 0,
+        resolution: null,
+        connectionState: 'disconnected'
+      });
     };
   }, [targetId]);
 
-  return { videoRef, audioLevel, loading };
+  return { videoRef, audioLevel, loading, connectionQuality };
 }
