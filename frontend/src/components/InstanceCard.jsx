@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import ReactVNCViewer from './ReactVNCViewer';
 import useWebRTC from '../hooks/useWebRTC';
 import AudioSinkSelector from './AudioSinkSelector';
+import QualityIndicator from './QualityIndicator';
 
 /**
  * Individual instance card component for the 3x3 grid
@@ -12,7 +13,7 @@ import AudioSinkSelector from './AudioSinkSelector';
  * - onClick: callback when card is clicked
  */
 export default function InstanceCard({ instance, isActive, onClick }) {
-  const { videoRef, loading } = useWebRTC(instance.id);
+  const { videoRef, loading, connectionQuality } = useWebRTC(instance.id);
   const getStatusColor = (status) => {
     switch (status) {
       case 'ready':
@@ -70,7 +71,40 @@ export default function InstanceCard({ instance, isActive, onClick }) {
         {instance.description && (
           <p className="text-xs text-gray-400 truncate">{instance.description}</p>
         )}
-        <AudioSinkSelector mediaRef={videoRef} />
+        
+        {/* Quality Indicator and Audio Selector Row */}
+        <div className="flex items-start justify-between mt-2 space-x-2">
+          <div className="flex-1">
+            {instance.provisioned && (
+              <QualityIndicator instanceId={instance.id} compact={true} />
+            )}
+          </div>
+          <div className="flex-shrink-0">
+            <AudioSinkSelector mediaRef={videoRef} />
+          </div>
+        </div>
+
+        {/* WebRTC Connection Quality */}
+        {connectionQuality.connectionState !== 'disconnected' && (
+          <div className="mt-2 text-xs text-gray-400">
+            <div className="flex items-center justify-between">
+              <span>WebRTC:</span>
+              <span className={
+                connectionQuality.connectionState === 'connected' ? 'text-green-400' :
+                connectionQuality.connectionState === 'connecting' ? 'text-yellow-400' :
+                'text-red-400'
+              }>
+                {connectionQuality.connectionState}
+              </span>
+            </div>
+            {connectionQuality.bitrate > 0 && (
+              <div className="flex items-center justify-between">
+                <span>Bitrate:</span>
+                <span className="text-blue-400">{Math.round(connectionQuality.bitrate / 1000)}kbps</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* VNC Content Area */}
