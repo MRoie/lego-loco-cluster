@@ -9,3 +9,4 @@ containers/**/win98.*
 images/*.tar.gz
 images/*
 compose/*.tar
+talosctl
