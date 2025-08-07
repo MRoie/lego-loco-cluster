@@ -124,15 +124,17 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white relative">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-white relative">
       {!vrMode && (
         <>
           {/* Header */}
-          <div className="bg-gray-800 border-b border-gray-700 p-4">
-            <div className="flex items-center justify-between">
+          <div className="glass-card bg-gray-800/90 backdrop-blur-md border-b border-white/10 p-6">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
               <div>
-                <h1 className="text-2xl font-bold text-yellow-400">🎮 Lego Loco Cluster</h1>
-                <p className="text-gray-300 text-sm">
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent te-mono">
+                  🎮 Lego Loco Cluster
+                </h1>
+                <p className="text-gray-300 text-sm mt-1 te-mono">
                   {displayInstances.length} of {instances.length} instances
                   {showOnlyProvisioned ? ' (provisioned only)' : ''}
                 </p>
@@ -140,17 +142,17 @@ export default function App() {
               <div className="flex items-center space-x-4">
                 <button
                   onClick={() => setShowOnlyProvisioned(!showOnlyProvisioned)}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
+                  className={`px-4 py-2 rounded-lg text-sm transition-all duration-200 te-mono card-depth-subtle ${
                     showOnlyProvisioned 
-                      ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                      : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                      ? 'bg-blue-600/80 text-white hover:bg-blue-500/90 backdrop-blur-sm' 
+                      : 'bg-gray-600/50 text-gray-300 hover:bg-gray-500/60 backdrop-blur-sm'
                   }`}
                 >
                   {showOnlyProvisioned ? 'Show All' : 'Provisioned Only'}
                 </button>
                 <button
                   onClick={() => setVrMode(true)}
-                  className="bg-yellow-500 text-black px-4 py-2 rounded font-medium hover:bg-yellow-400 transition-colors"
+                  className="bg-gradient-to-r from-yellow-500 to-orange-500 text-black px-6 py-2 rounded-lg font-medium hover:from-yellow-400 hover:to-orange-400 transition-all duration-200 card-depth-subtle te-mono"
                 >
                   Enter VR
                 </button>
@@ -159,10 +161,16 @@ export default function App() {
           </div>
 
           {/* 3x3 Grid Container */}
-          <div className="p-6">
-            <div className="grid grid-cols-3 gap-6 max-w-6xl mx-auto">
+          <div className="p-8 grid-container">
+            <div className="grid grid-cols-3 gap-8 max-w-7xl mx-auto">
               {gridInstances.map((instance, index) => (
-                <div key={index} className="aspect-video">
+                <motion.div 
+                  key={index} 
+                  className="aspect-video"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1, duration: 0.5 }}
+                >
                   {instance ? (
                     <InstanceCard
                       instance={instance}
@@ -174,46 +182,54 @@ export default function App() {
                     />
                   ) : (
                     <motion.div
-                      className="w-full h-full border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center text-gray-500"
-                      whileHover={{ borderColor: '#9CA3AF' }}
+                      className="w-full h-full border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-gray-400 card-depth-inset glass-card transition-all duration-300 shimmer"
+                      whileHover={{ 
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                        scale: 1.02,
+                        y: -2 
+                      }}
+                      whileTap={{ scale: 0.98 }}
                     >
                       <div className="text-center">
-                        <div className="w-12 h-12 border border-gray-600 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                          <span className="text-2xl">➕</span>
-                        </div>
-                        <p className="text-sm">Empty Slot</p>
-                        <p className="text-xs opacity-75">
-                          {showOnlyProvisioned ? 'No provisioned instance' : 'Available slot'}
+                        <motion.div 
+                          className="w-16 h-16 border-2 border-white/20 rounded-xl mx-auto mb-3 flex items-center justify-center backdrop-blur-sm"
+                          whileHover={{ borderColor: 'rgba(255, 255, 255, 0.4)' }}
+                        >
+                          <span className="text-3xl opacity-60">➕</span>
+                        </motion.div>
+                        <p className="text-sm font-medium te-mono mb-1">Empty Slot</p>
+                        <p className="text-xs opacity-60 te-mono">
+                          {showOnlyProvisioned ? 'No provisioned instance' : 'Available for deployment'}
                         </p>
                       </div>
                     </motion.div>
                   )}
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
 
           {/* Status Bar */}
-          <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-3">
-            <div className="flex items-center justify-between max-w-6xl mx-auto">
+          <div className="fixed bottom-0 left-0 right-0 glass-card bg-gray-800/90 backdrop-blur-md border-t border-white/10 p-4">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
               <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-300">Active Instance:</span>
-                <span className="text-sm font-medium text-yellow-400">
+                <span className="text-sm text-gray-300 te-mono">Active Instance:</span>
+                <span className="text-sm font-medium bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent te-mono">
                   {displayInstances[active]?.id || 'None'}
                 </span>
               </div>
-              <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-8">
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-xs text-gray-300">Ready ({displayInstances.filter(i => i?.status === 'ready').length})</span>
+                  <div className="w-2 h-2 status-glow-green rounded-full"></div>
+                  <span className="text-xs text-gray-300 te-mono">Ready ({displayInstances.filter(i => i?.status === 'ready').length})</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span className="text-xs text-gray-300">Booting ({displayInstances.filter(i => i?.status === 'booting').length})</span>
+                  <div className="w-2 h-2 status-glow-yellow rounded-full"></div>
+                  <span className="text-xs text-gray-300 te-mono">Booting ({displayInstances.filter(i => i?.status === 'booting').length})</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  <span className="text-xs text-gray-300">Error ({displayInstances.filter(i => i?.status === 'error').length})</span>
+                  <div className="w-2 h-2 status-glow-red rounded-full"></div>
+                  <span className="text-xs text-gray-300 te-mono">Error ({displayInstances.filter(i => i?.status === 'error').length})</span>
                 </div>
               </div>
             </div>
