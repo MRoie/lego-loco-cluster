@@ -10,6 +10,7 @@
     "ws": "^8.18.2"
   },
   "devDependencies": {
+    "jest": "^30.0.5",
     "nodemon": "^3.1.10"
   },
   "scripts": {
@@ -17,6 +18,8 @@
     "dev": "nodemon server.js",
     "dev:verbose": "nodemon --verbose server.js",
     "dev:debug": "nodemon --inspect=0.0.0.0:9229 server.js",
-    "monitor": "nodemon --watch . --watch ../config --ext js,json server.js"
+    "monitor": "nodemon --watch . --watch ../config --ext js,json server.js",
+    "test": "jest",
+    "test:watch": "jest --watch"
   }
 }

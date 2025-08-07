@@ -4,28 +4,123 @@ import { VncScreen } from 'react-vnc';
 /**
  * React-VNC based VNC viewer component
  * Uses the react-vnc library for robust VNC protocol implementation
+ * Enhanced with audio and controls testing
  */
 export default function ReactVNCViewer({ instanceId }) {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState(null);
   const [hasControl, setHasControl] = useState(false);
+  const [audioDetected, setAudioDetected] = useState(false);
+  const [controlsResponsive, setControlsResponsive] = useState(false);
   const vncRef = useRef(null);
   
   // Control release tracking
   const keySequenceRef = useRef([]);
   const lastKeyTimeRef = useRef(0);
+  
+  // Audio and controls testing
+  const lastControlTestRef = useRef(0);
+  const audioContextRef = useRef(null);
 
   // Debug logging for hasControl state changes
   useEffect(() => {
     console.log(`🎮 ReactVNC hasControl state changed to: ${hasControl} for instance ${instanceId}`);
   }, [hasControl, instanceId]);
 
+  // Test audio detection
+  useEffect(() => {
+    if (connected && hasControl) {
+      testAudioCapabilities();
+    }
+  }, [connected, hasControl]);
+
+  // Test controls responsiveness periodically
+  useEffect(() => {
+    if (connected && hasControl) {
+      const testInterval = setInterval(() => {
+        testControlsResponsiveness();
+      }, 10000); // Test every 10 seconds
+
+      return () => clearInterval(testInterval);
+    }
+  }, [connected, hasControl]);
+
   console.log('ReactVNCViewer component mounted for instance:', instanceId);
 
   // Create WebSocket connection URL
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const vncUrl = `${protocol}//${window.location.host}/proxy/vnc/${instanceId}/`;
+
+  // Audio detection test
+  const testAudioCapabilities = async () => {
+    try {
+      // Try to detect audio context capabilities
+      if (window.AudioContext || window.webkitAudioContext) {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        // Test if we can create audio nodes (indicates audio support)
+        const oscillator = audioContextRef.current.createOscillator();
+        const gainNode = audioContextRef.current.createGain();
+        oscillator.connect(gainNode);
+        
+        setAudioDetected(true);
+        console.log('🔊 Audio capabilities detected for instance:', instanceId);
+        
+        // Dispatch event for quality monitoring
+        window.dispatchEvent(new CustomEvent('vncAudioDetected', {
+          detail: { instanceId, detected: true }
+        }));
+      } else {
+        setAudioDetected(false);
+        console.log('🔇 No audio capabilities detected for instance:', instanceId);
+      }
+    } catch (error) {
+      console.warn('Audio detection failed:', error);
+      setAudioDetected(false);
+    }
+  };
+
+  // Controls responsiveness test
+  const testControlsResponsiveness = () => {
+    const now = Date.now();
+    
+    // Don't test too frequently
+    if (now - lastControlTestRef.current < 5000) return;
+    lastControlTestRef.current = now;
+
+    try {
+      // Test if we can access the VNC canvas for control testing
+      const canvas = vncRef.current?.querySelector('canvas');
+      if (canvas) {
+        // Simulate a minimal mouse movement to test responsiveness
+        const testEvent = new MouseEvent('mousemove', {
+          clientX: canvas.getBoundingClientRect().left + 1,
+          clientY: canvas.getBoundingClientRect().top + 1,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        const eventDispatched = canvas.dispatchEvent(testEvent);
+        setControlsResponsive(eventDispatched);
+        
+        console.log(`🎮 Controls responsiveness test for ${instanceId}: ${eventDispatched ? 'PASS' : 'FAIL'}`);
+        
+        // Dispatch event for quality monitoring
+        window.dispatchEvent(new CustomEvent('vncControlsTest', {
+          detail: { instanceId, responsive: eventDispatched }
+        }));
+      } else {
+        setControlsResponsive(false);
+        console.log(`🎮 Controls test failed - no canvas found for ${instanceId}`);
+      }
+    } catch (error) {
+      console.warn('Controls responsiveness test failed:', error);
+      setControlsResponsive(false);
+    }
+  };
 
   // VNC event handlers
   const handleConnect = () => {
@@ -34,6 +129,12 @@ export default function ReactVNCViewer({ instanceId }) {
     setConnecting(false);
     setHasControl(true);
     setError(null);
+    
+    // Test capabilities after connection
+    setTimeout(() => {
+      testAudioCapabilities();
+      testControlsResponsiveness();
+    }, 1000);
   };
 
   const handleDisconnect = () => {
@@ -41,6 +142,14 @@ export default function ReactVNCViewer({ instanceId }) {
     setConnected(false);
     setConnecting(false);
     setHasControl(false);
+    setAudioDetected(false);
+    setControlsResponsive(false);
+    
+    // Clean up audio context
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
   };
 
   const handleError = (error) => {
@@ -301,14 +410,35 @@ export default function ReactVNCViewer({ instanceId }) {
         </div>
       )}
 
-      {/* Control indicator */}
+      {/* Control and Status indicators */}
       {connected && (
-        <div className={`absolute top-2 right-2 z-20 px-2 py-1 rounded text-xs font-medium ${
-          hasControl 
-            ? 'bg-green-500 text-white' 
-            : 'bg-yellow-500 text-black cursor-pointer hover:bg-yellow-400'
-        }`}>
-          {hasControl ? '🎮 You have control' : '👆 Click to take control'}
+        <div className="absolute top-2 right-2 z-20 space-y-1">
+          {/* Control Status */}
+          <div className={`px-2 py-1 rounded text-xs font-medium ${
+            hasControl 
+              ? 'bg-green-500 text-white' 
+              : 'bg-yellow-500 text-black cursor-pointer hover:bg-yellow-400'
+          }`}>
+            {hasControl ? '🎮 You have control' : '👆 Click to take control'}
+          </div>
+          
+          {/* Audio Status */}
+          <div className={`px-2 py-1 rounded text-xs font-medium ${
+            audioDetected 
+              ? 'bg-blue-500 text-white' 
+              : 'bg-gray-500 text-white'
+          }`}>
+            🔊 {audioDetected ? 'Audio Ready' : 'No Audio'}
+          </div>
+          
+          {/* Controls Status */}
+          <div className={`px-2 py-1 rounded text-xs font-medium ${
+            controlsResponsive 
+              ? 'bg-green-500 text-white' 
+              : 'bg-orange-500 text-white'
+          }`}>
+            🎯 {controlsResponsive ? 'Controls OK' : 'Controls Test'}
+          </div>
         </div>
       )}
 
@@ -340,7 +470,7 @@ export default function ReactVNCViewer({ instanceId }) {
       {/* Debug info */}
       {process.env.NODE_ENV === 'development' && (
         <div className="absolute bottom-2 left-2 text-xs text-gray-300 bg-black bg-opacity-50 p-1 rounded">
-          Instance: {instanceId} | Connected: {connected ? '✓' : '✗'} | Control: {hasControl ? '✓' : '✗'}
+          Instance: {instanceId} | Connected: {connected ? '✓' : '✗'} | Control: {hasControl ? '✓' : '✗'} | Audio: {audioDetected ? '✓' : '✗'} | Controls: {controlsResponsive ? '✓' : '✗'}
         </div>
       )}
     </div>

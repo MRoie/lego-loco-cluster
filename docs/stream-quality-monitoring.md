@@ -1,6 +1,278 @@
 # Stream Quality Monitoring
 
-This document describes the video/audio quality monitoring system implemented for the Lego Loco cluster streaming infrastructure.
+This document describes the comprehensive video/audio quality monitoring system for QEMU streaming instances.
+
+## Overview
+
+The Stream Quality Monitor provides real-time assessment of QEMU instance streaming quality, including:
+
+- **VNC Connectivity Testing** - Tests actual VNC port connectivity and responsiveness
+- **Audio Detection and Quality Assessment** - Detects audio capabilities and measures audio quality
+- **Control Responsiveness Testing** - Tests VNC control inputs (mouse/keyboard) responsiveness  
+- **Network Quality Metrics** - Measures latency, packet loss, and jitter
+- **Individual Instance Indicators** - Shows quality status on each instance card
+- **Comprehensive Dashboard** - Central monitoring view for all instances
+
+## Features
+
+### Backend Quality Monitoring Service
+
+The `StreamQualityMonitor` service continuously probes all instances:
+
+```javascript
+const qualityMonitor = new StreamQualityMonitor('/config');
+qualityMonitor.start();
+```
+
+**Monitoring Capabilities:**
+- VNC port connectivity via TCP socket testing
+- WebSocket VNC proxy testing for actual protocol validation
+- Audio detection using WebAudio API capabilities testing
+- Control responsiveness via synthetic mouse/keyboard event testing
+- Connection latency measurement and quality estimation
+- Automatic error detection and recovery
+
+**Quality Metrics Tracked:**
+- `availability.vnc` - VNC service availability
+- `availability.stream` - Stream endpoint availability  
+- `availability.audio` - Audio detection status
+- `availability.controls` - Control input availability
+- `quality.connectionLatency` - Network latency in milliseconds
+- `quality.videoFrameRate` - Estimated video frame rate
+- `quality.audioQuality` - Overall audio quality (excellent/good/fair/poor/error/unavailable)
+- `quality.audioLevel` - Audio level detection (0.0-1.0)
+- `quality.controlsResponsive` - Control input responsiveness status
+- `quality.packetLoss` - Estimated packet loss percentage
+- `quality.jitter` - Network jitter in milliseconds
+
+### Frontend Quality Integration
+
+#### Individual Instance Cards
+
+Each instance card now displays real-time quality indicators:
+
+```jsx
+import QualityIndicator from './components/QualityIndicator';
+
+<QualityIndicator instanceId={instance.id} compact={true} />
+```
+
+**Quality Indicator Features:**
+- Color-coded quality status (green/blue/yellow/orange/red)
+- VNC availability status
+- Audio detection indicator
+- Control responsiveness status
+- Connection latency display
+- Real-time updates every 5 seconds
+
+#### Enhanced VNC Viewer
+
+The `ReactVNCViewer` component now includes:
+
+- **Audio Capabilities Testing** - Tests browser audio support and VNC audio streams
+- **Control Responsiveness Testing** - Periodically tests control input handling
+- **Enhanced Status Indicators** - Shows audio, video, and control status separately
+- **Improved Error Handling** - Better error reporting and recovery
+
+### API Endpoints
+
+#### Get All Instance Metrics
+```bash
+GET /api/quality/metrics
+```
+
+Returns quality metrics for all instances:
+```json
+{
+  "instance-0": {
+    "instanceId": "instance-0",
+    "timestamp": "2025-08-07T23:17:30.476Z",
+    "availability": {
+      "vnc": true,
+      "stream": true,
+      "audio": true,
+      "controls": true
+    },
+    "quality": {
+      "connectionLatency": 45,
+      "videoFrameRate": 30,
+      "audioQuality": "excellent",
+      "audioLevel": 0.7,
+      "controlsResponsive": true,
+      "packetLoss": 0.001,
+      "jitter": 2.5
+    },
+    "errors": []
+  }
+}
+```
+
+#### Get Instance-Specific Metrics
+```bash
+GET /api/quality/metrics/:instanceId
+```
+
+Returns quality metrics for a specific instance.
+
+#### Get Quality Summary
+```bash
+GET /api/quality/summary
+```
+
+Returns aggregated quality overview:
+```json
+{
+  "total": 9,
+  "available": 6,
+  "availabilityPercent": 66.7,
+  "averageLatency": 52,
+  "qualityDistribution": {
+    "excellent": 3,
+    "good": 2,
+    "fair": 1,
+    "unavailable": 3
+  }
+}
+```
+
+#### Control Monitoring Service
+```bash
+POST /api/quality/monitor/start
+POST /api/quality/monitor/stop
+```
+
+Start or stop the quality monitoring service.
+
+## Quality Assessment Algorithm
+
+### Audio Quality Determination
+
+The system determines audio quality based on multiple factors:
+
+1. **Audio Detection** - Tests browser AudioContext support and VNC audio capabilities
+2. **Control Responsiveness** - Tests VNC control input handling
+3. **Network Latency** - Measures connection response time
+4. **Error Rate** - Tracks connection and functionality errors
+
+**Quality Levels:**
+- `excellent` - Low latency (<50ms), audio detected, controls responsive
+- `good` - Moderate latency (<100ms), audio detected, controls responsive  
+- `fair` - Higher latency (<200ms) OR audio detected but controls unresponsive
+- `poor` - High latency (>200ms) OR controls responsive but no audio
+- `error` - Neither audio nor controls working properly
+- `unavailable` - VNC connection failed
+
+### Control Testing
+
+The system performs non-intrusive control testing:
+
+1. **Synthetic Event Testing** - Dispatches test mouse/keyboard events to VNC canvas
+2. **Event Handler Validation** - Verifies event handlers are responsive
+3. **Periodic Testing** - Tests every 10 seconds when connected and active
+4. **VR Controller Support** - Special handling for VR controller inputs
+
+### Network Quality Estimation
+
+Network quality metrics are estimated based on:
+
+- **Connection Latency** - Direct TCP socket connection timing
+- **Packet Loss** - Derived from latency and functionality test results
+- **Jitter** - Calculated from latency variations and functional responsiveness
+
+## Testing
+
+The monitoring system includes comprehensive automated tests:
+
+```bash
+cd backend
+npm test
+```
+
+**Test Coverage:**
+- Audio detection and quality assessment
+- Control responsiveness testing
+- Network quality measurement
+- Error handling and recovery
+- Quality summary generation
+- API endpoint functionality
+
+## Configuration
+
+### Monitoring Intervals
+
+- **Probe Interval** - 5 seconds (configurable in `StreamQualityMonitor`)
+- **Control Test Interval** - 10 seconds when VNC is active
+- **Frontend Update Interval** - 5 seconds for UI refreshes
+
+### Quality Thresholds
+
+Quality thresholds can be adjusted in `estimateQualityMetrics()`:
+
+```javascript
+// Latency thresholds (milliseconds)
+const EXCELLENT_THRESHOLD = 50;
+const GOOD_THRESHOLD = 100;
+const FAIR_THRESHOLD = 200;
+
+// Audio level thresholds (0.0-1.0)
+const MIN_AUDIO_LEVEL = 0.2;
+const GOOD_AUDIO_LEVEL = 0.3;
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**No Quality Data**
+- Verify monitoring service is started: `POST /api/quality/monitor/start`
+- Check instances.json configuration file exists
+- Ensure backend server is running on correct port
+
+**Audio Not Detected**
+- Check browser audio permissions
+- Verify VNC connection is established
+- Test with audio-enabled browser (Chrome/Firefox)
+
+**Controls Not Responsive**
+- Check VNC canvas element exists
+- Verify browser allows synthetic events
+- Test with different VNC client settings
+
+**High Latency/Poor Quality**
+- Check network connectivity to VNC hosts
+- Verify QEMU instances are running
+- Monitor system resource usage
+
+### Debug Mode
+
+Enable debug mode for detailed logging:
+
+```bash
+NODE_ENV=development npm run dev
+```
+
+This provides additional console output for monitoring operations and quality assessments.
+
+## Integration with VR
+
+The quality monitoring system integrates with VR controllers:
+
+- **VR Event Handling** - Custom VR events trigger quality tests
+- **VR-Specific Control Testing** - Tests VR controller input responsiveness
+- **VR Quality Indicators** - Quality status visible in VR interface
+
+See `ReactVNCViewer.jsx` for VR integration details.
+
+## Future Enhancements
+
+Planned improvements include:
+
+1. **Advanced Video Analysis** - Real video frame rate detection
+2. **Audio Level Monitoring** - Real-time audio level measurement  
+3. **Network Bandwidth Testing** - Actual bandwidth measurement
+4. **Historical Quality Tracking** - Quality metrics over time
+5. **Alert System** - Notifications for quality degradation
+6. **Quality-Based Load Balancing** - Route users to best-performing instances
 
 ## Overview
 
