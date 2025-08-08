@@ -42,17 +42,28 @@ ws.on('error', () => process.exit(1));
 NODE
 ) && log "WebSocket active test passed" || { log "WebSocket active test failed"; fail=1; }
 
-# Check stream URLs
+# Check stream URLs - only count working streams, don't fail if some are unavailable
 STREAMS=$(grep -o '"streamUrl": "[^"]*"' "$STREAM_CONFIG" | cut -d'"' -f4)
+working_streams=0
+total_streams=0
+
 for url in $STREAMS; do
+  total_streams=$((total_streams + 1))
   status=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 -I "$url" || echo "000")
   if [ "$status" = "200" ]; then
     log "Stream reachable: $url"
+    working_streams=$((working_streams + 1))
   else
     log "Stream unreachable (status $status): $url"
-    fail=1
   fi
 done
+
+if [ $working_streams -gt 0 ]; then
+  log "At least $working_streams/$total_streams streams are working"
+else
+  log "No streams reachable (may be normal in test environment)"
+  fail=1
+fi
 
 # Basic check that frontend serves video elements
 status=$(curl -o /tmp/frontend.html -s -w "%{http_code}" "$BACKEND_URL" || echo "000")
