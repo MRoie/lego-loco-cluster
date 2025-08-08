@@ -17,7 +17,17 @@ if ! command -v minikube &> /dev/null; then
     echo "Installing minikube" && date
     curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
     chmod +x minikube
-    sudo mv minikube /usr/local/bin/
+    # Move to a directory that's already in PATH, avoiding sudo
+    if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
+        mv minikube /usr/local/bin/
+    elif [ -d "$HOME/.local/bin" ]; then
+        mkdir -p "$HOME/.local/bin"
+        mv minikube "$HOME/.local/bin/"
+        export PATH="$HOME/.local/bin:$PATH"
+    else
+        # Fallback: put it in current directory and add to PATH
+        export PATH="$PWD:$PATH"
+    fi
 fi
 
 # Ensure docker daemon is running
@@ -45,13 +55,12 @@ if ! minikube start \
     --driver=docker \
     --kubernetes-version="$KUBERNETES_VERSION" \
     --nodes="$WORKERS" \
-    --cpus=4 \
-    --memory=8192 \
-    --disk-size=20g \
+    --cpus=2 \
+    --memory=4096 \
+    --disk-size=10g \
     --container-runtime=docker \
     --network-plugin=cni \
     --cni=calico \
-    --feature-gates="KubeletInUserNamespace=true" \
     --wait=true; then
     
     echo "❌ Failed to start Minikube cluster" && date
