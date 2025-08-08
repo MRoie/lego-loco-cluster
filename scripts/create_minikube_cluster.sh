@@ -10,6 +10,19 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 WORKERS=${WORKERS:-1}
 KUBERNETES_VERSION=${KUBERNETES_VERSION:-v1.28.3}
 
+# Environment-specific resource allocation
+if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    # CI environment - use minimum required resources
+    MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}  # Minimum required by minikube
+    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-2048}
+    echo "CI environment detected - using minimal resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB)"
+else
+    # Development environment - can use more resources
+    MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}
+    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-4096}
+    echo "Development environment - using standard resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB)"
+fi
+
 echo "Creating Minikube cluster with $WORKERS nodes" && date
 
 # Install minikube if not present
@@ -42,23 +55,68 @@ fi
 # Delete existing cluster if it exists
 minikube delete || true
 
+# Validate system resources before attempting cluster creation
+echo "Validating system resources" && date
+available_cpus=$(nproc)
+available_memory_kb=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
+available_memory_mb=$((available_memory_kb / 1024))
+
+echo "System resources: CPUs=$available_cpus, Memory=${available_memory_mb}MB"
+echo "Requested resources: CPUs=$MINIKUBE_CPUS, Memory=${MINIKUBE_MEMORY}MB"
+
+if [ "$available_cpus" -lt "$MINIKUBE_CPUS" ]; then
+    echo "⚠️  Warning: Available CPUs ($available_cpus) less than requested ($MINIKUBE_CPUS)"
+    echo "Attempting to start anyway as CI environments may have CPU limits"
+fi
+
+if [ "$available_memory_mb" -lt "$MINIKUBE_MEMORY" ]; then
+    echo "⚠️  Warning: Available memory (${available_memory_mb}MB) less than requested (${MINIKUBE_MEMORY}MB)"
+    echo "Attempting to start anyway as CI environments may have memory limits"
+fi
+
 # Start minikube cluster with minimal configuration for CI compatibility
 echo "Starting Minikube cluster" && date
-if ! minikube start \
-    --driver=docker \
-    --kubernetes-version="$KUBERNETES_VERSION" \
-    --nodes="$WORKERS" \
-    --cpus=1 \
-    --memory=2048 \
-    --disk-size=8g \
-    --container-runtime=docker \
-    --wait=true \
-    --wait-timeout=600s; then
-    
-    echo "❌ Failed to start Minikube cluster" && date
-    minikube logs || true
-    exit 1
-fi
+
+# Retry logic for minikube start with exponential backoff
+MAX_RETRIES=3
+RETRY_COUNT=0
+RETRY_DELAY=30
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if minikube start \
+        --driver=docker \
+        --kubernetes-version="$KUBERNETES_VERSION" \
+        --nodes="$WORKERS" \
+        --cpus="$MINIKUBE_CPUS" \
+        --memory="$MINIKUBE_MEMORY" \
+        --disk-size=8g \
+        --container-runtime=docker \
+        --wait=true \
+        --wait-timeout=600s; then
+        echo "✅ Minikube cluster started successfully" && date
+        break
+    else
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        echo "❌ Attempt $RETRY_COUNT failed to start Minikube cluster" && date
+        
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            echo "Retrying in ${RETRY_DELAY} seconds..." && date
+            sleep $RETRY_DELAY
+            RETRY_DELAY=$((RETRY_DELAY * 2))  # Exponential backoff
+            
+            # Clean up before retry
+            minikube delete || true
+            docker system prune -f || true
+        else
+            echo "❌ Failed to start Minikube cluster after $MAX_RETRIES attempts" && date
+            echo "Collecting diagnostic information..."
+            minikube logs || true
+            docker ps -a || true
+            docker images || true
+            exit 1
+        fi
+    fi
+done
 
 # Enable required addons with better error handling
 echo "Enabling Minikube addons" && date
