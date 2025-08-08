@@ -108,27 +108,27 @@ export default function InstanceCard({ instance, isActive, onClick }) {
       layout
     >
       {/* Header with instance ID and status - styled like LEGO character card name plate */}
-      <div className="relative bg-gradient-to-b from-yellow-100 to-yellow-50 border-b-3 border-red-600 shadow-inner">
-        <div className="p-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="lego-name-plate px-2 py-1 bg-white/80 border-2 border-gray-400 rounded shadow-sm">
-              <span className="text-sm font-bold text-black lego-text tracking-wide">
+      <div className="relative bg-gradient-to-b from-yellow-200 to-yellow-100 border-b-4 border-red-700 shadow-inner" style={{ zIndex: 2 }}>
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="lego-name-plate px-3 py-2 bg-white border-3 border-gray-500 rounded-lg shadow-lg">
+              <span className="text-sm font-bold text-black lego-text tracking-wide uppercase">
                 {instance.name || instance.id}
               </span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className={`w-4 h-4 rounded-sm ${getStatusColor(instance.status)} border-2 border-black/20`} />
+              <div className={`w-5 h-5 rounded ${getStatusColor(instance.status)} border-3 border-black/30 shadow-sm`} />
             </div>
           </div>
           
           {/* Control buttons row like LEGO character card buttons */}
-          <div className="flex justify-between items-center mt-2">
+          <div className="flex justify-between items-center">
             <AudioSinkSelector mediaRef={videoRef} />
-            <div className="flex space-x-1">
-              <button className="lego-mini-button bg-red-500 border-red-600 hover:bg-red-400">
+            <div className="flex space-x-2">
+              <button className="lego-mini-button bg-red-500 border-red-700 hover:bg-red-400 text-white shadow-lg">
                 ×
               </button>
-              <button className="lego-mini-button bg-blue-500 border-blue-600 hover:bg-blue-400">
+              <button className="lego-mini-button bg-blue-500 border-blue-700 hover:bg-blue-400 text-white shadow-lg">
                 ?
               </button>
             </div>
