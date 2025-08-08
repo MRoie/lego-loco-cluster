@@ -139,7 +139,7 @@ class InstanceManager {
     this.getInstances().catch(console.error);
     
     // Set up periodic discovery
-    setInterval(async () => {
+    this.discoveryTimer = setInterval(async () => {
       try {
         await this.k8sDiscovery.discoverEmulatorInstances();
       } catch (error) {
@@ -148,12 +148,28 @@ class InstanceManager {
     }, this.discoveryInterval);
 
     // Set up watch for real-time updates
-    this.k8sDiscovery.watchEmulatorInstances((type, pod) => {
+    this.watchHandle = this.k8sDiscovery.watchEmulatorInstances((type, pod) => {
       console.log(`Instance ${type}: ${pod.metadata.name}`);
       // Invalidate cache to force refresh on next request
       this.cachedInstances = null;
       this.lastDiscoveryTime = null;
     });
+  }
+
+  stopBackgroundDiscovery() {
+    if (this.discoveryTimer) {
+      clearInterval(this.discoveryTimer);
+      this.discoveryTimer = null;
+    }
+    
+    if (this.watchHandle) {
+      try {
+        this.watchHandle.abort();
+      } catch (error) {
+        console.warn('Failed to stop watch handle:', error.message);
+      }
+      this.watchHandle = null;
+    }
   }
 
   loadConfig(name) {

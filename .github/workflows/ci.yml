@@ -187,6 +187,57 @@ jobs:
           name: e2e-logs
           path: k8s-tests/logs
 
+  # Test comprehensive monitoring and auto-discovery
+  monitoring-integration:
+    needs: build
+    runs-on: ubuntu-22.04
+    container:
+      image: node:20-bullseye
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install system packages
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
+            pulseaudio docker.io tcpdump netcat-openbsd curl jq
+      - name: Start Docker daemon
+        run: |
+          dockerd > /tmp/dockerd.log 2>&1 &
+          sleep 5
+      - name: Install Node dependencies
+        run: |
+          cd backend && npm install && cd ..
+          cd frontend && npm install && npm run build && cd ..
+      - name: Install kubectl and helm
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+          curl https://get.helm.sh/helm-v3.14.3-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
+          chmod +x /usr/local/bin/helm
+      - name: Install talosctl
+        run: |
+          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
+          install -m 0755 talosctl /usr/local/bin/talosctl
+      - name: Create Talos cluster
+        run: scripts/create_cluster.sh
+      - name: Run monitoring integration tests
+        run: bash scripts/test_monitoring_integration.sh
+      - name: Upload monitoring integration logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-integration-logs
+          path: k8s-tests/logs
+      - name: Destroy cluster
+        if: always()
+        run: talosctl cluster destroy loco || true
+
   # Deploy services in Talos and run live end-to-end tests
   e2e-live:
     needs: build

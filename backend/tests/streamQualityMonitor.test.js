@@ -92,11 +92,19 @@ describe('StreamQualityMonitor - Audio and Controls Testing', () => {
   });
 
   afterEach(async () => {
-    monitor.stop();
+    // Stop monitoring first
+    if (monitor) {
+      monitor.stop();
+      // Wait a bit for cleanup
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
     
     if (testServer) {
       await new Promise((resolve) => {
-        testServer.close(resolve);
+        testServer.close(() => {
+          // Wait for server to fully close
+          setTimeout(resolve, 50);
+        });
       });
     }
 
