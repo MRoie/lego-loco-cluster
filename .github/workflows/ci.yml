@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "run_ci" ]
+    branches: [ "run_ci", "copilot/fix-55" ]
   pull_request:
-    branches: [ "run_ci" ]
+    branches: [ "run_ci", "copilot/fix-55" ]
 
 jobs:
   # Build the backend and frontend assets
@@ -51,12 +51,8 @@ jobs:
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
-      - name: Install talosctl
-        run: |
-          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          install -m 0755 talosctl /usr/local/bin/talosctl
-      - name: Create Talos cluster
-        run: scripts/create_cluster.sh
+      - name: Create Minikube cluster
+        run: scripts/create_minikube_cluster.sh
       - name: Run network tests
         run: bash k8s-tests/test-network.sh
       - name: Upload integration network logs
@@ -66,7 +62,7 @@ jobs:
           path: k8s-tests/logs
       - name: Destroy cluster
         if: always()
-        run: talosctl cluster destroy loco || true
+        run: minikube delete || true
 
   integration-tcp:
     needs: build
@@ -94,12 +90,8 @@ jobs:
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
-      - name: Install talosctl
-        run: |
-          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          install -m 0755 talosctl /usr/local/bin/talosctl
-      - name: Create Talos cluster
-        run: scripts/create_cluster.sh
+      - name: Create Minikube cluster
+        run: scripts/create_minikube_cluster.sh
       - name: Run TCP tests
         run: bash k8s-tests/test-tcp.sh
       - name: Upload integration tcp logs
@@ -109,7 +101,7 @@ jobs:
           path: k8s-tests/logs
       - name: Destroy cluster
         if: always()
-        run: talosctl cluster destroy loco || true
+        run: minikube delete || true
 
   integration-broadcast:
     needs: build
@@ -137,12 +129,8 @@ jobs:
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
-      - name: Install talosctl
-        run: |
-          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          install -m 0755 talosctl /usr/local/bin/talosctl
-      - name: Create Talos cluster
-        run: scripts/create_cluster.sh
+      - name: Create Minikube cluster
+        run: scripts/create_minikube_cluster.sh
       - name: Run broadcast tests
         run: bash k8s-tests/test-broadcast.sh
       - name: Upload integration broadcast logs
@@ -152,7 +140,7 @@ jobs:
           path: k8s-tests/logs
       - name: Destroy cluster
         if: always()
-        run: talosctl cluster destroy loco || true
+        run: minikube delete || true
 
   # Run end-to-end tests against local services
   e2e:
@@ -187,8 +175,8 @@ jobs:
           name: e2e-logs
           path: k8s-tests/logs
 
-  # Test comprehensive monitoring and auto-discovery
-  monitoring-integration:
+  # Test comprehensive monitoring with real QEMU containers and UI verification
+  comprehensive-monitoring:
     needs: build
     runs-on: ubuntu-22.04
     container:
@@ -206,11 +194,22 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
-            pulseaudio docker.io tcpdump netcat-openbsd curl jq
+            pulseaudio docker.io tcpdump netcat-openbsd curl jq \
+            ca-certificates apt-transport-https lsb-release gnupg
       - name: Start Docker daemon
         run: |
           dockerd > /tmp/dockerd.log 2>&1 &
-          sleep 5
+          sleep 10
+          # Wait for Docker to be fully ready
+          timeout=30
+          while ! docker info >/dev/null 2>&1; do
+            ((timeout--))
+            if [ $timeout -le 0 ]; then
+              echo "Docker daemon failed to start"
+              exit 1
+            fi
+            sleep 2
+          done
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
@@ -221,24 +220,22 @@ jobs:
           install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
           curl https://get.helm.sh/helm-v3.14.3-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
           chmod +x /usr/local/bin/helm
-      - name: Install talosctl
-        run: |
-          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          install -m 0755 talosctl /usr/local/bin/talosctl
-      - name: Create Talos cluster
-        run: scripts/create_cluster.sh
-      - name: Run monitoring integration tests
-        run: bash scripts/test_monitoring_integration.sh
-      - name: Upload monitoring integration logs
+      - name: Create Minikube cluster
+        run: scripts/create_minikube_cluster.sh
+      - name: Build and test real QEMU containers
+        env:
+          BUILD_CONTAINERS: "true"
+        run: bash scripts/test_comprehensive_monitoring.sh
+      - name: Upload comprehensive monitoring logs
         uses: actions/upload-artifact@v4
         with:
-          name: monitoring-integration-logs
+          name: comprehensive-monitoring-logs
           path: k8s-tests/logs
       - name: Destroy cluster
         if: always()
-        run: talosctl cluster destroy loco || true
+        run: minikube delete || true
 
-  # Deploy services in Talos and run live end-to-end tests
+  # Deploy services in Minikube and run live end-to-end tests
   e2e-live:
     needs: build
     runs-on: ubuntu-22.04
@@ -266,12 +263,8 @@ jobs:
         run: |
           cd backend && npm install && cd ..
           cd frontend && npm install && npm run build && cd ..
-      - name: Install talosctl
-        run: |
-          curl -L https://github.com/siderolabs/talos/releases/latest/download/talosctl-linux-amd64 -o talosctl
-          install -m 0755 talosctl /usr/local/bin/talosctl
-      - name: Create Talos cluster
-        run: scripts/create_cluster.sh
+      - name: Create Minikube cluster
+        run: scripts/create_minikube_cluster.sh
       - name: Start forwards
         run: scripts/start_live_cluster.sh
       - name: Run websocket tests against cluster
@@ -288,5 +281,5 @@ jobs:
           path: k8s-tests/logs
       - name: Destroy cluster
         if: always()
-        run: talosctl cluster destroy loco || true
+        run: minikube delete || true
 
