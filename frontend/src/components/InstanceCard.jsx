@@ -138,9 +138,49 @@ export default function InstanceCard({ instance, isActive, onClick }) {
 
       {/* VNC Content Area - styled like the character portrait area */}
       <div className="relative aspect-video lego-stream-area">
-        {instance.provisioned && instance.ready ? (
+        {instance.provisioned && (instance.ready || instance.status === 'ready' || instance.status === 'running') ? (
           <>
-            <ReactVNCViewer instanceId={instance.id} />
+            {/* Show placeholder for demo instances or actual VNC for real ones */}
+            {instance.id?.startsWith('demo-') ? (
+              <div className="w-full h-full bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center relative overflow-hidden">
+                {/* Simulated game content */}
+                <div className="absolute inset-0">
+                  <div className="w-full h-full bg-gradient-to-b from-green-400 to-green-600 relative">
+                    {/* LEGO railway grid pattern */}
+                    <div className="absolute inset-0 opacity-30">
+                      <div className="grid grid-cols-8 grid-rows-6 h-full w-full">
+                        {Array(48).fill(0).map((_, i) => (
+                          <div key={i} className="border border-gray-300/20"></div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Simulated LEGO elements */}
+                    <div className="absolute top-1/4 left-1/4 w-8 h-8 bg-red-500 rounded-sm border-2 border-red-700"></div>
+                    <div className="absolute top-1/2 right-1/3 w-6 h-6 bg-yellow-400 rounded-sm border-2 border-yellow-600"></div>
+                    <div className="absolute bottom-1/3 left-1/2 w-10 h-4 bg-blue-500 rounded-sm border-2 border-blue-700"></div>
+                    
+                    {/* Simulated locomotive */}
+                    <div className="absolute bottom-1/4 left-1/3 flex items-center space-x-1">
+                      <div className="w-3 h-2 bg-black rounded-sm"></div>
+                      <div className="w-4 h-3 bg-red-600 rounded-sm border border-red-800"></div>
+                      <div className="w-3 h-2 bg-blue-600 rounded-sm border border-blue-800"></div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Active stream indicator */}
+                <div className="absolute top-2 right-2 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
+                
+                {/* Stream overlay text */}
+                <div className="absolute bottom-2 left-2 text-white text-xs font-bold bg-black/50 px-2 py-1 rounded">
+                  ▶ LIVE STREAM
+                </div>
+              </div>
+            ) : (
+              <ReactVNCViewer instanceId={instance.id} />
+            )}
+            
             <video ref={videoRef} className="hidden" />
             {loading && (
               <motion.div 

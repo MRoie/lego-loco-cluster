@@ -45,6 +45,25 @@ Each instance card exactly replicates the visual style of LEGO Loco character ca
 - **Cream Content Area**: Light beige background (`#F5F5DC`) for readability
 - **Metallic Name Plates**: Gradient-filled name plates with 3D border effects
 
+## Instance Card States
+
+The interface now displays all possible card states for comprehensive design review:
+
+### Available States
+1. **Active Ready** - Green status indicator, live stream with simulated LEGO Loco gameplay
+2. **Active Running** - Blue status indicator, live stream with railway elements
+3. **Booting** - Yellow status indicator with animated lightning bolt and progress bar
+4. **Error** - Red status indicator with error icon and diagnostic message
+5. **Not Provisioned** - Gray status with prohibition icon, non-functional
+6. **Unknown Status** - Gray question mark icon for unidentified states
+7. **Empty Slot** - Dashed border placeholder for available deployment slots
+
+### Visual State Examples
+
+![All States - Desktop View](all-states-desktop.png)
+
+*Desktop view showing all 6 instance states plus 3 empty slots in authentic LEGO Loco character card styling*
+
 ## Responsive Grid System
 
 ### Desktop Layout (1024px+)
@@ -52,43 +71,78 @@ Each instance card exactly replicates the visual style of LEGO Loco character ca
 - **Spacing**: 40px gaps between cards (`lg:gap-10`)
 - **Card Size**: Aspect ratio 16:9 maintained
 - **Total Cards**: 9 cards in 3×3 grid arrangement
+- **States Shown**: Active Ready (MARY), Active Running (PETER), Booting (LUCY), Error (JOHNNY), Not Provisioned (FRANK), Unknown (ANNA), plus 3 empty slots
 
-![Desktop Layout - 1920×1080](design/desktop-1920x1080.png)
+![Desktop Layout - 1920×1080](desktop-1920x1080.png)
 
 ### Laptop Layout (1440×900)
 - **Grid**: 3 columns maintained
 - **Spacing**: Scaled proportionally
 - **Cards**: Slightly smaller but maintains aspect ratio
 
-![Laptop Layout - 1440×900](design/laptop-1440x900.png)
+![Laptop Layout - 1440×900](laptop-1440x900.png)
 
 ### Tablet Portrait (768×1024)
 - **Grid**: 2 columns (`md:grid-cols-2`)
 - **Spacing**: 32px gaps (`md:gap-8`)
 - **Cards**: Larger individual cards with better touch targets
+- **Layout**: All states displayed in 2-column responsive grid
 
-![Tablet Portrait Layout - 768×1024](design/tablet-portrait-768x1024.png)
+![Tablet Portrait Layout - 768×1024](tablet-portrait-states.png)
 
 ### Tablet Landscape (1024×768)
 - **Grid**: 3 columns (desktop layout)
 - **Spacing**: Condensed for horizontal space
 - **Cards**: Optimized for landscape viewing
 
-![Tablet Landscape Layout - 1024×768](design/tablet-landscape-1024x768.png)
+![Tablet Landscape Layout - 1024×768](tablet-landscape-1024x768.png)
 
 ### Mobile Portrait (375×812)
 - **Grid**: 1 column (`grid-cols-1`)
 - **Spacing**: 24px gaps (`gap-6`)
 - **Cards**: Full-width cards for easy touch interaction
+- **Stacked Layout**: All instance states displayed vertically
 
-![Mobile Portrait Layout - 375×812](design/mobile-portrait-375x812.png)
+![Mobile Portrait Layout - 375×812](mobile-portrait-states.png)
 
 ### Mobile Landscape (812×375)
 - **Grid**: 2 columns for horizontal space optimization
 - **Spacing**: Reduced for landscape constraints
 - **Cards**: Compact layout maintaining functionality
 
-![Mobile Landscape Layout - 812×375](design/mobile-landscape-812x375.png)
+![Mobile Landscape Layout - 812×375](mobile-landscape-812x375.png)
+
+## VR Mode Interface
+
+### Updated LEGO Loco VR Theme
+The VR interface has been completely redesigned to align with the authentic LEGO Loco visual language:
+
+**🟩 LEGO Green Environment**
+- Sky color changed from dark (`#111`) to bright LEGO green (`#00A651`)
+- 3D baseplate grid pattern with white grid lines for authentic LEGO surface feel
+- Spatial audio controls with LEGO-themed UI elements
+
+**🔴 Authentic VR Card Design**
+- VR tiles now use cream backgrounds (`#F5F5DC`) with red borders (`#C4281C`)
+- Active tiles highlighted with LEGO yellow (`#FFD700`) and blue accents (`#0055BF`)
+- Character names displayed prominently on each VR tile
+- Double-bordered effect matching the 2D card design
+
+**📱 Updated VR UI Elements**
+- Info panel with LEGO-themed styling and emoji icons (`🎮 LEGO LOCO VR`)
+- Yellow exit button (`🚪 Exit VR`) with red border matching main interface
+- Volume controls (`🔊 Volume`) with clean white background and LEGO colors
+- Instance selection menu (`🎯 Select Instance`) with authentic LEGO card styling
+
+![VR Mode - Updated Design](vr-mode-updated.png)
+
+*VR interface now features bright LEGO green environment with baseplate grid pattern and authentic character card styling*
+
+### VR Tile States
+- **Connecting**: Shows character name with "Connecting..." status
+- **Active**: Highlighted with yellow background and blue border
+- **Inactive**: Cream background with red border
+- **3D Depth**: Proper scaling and positioning for immersive experience
 
 ## UI Components
 
