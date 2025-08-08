@@ -164,6 +164,117 @@ app.get("/api/quality/summary", (req, res) => {
   }
 });
 
+// Get deep health information for all instances
+app.get("/api/quality/deep-health", (req, res) => {
+  try {
+    const metrics = qualityMonitor.getAllMetrics();
+    const deepHealthData = {};
+    
+    for (const [instanceId, data] of Object.entries(metrics)) {
+      if (data.deepHealth) {
+        deepHealthData[instanceId] = {
+          instanceId,
+          timestamp: data.timestamp,
+          overallStatus: data.deepHealth.overall_status || 'unknown',
+          deepHealth: data.deepHealth,
+          failureType: data.failureType || 'none',
+          recoveryNeeded: data.recoveryNeeded || false,
+          errors: data.errors || []
+        };
+      }
+    }
+    
+    res.json(deepHealthData);
+  } catch (e) {
+    console.error("Failed to get deep health data:", e.message);
+    res.status(500).json({ error: "Failed to get deep health data" });
+  }
+});
+
+// Get deep health information for a specific instance
+app.get("/api/quality/deep-health/:instanceId", (req, res) => {
+  try {
+    const instanceId = req.params.instanceId;
+    const metrics = qualityMonitor.getInstanceMetrics(instanceId);
+    
+    if (!metrics) {
+      return res.status(404).json({ error: "Instance not found" });
+    }
+    
+    const deepHealthData = {
+      instanceId,
+      timestamp: metrics.timestamp,
+      overallStatus: metrics.deepHealth?.overall_status || 'unknown',
+      deepHealth: metrics.deepHealth || null,
+      failureType: metrics.failureType || 'none',
+      recoveryNeeded: metrics.recoveryNeeded || false,
+      errors: metrics.errors || []
+    };
+    
+    res.json(deepHealthData);
+  } catch (e) {
+    console.error(`Failed to get deep health data for ${req.params.instanceId}:`, e.message);
+    res.status(500).json({ error: "Failed to get instance deep health data" });
+  }
+});
+
+// Trigger recovery for a specific instance
+app.post("/api/quality/recover/:instanceId", (req, res) => {
+  try {
+    const instanceId = req.params.instanceId;
+    const { forceRecovery = false } = req.body;
+    
+    console.log(`🚑 Manual recovery triggered for ${instanceId}`);
+    
+    // Get current metrics to determine failure type
+    const metrics = qualityMonitor.getInstanceMetrics(instanceId);
+    if (!metrics) {
+      return res.status(404).json({ error: "Instance not found" });
+    }
+    
+    const failureType = metrics.failureType || 'mixed';
+    
+    // Trigger recovery asynchronously
+    qualityMonitor.executeRecoveryStrategy(instanceId, failureType)
+      .then((success) => {
+        console.log(`Recovery ${success ? 'succeeded' : 'failed'} for ${instanceId}`);
+      })
+      .catch((error) => {
+        console.error(`Recovery error for ${instanceId}:`, error.message);
+      });
+    
+    res.json({ 
+      message: `Recovery initiated for ${instanceId}`, 
+      failureType,
+      forceRecovery 
+    });
+  } catch (e) {
+    console.error(`Failed to trigger recovery for ${req.params.instanceId}:`, e.message);
+    res.status(500).json({ error: "Failed to trigger recovery" });
+  }
+});
+
+// Get recovery status and attempts
+app.get("/api/quality/recovery-status", (req, res) => {
+  try {
+    const recoveryStatus = {};
+    
+    // Get recovery attempts for all instances
+    for (const [instanceId, attempts] of qualityMonitor.recoveryAttempts || []) {
+      recoveryStatus[instanceId] = {
+        attempts,
+        maxAttempts: qualityMonitor.maxRecoveryAttempts,
+        canRecover: attempts < qualityMonitor.maxRecoveryAttempts
+      };
+    }
+    
+    res.json(recoveryStatus);
+  } catch (e) {
+    console.error("Failed to get recovery status:", e.message);
+    res.status(500).json({ error: "Failed to get recovery status" });
+  }
+});
+
 // Start/stop quality monitoring
 app.post("/api/quality/monitor/:action", (req, res) => {
   try {
