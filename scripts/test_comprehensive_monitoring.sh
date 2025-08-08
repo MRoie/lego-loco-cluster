@@ -46,25 +46,47 @@ build_and_load_containers() {
     # Build qemu-softgpu container
     echo "Building qemu-softgpu container..."
     cd containers/qemu-softgpu
-    docker build -t loco-qemu-softgpu:test .
-    minikube image load loco-qemu-softgpu:test
+    if ! docker build -t loco-qemu-softgpu:test .; then
+        echo "❌ Failed to build qemu-softgpu container"
+        exit 1
+    fi
+    if ! minikube image load loco-qemu-softgpu:test; then
+        echo "❌ Failed to load qemu-softgpu container into minikube"
+        exit 1
+    fi
     cd ../..
     
     # Build backend container
     echo "Building backend container..."
     cd backend
-    docker build -t loco-backend:test .
-    minikube image load loco-backend:test
+    if ! docker build -t loco-backend:test .; then
+        echo "❌ Failed to build backend container"
+        exit 1
+    fi
+    if ! minikube image load loco-backend:test; then
+        echo "❌ Failed to load backend container into minikube"
+        exit 1
+    fi
     cd ..
     
     # Build frontend container
     echo "Building frontend container..."
     cd frontend
-    docker build -t loco-frontend:test .
-    minikube image load loco-frontend:test
+    if ! docker build -t loco-frontend:test .; then
+        echo "❌ Failed to build frontend container"
+        exit 1
+    fi
+    if ! minikube image load loco-frontend:test; then
+        echo "❌ Failed to load frontend container into minikube"
+        exit 1
+    fi
     cd ..
     
     echo "✅ Container images built and loaded into minikube"
+    
+    # Verify images are loaded
+    echo "📋 Verifying loaded images in minikube:"
+    minikube image ls | grep loco || echo "⚠️  No loco images found in minikube"
 }
 
 # Function to check real QEMU health endpoints
@@ -360,7 +382,14 @@ main() {
     
     # Deploy the Helm chart with monitoring enabled and test images
     echo "📦 Deploying Lego Loco cluster with test containers and monitoring"
-    helm upgrade --install loco ./helm/loco-chart \
+    
+    # First check if helm chart exists
+    if [ ! -d "./helm/loco-chart" ]; then
+        echo "❌ Helm chart not found at ./helm/loco-chart"
+        exit 1
+    fi
+    
+    if ! helm upgrade --install loco ./helm/loco-chart \
         --namespace "$NAMESPACE" \
         --set replicas=2 \
         --set rbac.create=true \
@@ -373,7 +402,15 @@ main() {
         --set frontend.image=loco-frontend \
         --set frontend.tag=test \
         --set frontend.imagePullPolicy=Never \
-        --wait --timeout=600s
+        --wait --timeout=600s; then
+        
+        echo "❌ Helm deployment failed"
+        echo "📋 Checking pod status for debugging:"
+        kubectl get pods -n "$NAMESPACE" -o wide || true
+        echo "📋 Checking events for debugging:"
+        kubectl get events -n "$NAMESPACE" --sort-by=.metadata.creationTimestamp || true
+        exit 1
+    fi
     
     echo "✅ Helm deployment completed"
     
