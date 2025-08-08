@@ -33,14 +33,14 @@ fi
 (
   cd backend && node - "$BACKEND_URL" <<'NODE'
 const WebSocket = require('ws');
-const url = process.argv[2] + '/signal';
+const url = process.argv[2].replace('http:', 'ws:') + '/active';
 const ws = new WebSocket(url);
 const timer = setTimeout(() => { console.error('timeout'); process.exit(1); }, 5000);
 ws.on('open', () => { clearTimeout(timer); ws.close(); });
 ws.on('close', () => process.exit(0));
 ws.on('error', () => process.exit(1));
 NODE
-) && log "WebSocket signal test passed" || { log "WebSocket signal test failed"; fail=1; }
+) && log "WebSocket active test passed" || { log "WebSocket active test failed"; fail=1; }
 
 # Check stream URLs
 STREAMS=$(grep -o '"streamUrl": "[^"]*"' "$STREAM_CONFIG" | cut -d'"' -f4)
