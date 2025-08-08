@@ -18,7 +18,7 @@ export default function App() {
   const [vrMode, setVrMode] = useState(defaultVr);
   const [status, setStatus] = useState({});
   const [focused, setFocused] = useState(null);
-  const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(true);
+  const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(false);
 
   const postActive = (id) => {
     setActiveIds([id]);
@@ -54,8 +54,11 @@ export default function App() {
         .then(setStatus)
         .catch(() => {});
       
-      // Refresh instances periodically
-      loadInstances();
+      // Refresh provisioned instances periodically
+      fetch("/api/instances/provisioned")
+        .then((r) => r.json())
+        .then(setProvisionedInstances)
+        .catch(() => {});
     }, 5000);
     
     fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => {});
@@ -132,55 +135,73 @@ export default function App() {
   // Get the instances to display based on filter
   const displayInstances = showOnlyProvisioned ? provisionedInstances : instances;
   
-  // Create a 3x3 grid array, filling empty slots with null
-  const gridInstances = Array(9).fill(null);
-  displayInstances.slice(0, 9).forEach((instance, index) => {
-    gridInstances[index] = instance;
-  });
+  // Create a 3x3 grid array with mixed states for demonstration
+  const createDemoInstances = () => {
+    // If no real instances, show demo states
+    if (displayInstances.length === 0) {
+      return [
+        { id: 'demo-0', name: 'MARY', status: 'ready', provisioned: true, ready: true },
+        { id: 'demo-1', name: 'PETER', status: 'running', provisioned: true, ready: true },
+        { id: 'demo-2', name: 'LUCY', status: 'booting', provisioned: true, ready: false },
+        { id: 'demo-3', name: 'JOHNNY', status: 'error', provisioned: true, ready: false },
+        { id: 'demo-4', name: 'FRANK', status: 'ready', provisioned: false, ready: false },
+        { id: 'demo-5', name: 'ANNA', status: 'unknown', provisioned: true, ready: false },
+        null, // Empty slot
+        null, // Empty slot  
+        null  // Empty slot
+      ];
+    }
+    
+    // Use real instances if available
+    const gridInstances = Array(9).fill(null);
+    displayInstances.slice(0, 9).forEach((instance, index) => {
+      gridInstances[index] = instance;
+    });
+    return gridInstances;
+  };
+  
+  const gridInstances = createDemoInstances();
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white relative">
+    <div className="min-h-screen lego-background text-black relative">
       {!vrMode && (
         <>
-          {/* Header */}
-          <div className="bg-gray-800 border-b border-gray-700 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-yellow-400">🎮 Lego Loco Cluster</h1>
-                <div className="flex items-center space-x-4">
-                  <p className="text-gray-300 text-sm">
-                    {displayInstances.length} of {instances.length} instances
-                    {showOnlyProvisioned ? ' (provisioned only)' : ''}
-                  </p>
-                  <DiscoveryStatus />
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => setShowOnlyProvisioned(!showOnlyProvisioned)}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
-                    showOnlyProvisioned 
-                      ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                      : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                  }`}
+          {/* Transparent Header with VR Button */}
+          <div className="absolute top-0 right-0 z-10 p-4">
+            <div className="flex items-center space-x-4">
+              {/* Discovery Status */}
+              <DiscoveryStatus />
+              {/* VR Button */}
+              <button
+                onClick={() => setVrMode(true)}
+                className="lego-vr-button"
+                title="Enter VR Mode"
+              >
+                {/* VR Headset Icon */}
+                <svg 
+                  width="24" 
+                  height="24" 
+                  viewBox="0 0 24 24" 
+                  fill="currentColor"
+                  className="w-6 h-6"
                 >
-                  {showOnlyProvisioned ? 'Show All' : 'Provisioned Only'}
-                </button>
-                <button
-                  onClick={() => setVrMode(true)}
-                  className="bg-yellow-500 text-black px-4 py-2 rounded font-medium hover:bg-yellow-400 transition-colors"
-                >
-                  Enter VR
-                </button>
-              </div>
+                  <path d="M20 8v8a3 3 0 01-3 3h-2.5l-1.5-2H8l-1.5 2H4a3 3 0 01-3-3V8a3 3 0 013-3h13a3 3 0 013 3zM6.5 13.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm11 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                </svg>
+              </button>
             </div>
           </div>
 
           {/* 3x3 Grid Container */}
-          <div className="p-6">
-            <div className="grid grid-cols-3 gap-6 max-w-6xl mx-auto">
+          <div className="lego-grid-container">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 lg:gap-10 max-w-7xl mx-auto w-full">
               {gridInstances.map((instance, index) => (
-                <div key={index} className="aspect-video">
+                <motion.div 
+                  key={index} 
+                  className="aspect-video"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1, duration: 0.5 }}
+                >
                   {instance ? (
                     <InstanceCard
                       instance={instance}
@@ -192,50 +213,33 @@ export default function App() {
                     />
                   ) : (
                     <motion.div
-                      className="w-full h-full border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center text-gray-500"
-                      whileHover={{ borderColor: '#9CA3AF' }}
+                      className="w-full h-full lego-empty-slot flex items-center justify-center text-gray-600 lego-shimmer cursor-pointer"
+                      whileHover={{ 
+                        scale: 1.02,
+                        y: -2 
+                      }}
+                      whileTap={{ scale: 0.98 }}
                     >
                       <div className="text-center">
-                        <div className="w-12 h-12 border border-gray-600 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                          <span className="text-2xl">➕</span>
-                        </div>
-                        <p className="text-sm">Empty Slot</p>
-                        <p className="text-xs opacity-75">
-                          {showOnlyProvisioned ? 'No provisioned instance' : 'Available slot'}
+                        <motion.div 
+                          className="w-16 h-16 border-3 border-gray-400 rounded-lg mx-auto mb-3 flex items-center justify-center bg-white/50"
+                          whileHover={{ borderColor: '#0055BF' }}
+                        >
+                          <span className="text-3xl text-gray-500">➕</span>
+                        </motion.div>
+                        <p className="text-sm font-bold lego-text mb-1 text-gray-700">Empty Slot</p>
+                        <p className="text-xs lego-text text-gray-600">
+                          {showOnlyProvisioned ? 'No provisioned instance' : 'Available for deployment'}
                         </p>
                       </div>
                     </motion.div>
                   )}
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
 
-          {/* Status Bar */}
-          <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-3">
-            <div className="flex items-center justify-between max-w-6xl mx-auto">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-300">Active Instance:</span>
-                <span className="text-sm font-medium text-yellow-400">
-                  {displayInstances[active]?.id || 'None'}
-                </span>
-              </div>
-              <div className="flex items-center space-x-6">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-xs text-gray-300">Ready ({displayInstances.filter(i => i?.status === 'ready').length})</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                  <span className="text-xs text-gray-300">Booting ({displayInstances.filter(i => i?.status === 'booting').length})</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  <span className="text-xs text-gray-300">Error ({displayInstances.filter(i => i?.status === 'error').length})</span>
-                </div>
-              </div>
-            </div>
-          </div>
+
         </>
       )}
       
