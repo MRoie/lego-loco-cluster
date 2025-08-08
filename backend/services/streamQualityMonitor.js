@@ -17,6 +17,7 @@ class StreamQualityMonitor {
     this.deepProbeInterval = 15000; // 15 seconds for deep health checks
     this.probeTimer = null;
     this.deepProbeTimer = null;
+    this.initialTimer = null; // Track initial timeout
     this.isRunning = false;
     this.recoveryAttempts = new Map(); // instanceId -> attempts count
     this.maxRecoveryAttempts = 3;
@@ -43,7 +44,7 @@ class StreamQualityMonitor {
     
     // Initial probes
     this.probeAllInstances();
-    setTimeout(() => this.deepProbeAllInstances(), 2000);
+    this.initialTimer = setTimeout(() => this.deepProbeAllInstances(), 2000);
   }
 
   /**
@@ -64,6 +65,15 @@ class StreamQualityMonitor {
       clearInterval(this.deepProbeTimer);
       this.deepProbeTimer = null;
     }
+    
+    if (this.initialTimer) {
+      clearTimeout(this.initialTimer);
+      this.initialTimer = null;
+    }
+    
+    // Clear metrics to help with cleanup
+    this.metrics.clear();
+    this.recoveryAttempts.clear();
   }
 
   /**
@@ -156,6 +166,10 @@ class StreamQualityMonitor {
     try {
       const vncAvailable = await this.probeVNCPort(instance.vncUrl);
       metrics.availability.vnc = vncAvailable;
+      
+      if (!vncAvailable) {
+        metrics.errors.push(`VNC connection failed: ${instance.vncUrl} not reachable`);
+      }
       
       if (vncAvailable) {
         metrics.quality.connectionLatency = Date.now() - startTime;
@@ -617,7 +631,7 @@ class StreamQualityMonitor {
     
     if (!metrics.availability.vnc) {
       metrics.quality.videoFrameRate = 0;
-      metrics.quality.audioQuality = 'unavailable';
+      metrics.quality.audioQuality = 'error'; // VNC unavailable means error, not unavailable
       return;
     }
 

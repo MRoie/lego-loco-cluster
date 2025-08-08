@@ -80,6 +80,13 @@ describe('InstanceManager', () => {
     instanceManager = new InstanceManager(mockConfigDir);
   });
 
+  afterEach(() => {
+    // Stop background discovery to prevent timer leaks
+    if (instanceManager && instanceManager.stopBackgroundDiscovery) {
+      instanceManager.stopBackgroundDiscovery();
+    }
+  });
+
   test('should load static instances when Kubernetes is not available', async () => {
     const instances = await instanceManager.getInstances();
     

@@ -1,16 +1,42 @@
-# Loco LAN
+# Lego Loco Cluster
 
-Loco LAN runs multiple instances of Lego Loco inside emulated Windows 98 environments.
-A web dashboard streams each emulator and provides keyboard, mouse and audio control.
+Lego Loco Cluster runs multiple instances of Lego Loco inside emulated Windows 98 environments with comprehensive health monitoring and intelligent auto-discovery.
+A web dashboard streams each emulator and provides keyboard, mouse and audio control with real-time quality monitoring.
 The stack uses Docker and Kubernetes so you can spin up the whole cluster with a single command.
 
 ## Features
-- 3×3 grid of WebRTC streams
-- Audio passthrough with meters
-- Dockerized Windows 98 images
-- Helm chart for Kubernetes
- - Simple dev container
- - Optional VR desktop viewer on port 3002
+- **Multi-Instance Gaming**: 3×3 grid of WebRTC streams for multiplayer Lego Loco
+- **Audio Passthrough**: Real-time audio with level meters and quality monitoring
+- **Comprehensive Health Monitoring**: Deep QEMU subsystem health probing for audio, video, and performance
+- **Intelligent Auto-Discovery**: Kubernetes-based instance discovery eliminating manual configuration
+- **Failure Detection & Recovery**: Automatic classification and recovery of network, QEMU, and client-side issues
+- **Dockerized Windows 98**: Containerized emulator images with SoftGPU acceleration
+- **Kubernetes Native**: Helm chart deployment with RBAC and service discovery
+- **VR Support**: Optional VR desktop viewer on port 3002
+- **Development Container**: Ready-to-use dev environment with VS Code integration
+
+## Advanced Monitoring Features
+
+### Deep Health Probing
+The system monitors actual QEMU subsystem health beyond basic connectivity:
+- **Video Subsystem**: VNC availability, X display activity, frame generation rates
+- **Audio Subsystem**: PulseAudio status, device availability, signal levels
+- **Performance Metrics**: CPU/memory usage, system load, resource utilization
+- **Network Health**: Bridge/TAP interface status with error tracking
+
+### Intelligent Recovery
+Automatic failure classification and targeted recovery:
+- **Network Issues**: Interface resets, bridge/TAP reconfiguration
+- **QEMU Problems**: Process restarts, audio/video subsystem resets
+- **Mixed Failures**: Sequential recovery strategies
+- **Recovery Limits**: Max 3 attempts per instance with manual override
+
+### Kubernetes Auto-Discovery
+Revolutionary instance management:
+- **Dynamic Discovery**: Automatically finds emulator pods from StatefulSets
+- **Real-time Updates**: Watches for pod changes and updates instantly
+- **RBAC Integration**: Proper service account permissions for cluster API access
+- **Intelligent Fallback**: Uses static instances.json when Kubernetes unavailable
 
 ## Repository Layout
 - `backend/` – signaling and API server
@@ -43,10 +69,122 @@ Start the development stack with:
 ```
 
 
-Additional helper scripts live in the `scripts/` directory. Use
-`scripts/decompress_loco_file.sh` to fetch an asset from any LAN URL and
-decompress it with the bundled Java utility. Decoded files are copied to the
-`net-shares/` directory so other pods can access them over the network.
+## API Endpoints
+
+### Health Monitoring
+```bash
+# Get comprehensive health status for all instances
+GET /api/quality/deep-health
+
+# Get health status for specific instance
+GET /api/quality/deep-health/:instanceId
+
+# Trigger recovery for failed instance
+POST /api/quality/recover/:instanceId
+
+# Get recovery status and history
+GET /api/quality/recovery-status
+```
+
+### Instance Auto-Discovery
+```bash
+# Get discovery configuration and status
+GET /api/instances/discovery-info
+
+# Force refresh of instance discovery
+POST /api/instances/refresh
+
+# Get discovered instances
+GET /api/instances
+```
+
+### Example Health Response
+```json
+{
+  "instanceId": "instance-0",
+  "overallStatus": "healthy",
+  "deepHealth": {
+    "qemu_healthy": true,
+    "video": {
+      "vnc_available": true,
+      "display_active": true,
+      "estimated_frame_rate": 30
+    },
+    "audio": {
+      "pulse_running": true,
+      "audio_devices": 2,
+      "estimated_level": 0.7
+    },
+    "performance": {
+      "qemu_cpu": 15.8,
+      "qemu_memory": 12.4,
+      "load_average": 1.2
+    },
+    "network": {
+      "bridge_up": true,
+      "tap_up": true,
+      "tx_errors": 0,
+      "rx_errors": 0
+    }
+  },
+  "failureType": "none",
+  "recoveryNeeded": false,
+  "kubernetes": {
+    "namespace": "loco",
+    "podName": "loco-emulator-0",
+    "discoveredAt": "2025-01-08T20:15:30Z"
+  }
+}
+```
+
+## Deployment
+
+### Kubernetes with Auto-Discovery
+```bash
+# Deploy with auto-discovery enabled
+helm install loco ./helm/loco-chart \
+  --set replicas=3 \
+  --set rbac.create=true \
+  --set emulator.image=ghcr.io/mroie/qemu-softgpu \
+  --namespace loco --create-namespace
+
+# Verify auto-discovery is working
+kubectl logs -n loco deployment/loco-backend | grep "Auto-discovered"
+```
+
+### RBAC Requirements
+For auto-discovery to work, the backend needs these permissions:
+```yaml
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets"]
+  verbs: ["get", "list", "watch"]
+```
+
+## Development
+
+### Container Health Testing
+Test QEMU health monitoring directly:
+```bash
+# Test health endpoints in container
+docker exec -it <qemu-container> /health-monitor.sh test
+
+# Get health report
+docker exec -it <qemu-container> /health-monitor.sh report
+```
+
+### Integration Testing
+Run comprehensive monitoring tests:
+```bash
+# Test monitoring integration with cluster
+./scripts/test_monitoring_integration.sh
+
+# Test with specific namespace
+NAMESPACE=test-loco ./scripts/test_monitoring_integration.sh
+```
 
 Game assets are synchronized through a watcher. Each emulator pod mounts an NFS
 share and `containers/qemu/watch_art_res.sh` automatically commits changes in

@@ -58,9 +58,14 @@ class KubernetesDiscovery {
         'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster' // labelSelector
       );
 
+      if (!podsResponse || !podsResponse.body) {
+        console.log('No pods response or body from Kubernetes API');
+        return [];
+      }
+
       const instances = [];
       
-      for (const pod of podsResponse.body.items) {
+      for (const pod of podsResponse.body.items || []) {
         if (pod.status.phase === 'Running' && pod.status.podIP) {
           // Extract instance number from pod name (e.g., loco-emulator-0 -> 0)
           const instanceMatch = pod.metadata.name.match(/-(\d+)$/);
@@ -136,9 +141,14 @@ class KubernetesDiscovery {
         'app.kubernetes.io/part-of=lego-loco-cluster' // labelSelector
       );
 
+      if (!servicesResponse || !servicesResponse.body) {
+        console.log('No services response or body from Kubernetes API');
+        return {};
+      }
+
       const services = {};
       
-      for (const service of servicesResponse.body.items) {
+      for (const service of servicesResponse.body.items || []) {
         services[service.metadata.name] = {
           name: service.metadata.name,
           type: service.spec.type,
@@ -166,7 +176,7 @@ class KubernetesDiscovery {
       
       console.log('Starting watch for emulator pod changes...');
       
-      const watchRequest = watch.watch(
+      const watchRequest = await watch.watch(
         `/api/v1/namespaces/${this.namespace}/pods`,
         { labelSelector: 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster' },
         (type, apiObj) => {
