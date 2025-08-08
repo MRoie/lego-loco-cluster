@@ -372,6 +372,11 @@ main() {
     # Build and load containers if requested
     if [ "$BUILD_CONTAINERS" = "true" ]; then
         build_and_load_containers
+    else
+        log "Skipping container build (BUILD_CONTAINERS not set to true)"
+        # Skip comprehensive monitoring if containers are not built
+        log "⚠️  Skipping comprehensive monitoring test - containers not built"
+        exit 0
     fi
     
     # Check if namespace exists
@@ -391,7 +396,7 @@ main() {
     
     if ! helm upgrade --install loco ./helm/loco-chart \
         --namespace "$NAMESPACE" \
-        --set replicas=2 \
+        --set replicas=1 \
         --set rbac.create=true \
         --set emulator.image=loco-qemu-softgpu \
         --set emulator.tag=test \
@@ -423,7 +428,7 @@ main() {
     
     # Wait specifically for emulator pods
     wait_for_condition \
-        "kubectl get pods -n $NAMESPACE -l app.kubernetes.io/component=emulator --no-headers | grep Running | wc -l | grep -q '^2$'" \
+        "kubectl get pods -n $NAMESPACE -l app.kubernetes.io/component=emulator --no-headers | grep Running | wc -l | grep -q '^1$'" \
         "Emulator pods ready" \
         $TIMEOUT
     

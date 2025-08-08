@@ -10,6 +10,7 @@ jobs:
   # Build the backend and frontend assets
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     container:
       image: node:20-bullseye
     steps:
@@ -28,6 +29,7 @@ jobs:
   integration-network:
     needs: build
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     container:
       image: node:20-bullseye
       options: --privileged
@@ -46,17 +48,28 @@ jobs:
             pulseaudio docker.io tcpdump netcat-openbsd
       - name: Start Docker daemon
         run: |
+          # Start dockerd with better logging and error handling
           dockerd > /tmp/dockerd.log 2>&1 &
-          sleep 10
-          timeout=30
+          DOCKERD_PID=$!
+          echo "Started dockerd with PID: $DOCKERD_PID"
+          
+          # Wait for Docker to be fully ready with extended timeout
+          echo "Waiting for Docker daemon to be ready..."
+          timeout=60
           while ! docker info >/dev/null 2>&1; do
             ((timeout--))
             if [ $timeout -le 0 ]; then
-              echo "Docker daemon failed to start"
+              echo "Docker daemon failed to start within 60 seconds"
+              echo "Docker daemon logs:"
+              cat /tmp/dockerd.log || true
+              echo "Process list:"
+              ps aux | grep docker || true
               exit 1
             fi
-            sleep 2
+            sleep 1
           done
+          echo "Docker daemon ready"
+          docker version
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
@@ -76,6 +89,7 @@ jobs:
   integration-tcp:
     needs: build
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     container:
       image: node:20-bullseye
       options: --privileged
@@ -94,8 +108,26 @@ jobs:
             pulseaudio docker.io tcpdump netcat-openbsd
       - name: Start Docker daemon
         run: |
+          # Start dockerd with better logging and error handling
           dockerd > /tmp/dockerd.log 2>&1 &
-          sleep 5
+          DOCKERD_PID=$!
+          echo "Started dockerd with PID: $DOCKERD_PID"
+          
+          # Wait for Docker to be fully ready
+          echo "Waiting for Docker daemon to be ready..."
+          timeout=60
+          while ! docker info >/dev/null 2>&1; do
+            ((timeout--))
+            if [ $timeout -le 0 ]; then
+              echo "Docker daemon failed to start within 60 seconds"
+              echo "Docker daemon logs:"
+              cat /tmp/dockerd.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "Docker daemon ready"
+          docker version
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
@@ -115,6 +147,7 @@ jobs:
   integration-broadcast:
     needs: build
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     container:
       image: node:20-bullseye
       options: --privileged
@@ -133,8 +166,26 @@ jobs:
             pulseaudio docker.io tcpdump netcat-openbsd
       - name: Start Docker daemon
         run: |
+          # Start dockerd with better logging and error handling
           dockerd > /tmp/dockerd.log 2>&1 &
-          sleep 5
+          DOCKERD_PID=$!
+          echo "Started dockerd with PID: $DOCKERD_PID"
+          
+          # Wait for Docker to be fully ready
+          echo "Waiting for Docker daemon to be ready..."
+          timeout=60
+          while ! docker info >/dev/null 2>&1; do
+            ((timeout--))
+            if [ $timeout -le 0 ]; then
+              echo "Docker daemon failed to start within 60 seconds"
+              echo "Docker daemon logs:"
+              cat /tmp/dockerd.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "Docker daemon ready"
+          docker version
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
@@ -155,6 +206,7 @@ jobs:
   e2e:
     needs: build
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     container:
       image: node:20-bullseye
     steps:
@@ -188,6 +240,7 @@ jobs:
   comprehensive-monitoring:
     needs: build
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     container:
       image: node:20-bullseye
       options: --privileged
@@ -207,18 +260,23 @@ jobs:
             ca-certificates apt-transport-https lsb-release gnupg
       - name: Start Docker daemon
         run: |
+          # Start dockerd with better logging and error handling
           dockerd > /tmp/dockerd.log 2>&1 &
-          sleep 10
+          DOCKERD_PID=$!
+          echo "Started dockerd with PID: $DOCKERD_PID"
+          
           # Wait for Docker to be fully ready
-          timeout=30
+          echo "Waiting for Docker daemon to be ready..."
+          timeout=60
           while ! docker info >/dev/null 2>&1; do
             ((timeout--))
             if [ $timeout -le 0 ]; then
-              echo "Docker daemon failed to start"
+              echo "Docker daemon failed to start within 60 seconds"
+              echo "Docker daemon logs:"
               cat /tmp/dockerd.log || true
               exit 1
             fi
-            sleep 2
+            sleep 1
           done
           echo "Docker daemon ready"
           docker version
@@ -251,6 +309,7 @@ jobs:
   e2e-live:
     needs: build
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     container:
       image: node:20-bullseye
       options: --privileged
@@ -269,8 +328,26 @@ jobs:
             pulseaudio docker.io tcpdump netcat-openbsd
       - name: Start Docker daemon
         run: |
+          # Start dockerd with better logging and error handling
           dockerd > /tmp/dockerd.log 2>&1 &
-          sleep 5
+          DOCKERD_PID=$!
+          echo "Started dockerd with PID: $DOCKERD_PID"
+          
+          # Wait for Docker to be fully ready
+          echo "Waiting for Docker daemon to be ready..."
+          timeout=60
+          while ! docker info >/dev/null 2>&1; do
+            ((timeout--))
+            if [ $timeout -le 0 ]; then
+              echo "Docker daemon failed to start within 60 seconds"
+              echo "Docker daemon logs:"
+              cat /tmp/dockerd.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "Docker daemon ready"
+          docker version
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
