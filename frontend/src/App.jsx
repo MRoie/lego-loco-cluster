@@ -124,17 +124,17 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black text-white relative">
+    <div className="min-h-screen lego-background text-black relative">
       {!vrMode && (
         <>
           {/* Header */}
-          <div className="glass-card bg-gray-800/90 backdrop-blur-md border-b border-white/10 p-4 md:p-6">
+          <div className="lego-header p-4 md:p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-7xl mx-auto gap-4 sm:gap-0">
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent te-mono">
-                  🎮 Lego Loco Cluster
+                <h1 className="text-2xl md:text-3xl font-bold text-white lego-title">
+                  🎮 LEGO LOCO CLUSTER
                 </h1>
-                <p className="text-gray-300 text-sm mt-1 te-mono">
+                <p className="text-red-100 text-sm mt-1 lego-text">
                   {displayInstances.length} of {instances.length} instances
                   {showOnlyProvisioned ? ' (provisioned only)' : ''}
                 </p>
@@ -142,17 +142,24 @@ export default function App() {
               <div className="flex items-center space-x-2 md:space-x-4 flex-wrap gap-2">
                 <button
                   onClick={() => setShowOnlyProvisioned(!showOnlyProvisioned)}
-                  className={`px-4 py-2 rounded-lg text-sm transition-all duration-200 te-mono card-depth-subtle ${
+                  className={`px-4 py-2 lego-button lego-text text-sm ${
                     showOnlyProvisioned 
-                      ? 'bg-blue-600/80 text-white hover:bg-blue-500/90 backdrop-blur-sm' 
-                      : 'bg-gray-600/50 text-gray-300 hover:bg-gray-500/60 backdrop-blur-sm'
+                      ? '' 
+                      : 'opacity-70 hover:opacity-100'
                   }`}
                 >
                   {showOnlyProvisioned ? 'Show All' : 'Provisioned Only'}
                 </button>
                 <button
                   onClick={() => setVrMode(true)}
-                  className="bg-gradient-to-r from-yellow-500 to-orange-500 text-black px-6 py-2 rounded-lg font-medium hover:from-yellow-400 hover:to-orange-400 transition-all duration-200 card-depth-subtle te-mono"
+                  className="bg-yellow-400 text-black px-6 py-2 border-2 border-yellow-500 rounded-lg font-bold hover:bg-yellow-300 transition-all duration-200 lego-text shadow-lg"
+                  style={{
+                    boxShadow: '0 3px 0 #F59E0B, 0 6px 8px rgba(0, 0, 0, 0.2)',
+                    transform: 'translateY(0)'
+                  }}
+                  onMouseDown={(e) => e.target.style.transform = 'translateY(1px)'}
+                  onMouseUp={(e) => e.target.style.transform = 'translateY(0)'}
+                  onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
                 >
                   Enter VR
                 </button>
@@ -161,8 +168,8 @@ export default function App() {
           </div>
 
           {/* 3x3 Grid Container */}
-          <div className="p-4 md:p-6 lg:p-8 grid-container">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8 max-w-7xl mx-auto w-full">
+          <div className="lego-grid-container">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 lg:gap-10 max-w-7xl mx-auto w-full">
               {gridInstances.map((instance, index) => (
                 <motion.div 
                   key={index} 
@@ -182,9 +189,8 @@ export default function App() {
                     />
                   ) : (
                     <motion.div
-                      className="w-full h-full border-2 border-dashed border-white/20 rounded-xl flex items-center justify-center text-gray-400 card-depth-inset glass-card transition-all duration-300 shimmer"
+                      className="w-full h-full lego-empty-slot flex items-center justify-center text-gray-600 lego-shimmer cursor-pointer"
                       whileHover={{ 
-                        borderColor: 'rgba(255, 255, 255, 0.3)',
                         scale: 1.02,
                         y: -2 
                       }}
@@ -192,13 +198,13 @@ export default function App() {
                     >
                       <div className="text-center">
                         <motion.div 
-                          className="w-16 h-16 border-2 border-white/20 rounded-xl mx-auto mb-3 flex items-center justify-center backdrop-blur-sm"
-                          whileHover={{ borderColor: 'rgba(255, 255, 255, 0.4)' }}
+                          className="w-16 h-16 border-3 border-gray-400 rounded-lg mx-auto mb-3 flex items-center justify-center bg-white/50"
+                          whileHover={{ borderColor: '#0055BF' }}
                         >
-                          <span className="text-3xl opacity-60">➕</span>
+                          <span className="text-3xl text-gray-500">➕</span>
                         </motion.div>
-                        <p className="text-sm font-medium te-mono mb-1">Empty Slot</p>
-                        <p className="text-xs opacity-60 te-mono">
+                        <p className="text-sm font-bold lego-text mb-1 text-gray-700">Empty Slot</p>
+                        <p className="text-xs lego-text text-gray-600">
                           {showOnlyProvisioned ? 'No provisioned instance' : 'Available for deployment'}
                         </p>
                       </div>
@@ -210,26 +216,26 @@ export default function App() {
           </div>
 
           {/* Status Bar */}
-          <div className="fixed bottom-0 left-0 right-0 glass-card bg-gray-800/90 backdrop-blur-md border-t border-white/10 p-3 md:p-4">
+          <div className="fixed bottom-0 left-0 right-0 lego-status-bar p-3 md:p-4">
             <div className="flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto gap-2 sm:gap-0">
               <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-300 te-mono">Active Instance:</span>
-                <span className="text-sm font-medium bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent te-mono">
+                <span className="text-sm text-red-100 lego-text">Active Instance:</span>
+                <span className="text-sm font-bold text-yellow-300 lego-text">
                   {displayInstances[active]?.id || 'None'}
                 </span>
               </div>
               <div className="flex items-center space-x-4 md:space-x-8">
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 status-glow-green rounded-full"></div>
-                  <span className="text-xs text-gray-300 te-mono">Ready ({displayInstances.filter(i => i?.status === 'ready').length})</span>
+                  <div className="w-3 h-3 lego-status-ready rounded-sm"></div>
+                  <span className="text-xs text-red-100 lego-text">Ready ({displayInstances.filter(i => i?.status === 'ready').length})</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 status-glow-yellow rounded-full"></div>
-                  <span className="text-xs text-gray-300 te-mono">Booting ({displayInstances.filter(i => i?.status === 'booting').length})</span>
+                  <div className="w-3 h-3 lego-status-booting rounded-sm"></div>
+                  <span className="text-xs text-red-100 lego-text">Booting ({displayInstances.filter(i => i?.status === 'booting').length})</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 status-glow-red rounded-full"></div>
-                  <span className="text-xs text-gray-300 te-mono">Error ({displayInstances.filter(i => i?.status === 'error').length})</span>
+                  <div className="w-3 h-3 lego-status-error rounded-sm"></div>
+                  <span className="text-xs text-red-100 lego-text">Error ({displayInstances.filter(i => i?.status === 'error').length})</span>
                 </div>
               </div>
             </div>

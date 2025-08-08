@@ -6,6 +6,7 @@ import AudioSinkSelector from './AudioSinkSelector';
 
 /**
  * Individual instance card component for the 3x3 grid
+ * Styled to match LEGO Loco character cards with red borders, yellow accents, and cream backgrounds
  * Props:
  * - instance: instance object with id, status, provisioned, etc.
  * - isActive: whether this card is currently focused
@@ -17,15 +18,15 @@ export default function InstanceCard({ instance, isActive, onClick }) {
   const getStatusColor = (status) => {
     switch (status) {
       case 'ready':
-        return 'status-glow-green';
+        return 'lego-status-ready';
       case 'running':
-        return 'status-glow-blue';
+        return 'lego-status-running';
       case 'booting':
-        return 'status-glow-yellow';
+        return 'lego-status-booting';
       case 'error':
-        return 'status-glow-red';
+        return 'lego-status-error';
       default:
-        return 'bg-gray-500';
+        return 'lego-status-unknown';
     }
   };
 
@@ -51,9 +52,9 @@ export default function InstanceCard({ instance, isActive, onClick }) {
         icon: '🚫',
         title: 'Not Provisioned',
         subtitle: 'Instance not available',
-        bgClass: 'bg-gray-700/30',
-        borderClass: 'border-gray-600/50',
-        iconBg: 'bg-gray-600/30'
+        bgClass: 'bg-red-100',
+        textClass: 'text-red-800',
+        iconBg: 'bg-red-200 border-red-400'
       };
     }
     
@@ -63,9 +64,9 @@ export default function InstanceCard({ instance, isActive, onClick }) {
           icon: '⚡',
           title: 'Booting...',
           subtitle: 'System initialization',
-          bgClass: 'bg-yellow-900/20',
-          borderClass: 'border-yellow-500/50',
-          iconBg: 'bg-yellow-500/20',
+          bgClass: 'bg-yellow-100',
+          textClass: 'text-yellow-800',
+          iconBg: 'bg-yellow-200 border-yellow-400',
           animated: true
         };
       case 'error':
@@ -73,18 +74,18 @@ export default function InstanceCard({ instance, isActive, onClick }) {
           icon: '❌',
           title: 'Error',
           subtitle: 'Failed to start',
-          bgClass: 'bg-red-900/20',
-          borderClass: 'border-red-500/50',
-          iconBg: 'bg-red-500/20'
+          bgClass: 'bg-red-100',
+          textClass: 'text-red-800',
+          iconBg: 'bg-red-200 border-red-400'
         };
       default:
         return {
           icon: '❓',
           title: 'Unknown Status',
           subtitle: 'Checking connection...',
-          bgClass: 'bg-gray-700/20',
-          borderClass: 'border-gray-500/50',
-          iconBg: 'bg-gray-500/20'
+          bgClass: 'bg-gray-100',
+          textClass: 'text-gray-800',
+          iconBg: 'bg-gray-200 border-gray-400'
         };
     }
   };
@@ -95,78 +96,87 @@ export default function InstanceCard({ instance, isActive, onClick }) {
     <motion.div
       onClick={onClick}
       className={`
-        relative rounded-xl transition-all duration-300 cursor-pointer overflow-hidden
+        relative transition-all duration-300 cursor-pointer overflow-hidden
         ${isActive 
-          ? 'ring-2 ring-blue-400/60 ring-offset-2 ring-offset-transparent card-depth' 
-          : 'card-depth-subtle glass-card'
+          ? 'lego-card ring-4 ring-blue-400 ring-offset-2 ring-offset-green-500' 
+          : 'lego-card'
         }
-        ${!instance.provisioned ? 'opacity-75' : ''}
+        ${!instance.provisioned ? 'opacity-90' : ''}
       `}
       whileHover={{ scale: 1.02, y: -2 }}
       whileTap={{ scale: 0.98 }}
       layout
     >
-      {/* Background with gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-800/80 to-gray-900/90 backdrop-blur-md" />
-      
-      {/* Header with instance ID and status */}
-      <div className="relative p-4 border-b border-white/10 glass-card">
+      {/* Header with instance ID and status - styled like LEGO character card header */}
+      <div className="relative p-3 bg-yellow-50 border-b-2 border-yellow-400">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-white te-mono truncate pr-2">
+          <h3 className="text-sm font-bold text-black lego-text truncate pr-2">
             {instance.name || instance.id}
           </h3>
           <div className="flex items-center space-x-2 flex-shrink-0">
-            <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(instance.status)}`} />
-            <span className="text-xs text-gray-300 te-mono">
+            <div className={`w-3 h-3 rounded-sm ${getStatusColor(instance.status)}`} />
+            <span className="text-xs text-black lego-text font-semibold">
               {getStatusText(instance.status, instance.provisioned)}
             </span>
           </div>
         </div>
         {instance.description && (
-          <p className="text-xs text-gray-400 truncate te-mono mb-2">{instance.description}</p>
+          <p className="text-xs text-gray-700 truncate lego-text mb-2 font-medium">{instance.description}</p>
         )}
-        <AudioSinkSelector mediaRef={videoRef} />
+        
+        {/* LEGO-style control buttons */}
+        <div className="flex justify-between items-center">
+          <AudioSinkSelector mediaRef={videoRef} />
+          <div className="flex space-x-1">
+            <button className="w-6 h-6 bg-red-500 border-2 border-red-600 rounded text-white text-xs font-bold flex items-center justify-center hover:bg-red-400 transition-colors">
+              ×
+            </button>
+            <button className="w-6 h-6 bg-blue-500 border-2 border-blue-600 rounded text-white text-xs font-bold flex items-center justify-center hover:bg-blue-400 transition-colors">
+              ?
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* VNC Content Area */}
-      <div className="relative aspect-video bg-black/80 backdrop-blur-sm">
+      {/* VNC Content Area - styled like the character portrait area */}
+      <div className="relative aspect-video lego-stream-area">
         {instance.provisioned && instance.ready ? (
           <>
             <ReactVNCViewer instanceId={instance.id} />
             <video ref={videoRef} className="hidden" />
             {loading && (
               <motion.div 
-                className="absolute inset-0 flex items-center justify-center text-xs text-white bg-black/60 backdrop-blur-sm"
+                className="absolute inset-0 flex items-center justify-center text-sm text-white bg-black/80"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
                 <div className="text-center">
                   <motion.div
-                    className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full mx-auto mb-2"
+                    className="w-10 h-10 border-3 border-yellow-400 border-t-transparent rounded-full mx-auto mb-3"
                     animate={{ rotate: 360 }}
                     transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
                   />
-                  <p className="te-mono">Loading stream...</p>
+                  <p className="lego-text font-bold text-yellow-400">Loading stream...</p>
                 </div>
               </motion.div>
             )}
           </>
         ) : (
-          <div className={`w-full h-full flex flex-col items-center justify-center text-gray-300 ${placeholder.bgClass} backdrop-blur-sm`}>
+          <div className={`w-full h-full flex flex-col items-center justify-center ${placeholder.bgClass}`}>
             <motion.div 
-              className={`w-16 h-16 border-2 ${placeholder.borderClass} rounded-xl mb-3 flex items-center justify-center ${placeholder.iconBg} backdrop-blur-sm`}
+              className={`w-16 h-16 border-3 ${placeholder.iconBg} rounded-lg mb-3 flex items-center justify-center`}
               animate={placeholder.animated ? { scale: [1, 1.1, 1] } : {}}
               transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
             >
               <span className="text-2xl">{placeholder.icon}</span>
             </motion.div>
-            <p className="text-sm font-medium mb-1 te-mono">{placeholder.title}</p>
-            <p className="text-xs opacity-75 te-mono text-center px-4">{placeholder.subtitle}</p>
+            <p className={`text-sm font-bold mb-1 lego-text ${placeholder.textClass}`}>{placeholder.title}</p>
+            <p className={`text-xs lego-text text-center px-4 ${placeholder.textClass} opacity-80`}>{placeholder.subtitle}</p>
             
             {instance.status === 'booting' && (
-              <div className="w-32 h-1 bg-gray-700/50 rounded-full mt-3 overflow-hidden backdrop-blur-sm">
+              <div className="w-32 h-2 lego-progress mt-3">
                 <motion.div
-                  className="h-full bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full"
+                  className="lego-progress-bar"
                   animate={{ x: ['-100%', '100%'] }}
                   transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
                 />
@@ -176,20 +186,23 @@ export default function InstanceCard({ instance, isActive, onClick }) {
         )}
       </div>
 
-      {/* Active indicator overlay */}
+      {/* Active indicator overlay - enhanced for LEGO style */}
       {isActive && (
         <motion.div
-          className="absolute inset-0 border-2 border-blue-400/60 rounded-xl pointer-events-none"
+          className="absolute inset-0 border-4 border-blue-400 rounded-lg pointer-events-none"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           layoutId="activeCardBorder"
+          style={{
+            boxShadow: '0 0 0 2px #FFD700, 0 0 20px rgba(0, 85, 191, 0.5)'
+          }}
         />
       )}
       
-      {/* Subtle glow effect for active card */}
+      {/* LEGO-style glow effect for active card */}
       {isActive && (
         <motion.div
-          className="absolute inset-0 bg-blue-400/5 rounded-xl pointer-events-none"
+          className="absolute inset-0 bg-blue-400/10 rounded-lg pointer-events-none"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         />

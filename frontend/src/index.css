@@ -2,98 +2,204 @@
 @tailwind components;
 @tailwind utilities;
 
-.lego-style {
-  box-shadow: 0 4px 0 #eab308, 0 8px 0 #facc15;
-  border-style: solid;
-  border-color: #eab308;
+/* LEGO Loco Color Palette */
+:root {
+  --lego-green: #00A651;
+  --lego-red: #C4281C;
+  --lego-yellow: #FFD700;
+  --lego-blue: #0055BF;
+  --lego-white: #FFFFFF;
+  --lego-black: #000000;
+  --lego-cream: #F5F5DC;
+  --lego-gray: #9CA3AF;
 }
 
-/* Teenage Engineering / Nothing Phone inspired design */
-.card-depth {
+/* LEGO-style card design inspired by the character cards */
+.lego-card {
+  background: var(--lego-cream);
+  border: 4px solid var(--lego-red);
+  border-radius: 8px;
   box-shadow: 
-    0 1px 3px rgba(0, 0, 0, 0.12),
-    0 1px 2px rgba(0, 0, 0, 0.24);
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    inset 0 0 0 2px var(--lego-yellow),
+    0 4px 0 var(--lego-red),
+    0 8px 16px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
 }
 
-.card-depth:hover {
+.lego-card:hover {
+  transform: translateY(-2px);
   box-shadow: 
-    0 14px 28px rgba(0, 0, 0, 0.25),
-    0 10px 10px rgba(0, 0, 0, 0.22);
+    inset 0 0 0 2px var(--lego-yellow),
+    0 6px 0 var(--lego-red),
+    0 12px 20px rgba(0, 0, 0, 0.3);
 }
 
-.card-depth-subtle {
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.1),
-    0 1px 2px rgba(0, 0, 0, 0.06);
-  transition: all 0.2s ease-in-out;
+/* LEGO-style empty slot */
+.lego-empty-slot {
+  background: rgba(245, 245, 220, 0.3);
+  border: 3px dashed var(--lego-gray);
+  border-radius: 8px;
+  transition: all 0.3s ease;
 }
 
-.card-depth-subtle:hover {
-  box-shadow: 
-    0 4px 8px rgba(0, 0, 0, 0.15),
-    0 2px 4px rgba(0, 0, 0, 0.1);
+.lego-empty-slot:hover {
+  border-color: var(--lego-blue);
+  background: rgba(245, 245, 220, 0.5);
   transform: translateY(-1px);
 }
 
-.card-depth-inset {
-  box-shadow: 
-    inset 0 2px 4px rgba(0, 0, 0, 0.1),
-    0 1px 2px rgba(255, 255, 255, 0.05);
+/* LEGO baseplate background pattern */
+.lego-background {
+  background: var(--lego-green);
+  background-image: 
+    radial-gradient(circle at 20px 20px, rgba(255,255,255,0.1) 2px, transparent 2px),
+    radial-gradient(circle at 60px 60px, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 40px 40px, 80px 80px;
 }
 
-/* Nothing Phone inspired glass effect */
-.glass-card {
-  backdrop-filter: blur(16px);
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* LEGO-style buttons */
+.lego-button {
+  background: var(--lego-blue);
+  color: var(--lego-white);
+  border: 2px solid var(--lego-blue);
+  border-radius: 6px;
+  font-weight: 600;
+  box-shadow: 0 3px 0 #003d8a, 0 6px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
 }
 
-/* Teenage Engineering inspired typography */
-.te-mono {
+.lego-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 #003d8a, 0 8px 12px rgba(0, 0, 0, 0.3);
+}
+
+.lego-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 0 #003d8a, 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* LEGO-style header */
+.lego-header {
+  background: var(--lego-red);
+  color: var(--lego-white);
+  border-bottom: 4px solid #a01e15;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* LEGO-style status bar */
+.lego-status-bar {
+  background: var(--lego-red);
+  color: var(--lego-white);
+  border-top: 2px solid var(--lego-yellow);
+  box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* LEGO typography */
+.lego-text {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: 0.025em;
 }
 
-/* Status indicators with glow */
-.status-glow-green {
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
-  background: rgb(34, 197, 94);
+.lego-title {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
-.status-glow-yellow {
-  box-shadow: 0 0 8px rgba(234, 179, 8, 0.4);
-  background: rgb(234, 179, 8);
+/* LEGO-style status indicators */
+.lego-status-ready {
+  background: #22C55E;
+  border: 2px solid #16A34A;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
 }
 
-.status-glow-red {
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
-  background: rgb(239, 68, 68);
+.lego-status-running {
+  background: var(--lego-blue);
+  border: 2px solid #003d8a;
+  box-shadow: 0 0 8px rgba(0, 85, 191, 0.6);
 }
 
-.status-glow-blue {
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
-  background: rgb(59, 130, 246);
+.lego-status-booting {
+  background: var(--lego-yellow);
+  border: 2px solid #F59E0B;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+}
+
+.lego-status-error {
+  background: #EF4444;
+  border: 2px solid #DC2626;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+.lego-status-unknown {
+  background: var(--lego-gray);
+  border: 2px solid #6B7280;
+  box-shadow: 0 0 8px rgba(156, 163, 175, 0.6);
+}
+
+/* Stream area styling */
+.lego-stream-area {
+  background: var(--lego-black);
+  border: 3px solid var(--lego-yellow);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--lego-red);
 }
 
 /* Animated loading states */
-.pulse-slow {
-  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+.lego-pulse {
+  animation: lego-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-.shimmer {
-  background: linear-gradient(90deg, rgba(255,255,255,0.0) 0%, rgba(255,255,255,0.03) 50%, rgba(255,255,255,0.0) 100%);
+@keyframes lego-pulse {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+.lego-shimmer {
+  background: linear-gradient(90deg, 
+    rgba(245, 245, 220, 0.0) 0%, 
+    rgba(245, 245, 220, 0.3) 50%, 
+    rgba(245, 245, 220, 0.0) 100%);
   background-size: 200% 100%;
-  animation: shimmer 2s ease-in-out infinite;
+  animation: lego-shimmer 2s ease-in-out infinite;
 }
 
-@keyframes shimmer {
+@keyframes lego-shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
 
-/* Grid enhancements */
-.grid-container {
+/* LEGO progress bar */
+.lego-progress {
+  background: var(--lego-gray);
+  border: 2px solid var(--lego-black);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.lego-progress-bar {
+  background: linear-gradient(90deg, var(--lego-yellow), var(--lego-red));
+  height: 100%;
+  border-radius: 2px;
+  animation: lego-progress 1.5s ease-in-out infinite;
+}
+
+@keyframes lego-progress {
+  0%, 100% { transform: translateX(-100%); }
+  50% { transform: translateX(0%); }
+}
+
+/* Grid container with LEGO baseplate feel */
+.lego-grid-container {
   perspective: 1000px;
+  padding: 20px;
+  background: var(--lego-green);
 }
