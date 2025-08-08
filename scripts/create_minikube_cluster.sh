@@ -41,7 +41,7 @@ minikube delete || true
 
 # Start minikube cluster with specific configuration for our use case
 echo "Starting Minikube cluster" && date
-minikube start \
+if ! minikube start \
     --driver=docker \
     --kubernetes-version="$KUBERNETES_VERSION" \
     --nodes="$WORKERS" \
@@ -52,13 +52,24 @@ minikube start \
     --network-plugin=cni \
     --cni=calico \
     --feature-gates="KubeletInUserNamespace=true" \
-    --wait=true
+    --wait=true; then
+    
+    echo "❌ Failed to start Minikube cluster" && date
+    minikube logs || true
+    exit 1
+fi
 
 # Enable required addons
 echo "Enabling Minikube addons" && date
-minikube addons enable ingress
-minikube addons enable metrics-server
-minikube addons enable storage-provisioner
+if ! minikube addons enable ingress; then
+    echo "⚠️  Failed to enable ingress addon" && date
+fi
+if ! minikube addons enable metrics-server; then
+    echo "⚠️  Failed to enable metrics-server addon" && date
+fi
+if ! minikube addons enable storage-provisioner; then
+    echo "⚠️  Failed to enable storage-provisioner addon" && date
+fi
 
 # Set up kubectl context
 kubectl config use-context minikube
