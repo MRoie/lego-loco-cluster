@@ -3,10 +3,15 @@ kind: Service
 metadata:
   name: {{ include "loco.fullname" . }}-emulator
   namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: emulator
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-emulator
 spec:
   clusterIP: None
   selector:
     app: {{ include "loco.fullname" . }}-emulator
+    app.kubernetes.io/component: emulator
   ports:
   - name: vnc
     port: {{ .Values.emulator.servicePort }}

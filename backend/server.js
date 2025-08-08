@@ -7,6 +7,7 @@ const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
+const InstanceManager = require("./services/instanceManager");
 
 const app = express();
 const server = http.createServer(app);
@@ -28,6 +29,9 @@ const K8S_CONFIG_DIR = "/app/config";
 const FINAL_CONFIG_DIR = fs.existsSync(K8S_CONFIG_DIR) ? K8S_CONFIG_DIR : CONFIG_DIR;
 
 console.log("Using config directory:", FINAL_CONFIG_DIR);
+
+// Initialize instance manager with auto-discovery
+const instanceManager = new InstanceManager(FINAL_CONFIG_DIR);
 
 // Initialize stream quality monitor after config directory is determined
 const qualityMonitor = new StreamQualityMonitor(FINAL_CONFIG_DIR);
@@ -77,49 +81,60 @@ app.get("/api/status", (req, res) => {
   }
 });
 
-// Enhanced instances endpoint that includes status and provisioning info
-app.get("/api/instances", (req, res) => {
+// Enhanced instances endpoint with auto-discovery support
+app.get("/api/instances", async (req, res) => {
   try {
     console.log("Instances request");
-    const instances = loadConfig("instances");
-    const statusData = loadConfig("status");
-    
-    // Enhanced instance data with status information
-    const enhancedInstances = instances.map(instance => ({
-      ...instance,
-      status: statusData[instance.id] || 'unknown',
-      provisioned: statusData[instance.id] === 'ready' || statusData[instance.id] === 'running',
-      ready: statusData[instance.id] === 'ready'
-    }));
-    
-    res.json(enhancedInstances);
+    const instances = await instanceManager.getInstances();
+    res.json(instances);
   } catch (e) {
     console.error("Instances config error:", e.message);
     res.status(503).json([]);
   }
 });
 
-// New endpoint to get provisioned instances only
-app.get("/api/instances/provisioned", (req, res) => {
+// New endpoint to get provisioned instances only with auto-discovery
+app.get("/api/instances/provisioned", async (req, res) => {
   try {
     console.log("Provisioned instances request");
-    const instances = loadConfig("instances");
-    const statusData = loadConfig("status");
-    
-    // Filter to only provisioned instances
-    const provisionedInstances = instances
-      .map(instance => ({
-        ...instance,
-        status: statusData[instance.id] || 'unknown',
-        provisioned: statusData[instance.id] === 'ready' || statusData[instance.id] === 'running',
-        ready: statusData[instance.id] === 'ready'
-      }))
-      .filter(instance => instance.provisioned);
-    
+    const provisionedInstances = await instanceManager.getProvisionedInstances();
     res.json(provisionedInstances);
   } catch (e) {
-    console.error("Provisioned instances config error:", e.message);
+    console.error("Provisioned instances error:", e.message);
     res.status(503).json([]);
+  }
+});
+
+// New endpoint for Kubernetes discovery information
+app.get("/api/instances/discovery-info", async (req, res) => {
+  try {
+    const k8sInfo = await instanceManager.getKubernetesInfo();
+    const isUsingK8sDiscovery = instanceManager.isUsingKubernetesDiscovery();
+    
+    res.json({
+      kubernetesDiscovery: k8sInfo,
+      usingAutoDiscovery: isUsingK8sDiscovery,
+      fallbackToStatic: !isUsingK8sDiscovery
+    });
+  } catch (e) {
+    console.error("Discovery info error:", e.message);
+    res.status(500).json({ error: "Failed to get discovery info" });
+  }
+});
+
+// New endpoint to refresh instance discovery
+app.post("/api/instances/refresh", async (req, res) => {
+  try {
+    console.log("Manual instance discovery refresh requested");
+    const instances = await instanceManager.refreshDiscovery();
+    res.json({
+      message: "Discovery refreshed successfully",
+      instanceCount: instances.length,
+      instances: instances
+    });
+  } catch (e) {
+    console.error("Discovery refresh error:", e.message);
+    res.status(500).json({ error: "Failed to refresh discovery" });
   }
 });
 
@@ -345,15 +360,19 @@ app.post("/api/active", (req, res) => {
 const proxy = httpProxy.createProxyServer({ ws: true, changeOrigin: true });
 
 // Resolve an instance ID to its upstream target URL
-function getInstanceTarget(id) {
-  // Reload instances dynamically to support scaling
+async function getInstanceTarget(id) {
+  // Reload instances dynamically using instance manager
   try {
-    const instances = loadConfig("instances");
-    const inst = instances.find((i) => i.id === id);
+    const inst = await instanceManager.getInstanceById(id);
+    if (!inst) {
+      throw new Error(`Instance ${id} not found`);
+    }
+    
+    console.log(`Found instance ${id}: ${inst.vncUrl}`);
     // Use vncUrl for direct VNC connection instead of streamUrl (which is for noVNC web interface)
-    return inst ? inst.vncUrl : null;
+    return inst.vncUrl;
   } catch (e) {
-    console.error("Failed to load instances config:", e.message);
+    console.error("Failed to get instance target:", e.message);
     return null;
   }
 }
@@ -472,19 +491,24 @@ server.on("upgrade", (req, socket, head) => {
   const vncMatch = req.url.match(/^\/proxy\/vnc\/([^\/]+)/);
   if (vncMatch) {
     const instanceId = vncMatch[1];
-    const target = getInstanceTarget(instanceId);
     
-    if (target) {
-      console.log(`VNC WebSocket proxy: ${instanceId} -> ${target}`);
-      
-      // Use the VNC WebSocket server
-      vncWss.handleUpgrade(req, socket, head, (ws) => {
-        createVNCBridge(ws, target, instanceId);
-      });
-    } else {
-      console.error(`VNC WebSocket proxy: Unknown instance ${instanceId}`);
+    getInstanceTarget(instanceId).then(target => {
+      if (target) {
+        console.log(`VNC WebSocket proxy: ${instanceId} -> ${target}`);
+        
+        // Use the VNC WebSocket server
+        vncWss.handleUpgrade(req, socket, head, (ws) => {
+          createVNCBridge(ws, target, instanceId);
+        });
+      } else {
+        console.error(`VNC WebSocket proxy: Unknown instance ${instanceId}`);
+        socket.destroy();
+      }
+    }).catch(error => {
+      console.error(`VNC WebSocket proxy error for ${instanceId}:`, error.message);
       socket.destroy();
-    }
+    });
+    
     return;
   }
   

@@ -1,0 +1,44 @@
+{{- if .Values.rbac.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "loco.fullname" . }}-backend
+  namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-backend
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: {{ include "loco.namespace" . }}
+  name: {{ include "loco.fullname" . }}-backend
+  labels:
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: lego-loco-cluster
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["statefulsets"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "loco.fullname" . }}-backend
+  namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: lego-loco-cluster
+subjects:
+- kind: ServiceAccount
+  name: {{ include "loco.fullname" . }}-backend
+  namespace: {{ include "loco.namespace" . }}
+roleRef:
+  kind: Role
+  name: {{ include "loco.fullname" . }}-backend
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

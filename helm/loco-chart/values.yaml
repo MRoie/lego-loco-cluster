@@ -16,6 +16,10 @@ imagePullSecrets: []
   # - jfrog-secret       # JFrog Artifactory
   # - custom-registry    # Custom registry
 
+# RBAC configuration for Kubernetes service discovery
+rbac:
+  create: true  # Create service account and RBAC for backend auto-discovery
+
 # Registry configurations for different environments
 registryConfig:
   # GitHub Container Registry

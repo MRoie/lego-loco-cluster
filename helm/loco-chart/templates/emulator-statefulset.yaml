@@ -9,10 +9,15 @@ spec:
   selector:
     matchLabels:
       app: {{ include "loco.fullname" . }}-emulator
+      app.kubernetes.io/component: emulator
+      app.kubernetes.io/part-of: lego-loco-cluster
   template:
     metadata:
       labels:
         app: {{ include "loco.fullname" . }}-emulator
+        app.kubernetes.io/component: emulator
+        app.kubernetes.io/part-of: lego-loco-cluster
+        app.kubernetes.io/name: lego-loco-emulator
     spec:
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
