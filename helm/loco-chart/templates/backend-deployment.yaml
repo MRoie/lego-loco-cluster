@@ -8,11 +8,19 @@ spec:
   selector:
     matchLabels:
       app: {{ include "loco.fullname" . }}-backend
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/part-of: lego-loco-cluster
   template:
     metadata:
       labels:
         app: {{ include "loco.fullname" . }}-backend
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: lego-loco-cluster
+        app.kubernetes.io/name: lego-loco-backend
     spec:
+      {{- if .Values.rbac.create }}
+      serviceAccountName: {{ include "loco.fullname" . }}-backend
+      {{- end }}
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range .Values.imagePullSecrets }}
@@ -23,6 +31,11 @@ spec:
       - name: backend
         image: {{ include "loco.image" (dict "root" . "image" .Values.backend.image "tag" .Values.backend.tag) }}
         imagePullPolicy: IfNotPresent
+        env:
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         ports:
         - containerPort: {{ .Values.backend.servicePort }}
         startupProbe:

@@ -3,6 +3,7 @@ import { useActive } from "./ActiveContext";
 import { motion, AnimatePresence } from "framer-motion";
 import VRScene from "./VRScene";
 import InstanceCard from "./components/InstanceCard";
+import DiscoveryStatus from "./components/DiscoveryStatus";
 
 
 // Main dashboard component showing the 3×3 grid of instances
@@ -25,17 +26,22 @@ export default function App() {
 
   // Fetch instance list and hotkey mapping from the backend
   useEffect(() => {
-    // Load all instances
-    fetch("/api/instances")
-      .then((r) => r.json())
-      .then(setInstances)
-      .catch((e) => console.error("Failed to fetch instances", e));
-    
-    // Load only provisioned instances
-    fetch("/api/instances/provisioned")
-      .then((r) => r.json())
-      .then(setProvisionedInstances)
-      .catch((e) => console.error("Failed to fetch provisioned instances", e));
+    const loadInstances = () => {
+      // Load all instances
+      fetch("/api/instances")
+        .then((r) => r.json())
+        .then(setInstances)
+        .catch((e) => console.error("Failed to fetch instances", e));
+      
+      // Load only provisioned instances
+      fetch("/api/instances/provisioned")
+        .then((r) => r.json())
+        .then(setProvisionedInstances)
+        .catch((e) => console.error("Failed to fetch provisioned instances", e));
+    };
+
+    // Initial load
+    loadInstances();
     
     fetch("/api/config/hotkeys")
       .then((r) => r.json())
@@ -48,15 +54,24 @@ export default function App() {
         .then(setStatus)
         .catch(() => {});
       
-      // Refresh provisioned instances periodically
-      fetch("/api/instances/provisioned")
-        .then((r) => r.json())
-        .then(setProvisionedInstances)
-        .catch(() => {});
+      // Refresh instances periodically
+      loadInstances();
     }, 5000);
     
     fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => {});
-    return () => clearInterval(interval);
+    
+    // Listen for discovery refresh events
+    const handleDiscoveryRefresh = () => {
+      console.log('Discovery refreshed, reloading instances');
+      loadInstances();
+    };
+    
+    window.addEventListener('discoveryRefreshed', handleDiscoveryRefresh);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('discoveryRefreshed', handleDiscoveryRefresh);
+    };
   }, []);
 
   // Update active index when activeIds or instances change
@@ -132,10 +147,13 @@ export default function App() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-yellow-400">🎮 Lego Loco Cluster</h1>
-                <p className="text-gray-300 text-sm">
-                  {displayInstances.length} of {instances.length} instances
-                  {showOnlyProvisioned ? ' (provisioned only)' : ''}
-                </p>
+                <div className="flex items-center space-x-4">
+                  <p className="text-gray-300 text-sm">
+                    {displayInstances.length} of {instances.length} instances
+                    {showOnlyProvisioned ? ' (provisioned only)' : ''}
+                  </p>
+                  <DiscoveryStatus />
+                </div>
               </div>
               <div className="flex items-center space-x-4">
                 <button
