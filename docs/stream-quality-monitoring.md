@@ -1,38 +1,56 @@
-# Stream Quality Monitoring
+# Stream Quality Monitoring with Deep QEMU Health Probing
 
-This document describes the comprehensive video/audio quality monitoring system for QEMU streaming instances.
+This document describes the comprehensive video/audio quality monitoring system for QEMU streaming instances, including deep health probing and intelligent failure detection.
 
 ## Overview
 
-The Stream Quality Monitor provides real-time assessment of QEMU instance streaming quality, including:
+The Stream Quality Monitor provides real-time assessment of QEMU instance streaming quality with two levels of monitoring:
 
+### Standard Quality Monitoring
 - **VNC Connectivity Testing** - Tests actual VNC port connectivity and responsiveness
 - **Audio Detection and Quality Assessment** - Detects audio capabilities and measures audio quality
 - **Control Responsiveness Testing** - Tests VNC control inputs (mouse/keyboard) responsiveness  
 - **Network Quality Metrics** - Measures latency, packet loss, and jitter
 - **Individual Instance Indicators** - Shows quality status on each instance card
-- **Comprehensive Dashboard** - Central monitoring view for all instances
+
+### Deep QEMU Health Probing
+- **QEMU Process Health** - Monitors actual QEMU process status and resource usage
+- **Video Subsystem Health** - Deep inspection of video frame generation rates and display activity
+- **Audio Subsystem Health** - Monitors PulseAudio/ALSA audio buffer states and device availability
+- **Performance Monitoring** - Tracks CPU, memory usage, and system load for QEMU processes
+- **Network Interface Health** - Monitors bridge/TAP interface status and network errors
+- **Intelligent Failure Detection** - Distinguishes between network, QEMU, and client-side issues
+- **Automatic Recovery** - Implements recovery strategies based on failure type
 
 ## Features
 
 ### Backend Quality Monitoring Service
 
-The `StreamQualityMonitor` service continuously probes all instances:
+The `StreamQualityMonitor` service provides two levels of monitoring:
 
 ```javascript
 const qualityMonitor = new StreamQualityMonitor('/config');
-qualityMonitor.start();
+qualityMonitor.start(); // Starts both standard and deep monitoring
 ```
 
-**Monitoring Capabilities:**
+**Standard Monitoring (every 5 seconds):**
 - VNC port connectivity via TCP socket testing
 - WebSocket VNC proxy testing for actual protocol validation
 - Audio detection using WebAudio API capabilities testing
 - Control responsiveness via synthetic mouse/keyboard event testing
 - Connection latency measurement and quality estimation
-- Automatic error detection and recovery
+
+**Deep Health Monitoring (every 15 seconds):**
+- Direct health endpoint queries to QEMU containers
+- QEMU process health and resource monitoring
+- Video/audio subsystem detailed analysis
+- Network interface status and error tracking
+- Performance metrics collection
+- Failure type analysis and recovery trigger evaluation
 
 **Quality Metrics Tracked:**
+
+*Standard Metrics:*
 - `availability.vnc` - VNC service availability
 - `availability.stream` - Stream endpoint availability  
 - `availability.audio` - Audio detection status
@@ -44,6 +62,102 @@ qualityMonitor.start();
 - `quality.controlsResponsive` - Control input responsiveness status
 - `quality.packetLoss` - Estimated packet loss percentage
 - `quality.jitter` - Network jitter in milliseconds
+
+*Deep Health Metrics:*
+- `deepHealth.overall_status` - Overall QEMU health (healthy/degraded/unhealthy)
+- `deepHealth.qemu_healthy` - QEMU process status
+- `deepHealth.video` - Video subsystem detailed health
+  - `vnc_available` - VNC server status
+  - `display_active` - X display activity
+  - `estimated_frame_rate` - Real frame generation rate
+- `deepHealth.audio` - Audio subsystem detailed health
+  - `pulse_running` - PulseAudio daemon status
+  - `audio_devices` - Available audio device count
+  - `estimated_level` - Audio signal level
+- `deepHealth.performance` - System performance metrics
+  - `cpu_usage` - Overall CPU usage
+  - `memory_usage` - Memory utilization
+  - `qemu_cpu` - QEMU-specific CPU usage
+  - `qemu_memory` - QEMU-specific memory usage
+  - `load_average` - System load average
+- `deepHealth.network` - Network health status
+  - `bridge_up` - Bridge interface status
+  - `tap_up` - TAP interface status
+  - `tx_packets/rx_packets` - Network traffic statistics
+  - `tx_errors/rx_errors` - Network error counts
+- `failureType` - Categorized failure type (network/qemu/client/mixed/none)
+- `recoveryNeeded` - Whether automatic recovery should be triggered
+
+### Container Health Monitoring
+
+Each QEMU container now includes a health monitoring service:
+
+**Health Monitor Script (`health-monitor.sh`):**
+- Runs HTTP server on port 8080
+- Provides real-time health data via JSON API
+- Monitors QEMU process, audio/video subsystems, network interfaces
+- Exposes detailed performance and error information
+
+**Health Endpoint Response:**
+```json
+{
+  "timestamp": "2025-01-07T23:30:00Z",
+  "overall_status": "healthy",
+  "qemu_healthy": true,
+  "video": {
+    "vnc_available": true,
+    "display_active": true,
+    "estimated_frame_rate": 30,
+    "vnc_port": 5901,
+    "display": ":1"
+  },
+  "audio": {
+    "pulse_running": true,
+    "audio_devices": 2,
+    "alsa_devices": 1,
+    "estimated_level": 0.7,
+    "audio_backend": "pulse"
+  },
+  "performance": {
+    "cpu_usage": 25.3,
+    "memory_usage": 45.1,
+    "load_average": 1.2,
+    "qemu_cpu": 15.8,
+    "qemu_memory": 12.4,
+    "qemu_pid": "1234"
+  },
+  "network": {
+    "bridge_up": true,
+    "tap_up": true,
+    "tx_packets": 15430,
+    "rx_packets": 12890,
+    "tx_errors": 0,
+    "rx_errors": 0
+  }
+}
+```
+
+### Intelligent Failure Detection and Recovery
+
+The system implements intelligent failure detection that categorizes issues:
+
+**Failure Types:**
+- `network` - Network connectivity, interface, or routing issues
+- `qemu` - QEMU process, audio/video subsystem, or performance issues  
+- `client` - Client-side browser or WebRTC issues
+- `mixed` - Multiple issue types detected
+- `none` - No issues detected
+
+**Recovery Strategies:**
+- **Network Recovery** - Restart network interfaces, reset bridge/TAP configuration
+- **QEMU Recovery** - Restart QEMU subsystems, reset audio/video components
+- **Mixed Recovery** - Attempt network recovery first, then QEMU recovery
+- **Manual Intervention** - Client-side issues flagged for manual review
+
+**Recovery Triggers:**
+- Automatic recovery after 3 consecutive deep health failures
+- Manual recovery via API or UI button
+- Maximum 3 recovery attempts per instance per session
 
 ### Frontend Quality Integration
 
@@ -131,6 +245,95 @@ Returns aggregated quality overview:
     "good": 2,
     "fair": 1,
     "unavailable": 3
+  }
+}
+```
+
+#### Get Deep Health Information
+```bash
+GET /api/quality/deep-health
+```
+
+Returns comprehensive QEMU health data for all instances:
+```json
+{
+  "instance-0": {
+    "instanceId": "instance-0",
+    "timestamp": "2025-01-07T23:30:00Z",
+    "overallStatus": "healthy",
+    "deepHealth": {
+      "overall_status": "healthy",
+      "qemu_healthy": true,
+      "video": {
+        "vnc_available": true,
+        "display_active": true,
+        "estimated_frame_rate": 30
+      },
+      "audio": {
+        "pulse_running": true,
+        "audio_devices": 2,
+        "estimated_level": 0.7
+      },
+      "performance": {
+        "cpu_usage": 25.3,
+        "memory_usage": 45.1,
+        "qemu_cpu": 15.8,
+        "qemu_memory": 12.4
+      },
+      "network": {
+        "bridge_up": true,
+        "tap_up": true,
+        "tx_errors": 0,
+        "rx_errors": 0
+      }
+    },
+    "failureType": "none",
+    "recoveryNeeded": false,
+    "errors": []
+  }
+}
+```
+
+#### Get Instance-Specific Deep Health
+```bash
+GET /api/quality/deep-health/:instanceId
+```
+
+Returns deep health data for a specific instance.
+
+#### Trigger Recovery
+```bash
+POST /api/quality/recover/:instanceId
+```
+
+Request body:
+```json
+{
+  "forceRecovery": true
+}
+```
+
+Triggers automatic recovery for a specific instance. Returns:
+```json
+{
+  "message": "Recovery initiated for instance-0",
+  "failureType": "qemu",
+  "forceRecovery": true
+}
+```
+
+#### Get Recovery Status
+```bash
+GET /api/quality/recovery-status
+```
+
+Returns recovery attempt status for all instances:
+```json
+{
+  "instance-0": {
+    "attempts": 1,
+    "maxAttempts": 3,
+    "canRecover": true
   }
 }
 ```

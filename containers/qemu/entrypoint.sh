@@ -293,7 +293,18 @@ GSTREAMER_PID=$!
 
 log_success "GStreamer started with PID: $GSTREAMER_PID"
 
-# === STEP 7: Art Resource Watcher ===
+# === STEP 7: Health Monitoring Setup ===
+log_info "Starting health monitoring service..."
+if [ -x /usr/local/bin/health-monitor.sh ]; then
+  HEALTH_PORT=${HEALTH_PORT:-8080}
+  /usr/local/bin/health-monitor.sh serve &
+  HEALTH_PID=$!
+  log_success "Health monitor started with PID: $HEALTH_PID on port $HEALTH_PORT"
+else
+  log_error "Health monitor script not found"
+fi
+
+# === STEP 8: Art Resource Watcher ===
 if [ -x /usr/local/bin/watch_art_res.sh ]; then
   log_info "Starting art resource watcher..."
   /usr/local/bin/watch_art_res.sh &
@@ -306,13 +317,22 @@ log_success "Container setup complete!"
 log_info "Services:"
 log_info "  - VNC: localhost:5901"
 log_info "  - Video stream: UDP port 5000"
+log_info "  - Health monitor: HTTP port ${HEALTH_PORT:-8080}"
 log_info "  - QEMU PID: $EMU_PID"
 log_info "  - Xvfb PID: $XVFB_PID"
 log_info "  - GStreamer PID: $GSTREAMER_PID"
+if [ -n "${HEALTH_PID:-}" ]; then
+  log_info "  - Health monitor PID: $HEALTH_PID"
+fi
 
 # Cleanup function
 cleanup() {
   log_info "Received shutdown signal, cleaning up..."
+  
+  if [ -n "${HEALTH_PID:-}" ]; then
+    log_info "Stopping health monitor (PID: $HEALTH_PID)"
+    kill $HEALTH_PID 2>/dev/null || true
+  fi
   
   if [ -n "${GSTREAMER_PID:-}" ]; then
     log_info "Stopping GStreamer (PID: $GSTREAMER_PID)"

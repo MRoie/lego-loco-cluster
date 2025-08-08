@@ -78,6 +78,8 @@ spec:
               - SYS_ADMIN
         ports:
         - containerPort: {{ .Values.emulator.servicePort }}
+        - containerPort: 8080
+          name: health
         volumeMounts:
         - name: disk
           mountPath: /images

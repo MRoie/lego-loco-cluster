@@ -11,3 +11,6 @@ spec:
   - name: vnc
     port: {{ .Values.emulator.servicePort }}
     targetPort: {{ .Values.emulator.servicePort }}
+  - name: health
+    port: 8080
+    targetPort: 8080

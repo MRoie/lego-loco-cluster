@@ -2,28 +2,66 @@ import React, { useState, useEffect } from 'react';
 
 /**
  * Quality Indicator Component for Individual Instance Cards
- * Shows real-time quality metrics for a specific instance
+ * Shows real-time quality metrics for a specific instance with deep health information
  */
 export default function QualityIndicator({ instanceId, compact = false }) {
   const [qualityMetrics, setQualityMetrics] = useState(null);
+  const [deepHealth, setDeepHealth] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
 
   // Fetch quality metrics for this specific instance
   const fetchInstanceQuality = async () => {
     try {
-      const response = await fetch(`/api/quality/metrics/${instanceId}`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      const [qualityResponse, deepHealthResponse] = await Promise.all([
+        fetch(`/api/quality/metrics/${instanceId}`),
+        fetch(`/api/quality/deep-health/${instanceId}`)
+      ]);
+      
+      if (qualityResponse.ok) {
+        const metrics = await qualityResponse.json();
+        setQualityMetrics(metrics);
       }
-      const metrics = await response.json();
-      setQualityMetrics(metrics);
+      
+      if (deepHealthResponse.ok) {
+        const health = await deepHealthResponse.json();
+        setDeepHealth(health);
+      }
+      
       setError(null);
       setIsLoading(false);
     } catch (err) {
       console.error(`Failed to fetch quality for ${instanceId}:`, err);
       setError(err.message);
       setIsLoading(false);
+    }
+  };
+
+  // Trigger recovery for this instance
+  const triggerRecovery = async () => {
+    setIsRecovering(true);
+    try {
+      const response = await fetch(`/api/quality/recover/${instanceId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ forceRecovery: true })
+      });
+      
+      if (response.ok) {
+        console.log(`Recovery triggered for ${instanceId}`);
+        // Refresh data after a short delay
+        setTimeout(fetchInstanceQuality, 2000);
+      } else {
+        console.error(`Recovery failed for ${instanceId}`);
+      }
+    } catch (err) {
+      console.error(`Recovery error for ${instanceId}:`, err);
+    } finally {
+      setIsRecovering(false);
     }
   };
 
@@ -139,6 +177,103 @@ export default function QualityIndicator({ instanceId, compact = false }) {
             </span>
           </div>
         )}
+
+        {/* Deep Health Status */}
+        {deepHealth && (
+          <div className="flex items-center justify-between">
+            <span className="text-gray-300">QEMU:</span>
+            <span className={
+              deepHealth.overallStatus === 'healthy' ? 'text-green-400' :
+              deepHealth.overallStatus === 'degraded' ? 'text-yellow-400' : 'text-red-400'
+            }>
+              {deepHealth.overallStatus === 'healthy' ? '✓' :
+               deepHealth.overallStatus === 'degraded' ? '⚠' : '✗'}
+            </span>
+          </div>
+        )}
+
+        {/* Recovery Button */}
+        {deepHealth && deepHealth.recoveryNeeded && (
+          <div className="flex items-center justify-center mt-1">
+            <button 
+              onClick={triggerRecovery}
+              disabled={isRecovering}
+              className="px-2 py-1 text-xs bg-orange-600 hover:bg-orange-500 disabled:bg-gray-600 
+                         text-white rounded transition-colors duration-200"
+            >
+              {isRecovering ? '🔄' : '🔧'} {isRecovering ? 'Recovering...' : 'Recover'}
+            </button>
+          </div>
+        )}
+
+        {/* Details Toggle */}
+        <div className="flex items-center justify-center mt-1">
+          <button 
+            onClick={() => setShowDetails(!showDetails)}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors duration-200"
+          >
+            {showDetails ? '▲ Less' : '▼ Details'}
+          </button>
+        </div>
+
+        {/* Detailed Information */}
+        {showDetails && deepHealth && (
+          <div className="mt-2 pt-2 border-t border-gray-600 space-y-1">
+            <div className="text-xs text-gray-400 font-semibold">Deep Health:</div>
+            
+            {deepHealth.deepHealth && (
+              <>
+                {/* Video Health */}
+                {deepHealth.deepHealth.video && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">Video FPS:</span>
+                    <span className="text-blue-400">
+                      {deepHealth.deepHealth.video.estimated_frame_rate || 0}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Audio Health */}
+                {deepHealth.deepHealth.audio && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300">Audio Devices:</span>
+                    <span className="text-blue-400">
+                      {deepHealth.deepHealth.audio.audio_devices || 0}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Performance */}
+                {deepHealth.deepHealth.performance && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">CPU:</span>
+                      <span className="text-blue-400">
+                        {deepHealth.deepHealth.performance.qemu_cpu || 0}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">Memory:</span>
+                      <span className="text-blue-400">
+                        {deepHealth.deepHealth.performance.qemu_memory || 0}%
+                      </span>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+            
+            {/* Failure Type */}
+            {deepHealth.failureType && deepHealth.failureType !== 'none' && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-300">Issue:</span>
+                <span className="text-red-400 capitalize">
+                  {deepHealth.failureType}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -224,6 +359,132 @@ export default function QualityIndicator({ instanceId, compact = false }) {
             </span>
           </div>
         </div>
+
+        {/* Deep Health Information */}
+        {deepHealth && (
+          <div className="border-t border-gray-700 pt-2 space-y-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-blue-400 text-xs font-semibold">QEMU Health:</span>
+              <span className={
+                deepHealth.overallStatus === 'healthy' ? 'text-green-400' :
+                deepHealth.overallStatus === 'degraded' ? 'text-yellow-400' : 'text-red-400'
+              }>
+                {deepHealth.overallStatus}
+              </span>
+            </div>
+            
+            {deepHealth.deepHealth && (
+              <>
+                {/* Video Subsystem */}
+                {deepHealth.deepHealth.video && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">Display Active:</span>
+                      <span className={deepHealth.deepHealth.video.display_active ? 'text-green-400' : 'text-red-400'}>
+                        {deepHealth.deepHealth.video.display_active ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">Estimated FPS:</span>
+                      <span className="text-blue-400">
+                        {deepHealth.deepHealth.video.estimated_frame_rate || 0}
+                      </span>
+                    </div>
+                  </>
+                )}
+                
+                {/* Audio Subsystem */}
+                {deepHealth.deepHealth.audio && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">PulseAudio:</span>
+                      <span className={deepHealth.deepHealth.audio.pulse_running ? 'text-green-400' : 'text-red-400'}>
+                        {deepHealth.deepHealth.audio.pulse_running ? 'Running' : 'Stopped'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">Audio Devices:</span>
+                      <span className="text-blue-400">
+                        {deepHealth.deepHealth.audio.audio_devices || 0}
+                      </span>
+                    </div>
+                  </>
+                )}
+                
+                {/* Performance */}
+                {deepHealth.deepHealth.performance && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">QEMU CPU:</span>
+                      <span className="text-blue-400">
+                        {deepHealth.deepHealth.performance.qemu_cpu || 0}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">QEMU Memory:</span>
+                      <span className="text-blue-400">
+                        {deepHealth.deepHealth.performance.qemu_memory || 0}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">System Load:</span>
+                      <span className="text-blue-400">
+                        {deepHealth.deepHealth.performance.load_average || 0}
+                      </span>
+                    </div>
+                  </>
+                )}
+                
+                {/* Network Health */}
+                {deepHealth.deepHealth.network && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-300">Bridge/TAP:</span>
+                      <span className={
+                        deepHealth.deepHealth.network.bridge_up && deepHealth.deepHealth.network.tap_up ? 
+                        'text-green-400' : 'text-red-400'
+                      }>
+                        {deepHealth.deepHealth.network.bridge_up && deepHealth.deepHealth.network.tap_up ? 'Up' : 'Down'}
+                      </span>
+                    </div>
+                    {(deepHealth.deepHealth.network.tx_errors > 0 || deepHealth.deepHealth.network.rx_errors > 0) && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-300">Network Errors:</span>
+                        <span className="text-yellow-400">
+                          TX: {deepHealth.deepHealth.network.tx_errors}, RX: {deepHealth.deepHealth.network.rx_errors}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+            
+            {/* Failure Analysis */}
+            {deepHealth.failureType && deepHealth.failureType !== 'none' && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-300">Issue Type:</span>
+                <span className="text-red-400 capitalize">
+                  {deepHealth.failureType}
+                </span>
+              </div>
+            )}
+            
+            {/* Recovery Button */}
+            {deepHealth.recoveryNeeded && (
+              <div className="flex items-center justify-center mt-2">
+                <button 
+                  onClick={triggerRecovery}
+                  disabled={isRecovering}
+                  className="px-3 py-1 text-sm bg-orange-600 hover:bg-orange-500 disabled:bg-gray-600 
+                             text-white rounded transition-colors duration-200"
+                >
+                  {isRecovering ? '🔄 Recovering...' : '🔧 Trigger Recovery'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Errors */}
         {qualityMetrics.errors && qualityMetrics.errors.length > 0 && (
