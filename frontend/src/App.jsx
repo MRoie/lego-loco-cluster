@@ -128,10 +128,10 @@ export default function App() {
       {!vrMode && (
         <>
           {/* Header */}
-          <div className="glass-card bg-gray-800/90 backdrop-blur-md border-b border-white/10 p-6">
-            <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="glass-card bg-gray-800/90 backdrop-blur-md border-b border-white/10 p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-7xl mx-auto gap-4 sm:gap-0">
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent te-mono">
+                <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent te-mono">
                   🎮 Lego Loco Cluster
                 </h1>
                 <p className="text-gray-300 text-sm mt-1 te-mono">
@@ -139,7 +139,7 @@ export default function App() {
                   {showOnlyProvisioned ? ' (provisioned only)' : ''}
                 </p>
               </div>
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 md:space-x-4 flex-wrap gap-2">
                 <button
                   onClick={() => setShowOnlyProvisioned(!showOnlyProvisioned)}
                   className={`px-4 py-2 rounded-lg text-sm transition-all duration-200 te-mono card-depth-subtle ${
@@ -161,8 +161,8 @@ export default function App() {
           </div>
 
           {/* 3x3 Grid Container */}
-          <div className="p-8 grid-container">
-            <div className="grid grid-cols-3 gap-8 max-w-7xl mx-auto">
+          <div className="p-4 md:p-6 lg:p-8 grid-container">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8 max-w-7xl mx-auto w-full">
               {gridInstances.map((instance, index) => (
                 <motion.div 
                   key={index} 
@@ -210,15 +210,15 @@ export default function App() {
           </div>
 
           {/* Status Bar */}
-          <div className="fixed bottom-0 left-0 right-0 glass-card bg-gray-800/90 backdrop-blur-md border-t border-white/10 p-4">
-            <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="fixed bottom-0 left-0 right-0 glass-card bg-gray-800/90 backdrop-blur-md border-t border-white/10 p-3 md:p-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto gap-2 sm:gap-0">
               <div className="flex items-center space-x-4">
                 <span className="text-sm text-gray-300 te-mono">Active Instance:</span>
                 <span className="text-sm font-medium bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent te-mono">
                   {displayInstances[active]?.id || 'None'}
                 </span>
               </div>
-              <div className="flex items-center space-x-8">
+              <div className="flex items-center space-x-4 md:space-x-8">
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 status-glow-green rounded-full"></div>
                   <span className="text-xs text-gray-300 te-mono">Ready ({displayInstances.filter(i => i?.status === 'ready').length})</span>
