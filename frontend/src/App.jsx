@@ -117,11 +117,32 @@ export default function App() {
   // Get the instances to display based on filter
   const displayInstances = showOnlyProvisioned ? provisionedInstances : instances;
   
-  // Create a 3x3 grid array, filling empty slots with null
-  const gridInstances = Array(9).fill(null);
-  displayInstances.slice(0, 9).forEach((instance, index) => {
-    gridInstances[index] = instance;
-  });
+  // Create a 3x3 grid array with mixed states for demonstration
+  const createDemoInstances = () => {
+    // If no real instances, show demo states
+    if (displayInstances.length === 0) {
+      return [
+        { id: 'demo-0', name: 'MARY', status: 'ready', provisioned: true, ready: true },
+        { id: 'demo-1', name: 'PETER', status: 'running', provisioned: true, ready: true },
+        { id: 'demo-2', name: 'LUCY', status: 'booting', provisioned: true, ready: false },
+        { id: 'demo-3', name: 'JOHNNY', status: 'error', provisioned: true, ready: false },
+        { id: 'demo-4', name: 'FRANK', status: 'ready', provisioned: false, ready: false },
+        { id: 'demo-5', name: 'ANNA', status: 'unknown', provisioned: true, ready: false },
+        null, // Empty slot
+        null, // Empty slot  
+        null  // Empty slot
+      ];
+    }
+    
+    // Use real instances if available
+    const gridInstances = Array(9).fill(null);
+    displayInstances.slice(0, 9).forEach((instance, index) => {
+      gridInstances[index] = instance;
+    });
+    return gridInstances;
+  };
+  
+  const gridInstances = createDemoInstances();
 
   return (
     <div className="min-h-screen lego-background text-black relative">

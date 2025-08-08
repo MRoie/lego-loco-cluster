@@ -128,28 +128,47 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
         className="tile"
         position={`${pos.x} ${pos.y} -3`}
         geometry="primitive: plane; width: 1.2; height: 0.9"
-        material={`color: ${active === idx ? '#555' : '#222'}`}
+        material={`color: ${active === idx ? '#FFD700' : '#F5F5DC'}; side: double`}
         scale={active === idx ? '1.4 1.4 1' : '1 1 1'}
         ref={planeRef}
         onClick={handleClick}
       >
+        {/* LEGO-style border for VR tiles */}
+        <a-entity
+          geometry="primitive: plane; width: 1.3; height: 1.0"
+          material={`color: ${active === idx ? '#0055BF' : '#C4281C'}; side: double`}
+          position="0 0 -0.01"
+        />
+        
         {status && status !== 'ready' && (
           <a-text
             value={status}
-            color="#FFF"
+            color={active === idx ? '#000000' : '#FFFFFF'}
             align="center"
             width="1.2"
             position="0 0 0.02"
+            font="roboto"
           />
         )}
         
         {!textureCreated && (
           <a-text
-            value={`Connecting to ${inst.id}...`}
-            color="#FFF"
+            value={`${inst.name || inst.id}`}
+            color={active === idx ? '#000000' : '#333333'}
             align="center"
             width="1.0"
-            position="0 0 0.02"
+            position="0 -0.3 0.02"
+            font="roboto"
+          />
+        )}
+        
+        {!textureCreated && (
+          <a-text
+            value="Connecting..."
+            color={active === idx ? '#666666' : '#CCCCCC'}
+            align="center"
+            width="0.8"
+            position="0 0.3 0.02"
             font="roboto"
           />
         )}
@@ -366,12 +385,13 @@ export default function VRScene({ onExit }) {
 
   return (
     <div className="w-full h-full relative">
-      <div className="absolute top-4 left-4 text-white z-10 font-sans text-sm">
-        Active tile: {active + 1} <span className="text-gray-400">{info}</span>
-        <div className="text-xs text-gray-300 mt-1">
-          VNC Connected: {connectedVNCs.size}/{instances.length}
+      <div className="absolute top-4 left-4 text-black z-10 font-sans text-sm bg-white/90 p-3 rounded-lg border-2 border-red-600">
+        <div className="font-bold text-red-600 mb-2">🎮 LEGO LOCO VR</div>
+        <div>Active tile: <span className="font-bold text-blue-600">{active + 1}</span> <span className="text-gray-600">{info}</span></div>
+        <div className="text-xs text-gray-700 mt-1">
+          VNC Connected: <span className="font-bold text-green-600">{connectedVNCs.size}</span>/{instances.length}
         </div>
-        <div className="text-xs text-gray-300">
+        <div className="text-xs text-gray-700">
           Keys 1-9: Switch tiles | Type to control active emulator
         </div>
       </div>
@@ -379,9 +399,9 @@ export default function VRScene({ onExit }) {
       <div className="absolute top-4 right-4 z-10">
         <button
           onClick={onExit}
-          className="bg-yellow-500 text-black px-3 py-1 rounded"
+          className="lego-vr-button bg-yellow-400 text-black px-4 py-2 rounded-lg border-3 border-red-600 font-bold shadow-lg hover:bg-yellow-300"
         >
-          Exit VR
+          🚪 Exit VR
         </button>
         <div className="inline-block ml-2">
           <ControlsConfig
@@ -393,7 +413,8 @@ export default function VRScene({ onExit }) {
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-4 z-10">
+      <div className="absolute bottom-4 left-4 z-10 bg-white/90 p-2 rounded-lg border-2 border-yellow-400">
+        <label className="text-sm font-bold text-black mb-1 block">🔊 Volume:</label>
         <input
           type="range"
           min="0"
@@ -408,11 +429,13 @@ export default function VRScene({ onExit }) {
               return arr;
             });
           }}
+          className="w-20"
         />
       </div>
 
       {menuOpen && (
-        <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-gray-800 bg-opacity-80 p-2 rounded z-10">
+        <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 bg-cream border-4 border-red-600 rounded-lg shadow-lg z-10 p-3">
+          <div className="text-sm font-bold text-black mb-2 text-center">🎯 Select Instance</div>
           {instances.map((inst, idx) => (
             <button
               key={inst.id}
@@ -421,9 +444,9 @@ export default function VRScene({ onExit }) {
                 setActiveIds([inst.id]);
                 setMenuOpen(false);
               }}
-              className="block text-sm text-white px-2 py-1 w-full text-left hover:bg-gray-700"
+              className="block text-sm text-black px-3 py-2 w-full text-left hover:bg-yellow-200 rounded border-2 border-transparent hover:border-blue-400 font-bold mb-1"
             >
-              {inst.id}
+              🎮 {inst.name || inst.id}
             </button>
           ))}
         </div>
@@ -453,7 +476,31 @@ export default function VRScene({ onExit }) {
           ))}
         </a-entity>
         
-        <a-sky color="#111"></a-sky>
+        <a-sky color="#00A651"></a-sky>
+        
+        {/* LEGO baseplate grid pattern in 3D space */}
+        <a-entity
+          geometry="primitive: plane; width: 20; height: 20"
+          material="color: #00A651; opacity: 0.8"
+          position="0 -2 -5"
+          rotation="-90 0 0"
+        >
+          {/* Grid lines for LEGO baseplate effect */}
+          {Array(20).fill(0).map((_, i) => (
+            <a-entity key={`grid-${i}`}>
+              <a-entity
+                geometry={`primitive: plane; width: 20; height: 0.02`}
+                material="color: #ffffff; opacity: 0.1"
+                position={`0 0 ${(i - 10) * 1}`}
+              />
+              <a-entity
+                geometry={`primitive: plane; width: 0.02; height: 20`}
+                material="color: #ffffff; opacity: 0.1"
+                position={`${(i - 10) * 1} 0 0`}
+              />
+            </a-entity>
+          ))}
+        </a-entity>
         
         <a-entity 
           id="rig" 
