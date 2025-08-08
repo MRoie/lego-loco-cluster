@@ -107,33 +107,31 @@ export default function InstanceCard({ instance, isActive, onClick }) {
       whileTap={{ scale: 0.98 }}
       layout
     >
-      {/* Header with instance ID and status - styled like LEGO character card header */}
-      <div className="relative p-3 bg-yellow-50 border-b-2 border-yellow-400">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-bold text-black lego-text truncate pr-2">
-            {instance.name || instance.id}
-          </h3>
-          <div className="flex items-center space-x-2 flex-shrink-0">
-            <div className={`w-3 h-3 rounded-sm ${getStatusColor(instance.status)}`} />
-            <span className="text-xs text-black lego-text font-semibold">
-              {getStatusText(instance.status, instance.provisioned)}
-            </span>
+      {/* Header with instance ID and status - styled like LEGO character card name plate */}
+      <div className="relative bg-gradient-to-b from-yellow-100 to-yellow-50 border-b-3 border-red-600 shadow-inner">
+        <div className="p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="lego-name-plate px-2 py-1 bg-white/80 border-2 border-gray-400 rounded shadow-sm">
+              <span className="text-sm font-bold text-black lego-text tracking-wide">
+                {instance.name || instance.id}
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className={`w-4 h-4 rounded-sm ${getStatusColor(instance.status)} border-2 border-black/20`} />
+            </div>
           </div>
-        </div>
-        {instance.description && (
-          <p className="text-xs text-gray-700 truncate lego-text mb-2 font-medium">{instance.description}</p>
-        )}
-        
-        {/* LEGO-style control buttons */}
-        <div className="flex justify-between items-center">
-          <AudioSinkSelector mediaRef={videoRef} />
-          <div className="flex space-x-1">
-            <button className="w-6 h-6 bg-red-500 border-2 border-red-600 rounded text-white text-xs font-bold flex items-center justify-center hover:bg-red-400 transition-colors">
-              ×
-            </button>
-            <button className="w-6 h-6 bg-blue-500 border-2 border-blue-600 rounded text-white text-xs font-bold flex items-center justify-center hover:bg-blue-400 transition-colors">
-              ?
-            </button>
+          
+          {/* Control buttons row like LEGO character card buttons */}
+          <div className="flex justify-between items-center mt-2">
+            <AudioSinkSelector mediaRef={videoRef} />
+            <div className="flex space-x-1">
+              <button className="lego-mini-button bg-red-500 border-red-600 hover:bg-red-400">
+                ×
+              </button>
+              <button className="lego-mini-button bg-blue-500 border-blue-600 hover:bg-blue-400">
+                ?
+              </button>
+            </div>
           </div>
         </div>
       </div>

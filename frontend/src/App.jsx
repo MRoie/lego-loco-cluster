@@ -17,7 +17,7 @@ export default function App() {
   const [vrMode, setVrMode] = useState(defaultVr);
   const [status, setStatus] = useState({});
   const [focused, setFocused] = useState(null);
-  const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(true);
+  const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(false);
 
   const postActive = (id) => {
     setActiveIds([id]);
@@ -127,44 +127,24 @@ export default function App() {
     <div className="min-h-screen lego-background text-black relative">
       {!vrMode && (
         <>
-          {/* Header */}
-          <div className="lego-header p-4 md:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between max-w-7xl mx-auto gap-4 sm:gap-0">
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-white lego-title">
-                  🎮 LEGO LOCO CLUSTER
-                </h1>
-                <p className="text-red-100 text-sm mt-1 lego-text">
-                  {displayInstances.length} of {instances.length} instances
-                  {showOnlyProvisioned ? ' (provisioned only)' : ''}
-                </p>
-              </div>
-              <div className="flex items-center space-x-2 md:space-x-4 flex-wrap gap-2">
-                <button
-                  onClick={() => setShowOnlyProvisioned(!showOnlyProvisioned)}
-                  className={`px-4 py-2 lego-button lego-text text-sm ${
-                    showOnlyProvisioned 
-                      ? '' 
-                      : 'opacity-70 hover:opacity-100'
-                  }`}
-                >
-                  {showOnlyProvisioned ? 'Show All' : 'Provisioned Only'}
-                </button>
-                <button
-                  onClick={() => setVrMode(true)}
-                  className="bg-yellow-400 text-black px-6 py-2 border-2 border-yellow-500 rounded-lg font-bold hover:bg-yellow-300 transition-all duration-200 lego-text shadow-lg"
-                  style={{
-                    boxShadow: '0 3px 0 #F59E0B, 0 6px 8px rgba(0, 0, 0, 0.2)',
-                    transform: 'translateY(0)'
-                  }}
-                  onMouseDown={(e) => e.target.style.transform = 'translateY(1px)'}
-                  onMouseUp={(e) => e.target.style.transform = 'translateY(0)'}
-                  onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
-                >
-                  Enter VR
-                </button>
-              </div>
-            </div>
+          {/* Transparent Header with VR Button */}
+          <div className="absolute top-0 right-0 z-10 p-4">
+            <button
+              onClick={() => setVrMode(true)}
+              className="lego-vr-button"
+              title="Enter VR Mode"
+            >
+              {/* VR Headset Icon */}
+              <svg 
+                width="24" 
+                height="24" 
+                viewBox="0 0 24 24" 
+                fill="currentColor"
+                className="w-6 h-6"
+              >
+                <path d="M20 8v8a3 3 0 01-3 3h-2.5l-1.5-2H8l-1.5 2H4a3 3 0 01-3-3V8a3 3 0 013-3h13a3 3 0 013 3zM6.5 13.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm11 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+              </svg>
+            </button>
           </div>
 
           {/* 3x3 Grid Container */}
@@ -215,31 +195,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Status Bar */}
-          <div className="fixed bottom-0 left-0 right-0 lego-status-bar p-3 md:p-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto gap-2 sm:gap-0">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-red-100 lego-text">Active Instance:</span>
-                <span className="text-sm font-bold text-yellow-300 lego-text">
-                  {displayInstances[active]?.id || 'None'}
-                </span>
-              </div>
-              <div className="flex items-center space-x-4 md:space-x-8">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 lego-status-ready rounded-sm"></div>
-                  <span className="text-xs text-red-100 lego-text">Ready ({displayInstances.filter(i => i?.status === 'ready').length})</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 lego-status-booting rounded-sm"></div>
-                  <span className="text-xs text-red-100 lego-text">Booting ({displayInstances.filter(i => i?.status === 'booting').length})</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 lego-status-error rounded-sm"></div>
-                  <span className="text-xs text-red-100 lego-text">Error ({displayInstances.filter(i => i?.status === 'error').length})</span>
-                </div>
-              </div>
-            </div>
-          </div>
+
         </>
       )}
       
