@@ -17,24 +17,40 @@
 /* LEGO-style card design inspired by the character cards */
 .lego-card {
   background: var(--lego-cream);
-  border: 6px solid var(--lego-red);
-  border-radius: 12px;
+  border: 8px solid var(--lego-red);
+  border-radius: 16px;
   box-shadow: 
-    inset 0 0 0 3px var(--lego-yellow),
-    inset 0 0 0 6px var(--lego-cream),
-    0 6px 0 var(--lego-red),
-    0 12px 24px rgba(0, 0, 0, 0.3);
+    inset 0 0 0 4px var(--lego-yellow),
+    inset 4px 4px 8px rgba(0, 0, 0, 0.1),
+    0 8px 0 #a01e15,
+    0 16px 32px rgba(0, 0, 0, 0.4);
   transition: all 0.3s ease;
   overflow: hidden;
+  position: relative;
+}
+
+.lego-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, 
+    rgba(255,255,255,0.3) 0%, 
+    transparent 50%, 
+    rgba(0,0,0,0.1) 100%);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .lego-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-4px);
   box-shadow: 
-    inset 0 0 0 3px var(--lego-yellow),
-    inset 0 0 0 6px var(--lego-cream),
-    0 9px 0 var(--lego-red),
-    0 18px 32px rgba(0, 0, 0, 0.4);
+    inset 0 0 0 4px var(--lego-yellow),
+    inset 4px 4px 8px rgba(0, 0, 0, 0.1),
+    0 12px 0 #a01e15,
+    0 24px 40px rgba(0, 0, 0, 0.5);
 }
 
 /* LEGO-style empty slot */
@@ -145,9 +161,13 @@
 /* Stream area styling */
 .lego-stream-area {
   background: var(--lego-black);
-  border: 3px solid var(--lego-yellow);
-  border-radius: 4px;
-  box-shadow: inset 0 0 0 1px var(--lego-red);
+  border: 4px solid var(--lego-yellow);
+  border-radius: 8px;
+  box-shadow: 
+    inset 0 0 0 2px var(--lego-red),
+    inset 0 4px 8px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 2;
 }
 
 /* Animated loading states */
@@ -202,38 +222,45 @@
 
 /* LEGO-style mini buttons */
 .lego-mini-button {
-  width: 24px;
-  height: 24px;
-  border: 2px solid;
-  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  border: 3px solid;
+  border-radius: 6px;
   color: white;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: bold;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 0 currentColor, 0 4px 6px rgba(0, 0, 0, 0.2);
+  box-shadow: 
+    0 3px 0 currentColor, 
+    0 6px 12px rgba(0, 0, 0, 0.3);
 }
 
 .lego-mini-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 0 currentColor, 0 6px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 4px 0 currentColor, 
+    0 8px 16px rgba(0, 0, 0, 0.4);
 }
 
 .lego-mini-button:active {
   transform: translateY(1px);
-  box-shadow: 0 1px 0 currentColor, 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 
+    0 2px 0 currentColor, 
+    0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* LEGO-style name plate */
 .lego-name-plate {
-  background: linear-gradient(135deg, #FFFFFF 0%, #F0F0F0 100%);
-  border: 2px solid #999999;
-  border-radius: 6px;
+  background: linear-gradient(135deg, #FFFFFF 0%, #F8F8F8 50%, #E8E8E8 100%);
+  border: 3px solid #666666;
+  border-radius: 8px;
   box-shadow: 
-    inset 0 1px 0 rgba(255,255,255,0.8),
-    0 2px 4px rgba(0,0,0,0.1);
+    inset 0 2px 0 rgba(255,255,255,0.9),
+    inset 0 -2px 0 rgba(0,0,0,0.1),
+    0 4px 8px rgba(0,0,0,0.2);
 }
 
 /* LEGO-style VR button */
