@@ -49,8 +49,8 @@ fi
 # Resource requirements for CI
 echo "--- CI Resource Requirements ---"
 MIN_CPUS=2
-MIN_MEMORY_MB=1536
-MIN_DISK_GB=6
+MIN_MEMORY_MB=1900  # Updated to match minikube minimum
+MIN_DISK_GB=8       # Updated to match cluster script
 
 echo "Minimum Requirements:"
 echo "  CPUs: $MIN_CPUS"

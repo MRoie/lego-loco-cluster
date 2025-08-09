@@ -42,8 +42,17 @@ ws.on('error', () => process.exit(1));
 NODE
 ) && log "WebSocket active test passed" || { log "WebSocket active test failed"; fail=1; }
 
-# Check stream URLs - only count working streams, don't fail if some are unavailable
-STREAMS=$(grep -o '"streamUrl": "[^"]*"' "$STREAM_CONFIG" | cut -d'"' -f4)
+# Check stream URLs - require ALL discovered instances to be working for true success
+if [[ -n "${STREAM_CONFIG:-}" ]] && [[ -f "$STREAM_CONFIG" ]]; then
+  # Use the live instances configuration if available
+  STREAMS=$(grep -o '"streamUrl": "[^"]*"' "$STREAM_CONFIG" | cut -d'"' -f4)
+  log "Using live stream configuration: $STREAM_CONFIG"
+else
+  # Fallback to static configuration
+  STREAMS=$(grep -o '"streamUrl": "[^"]*"' "$STREAM_CONFIG" | cut -d'"' -f4)
+  log "Using static stream configuration: $STREAM_CONFIG"
+fi
+
 working_streams=0
 total_streams=0
 
@@ -58,10 +67,22 @@ for url in $STREAMS; do
   fi
 done
 
-if [ $working_streams -gt 0 ]; then
-  log "At least $working_streams/$total_streams streams are working"
+# Success criteria: For discovered instances, all should work. For static instances, at least 1 should work.
+success_threshold=1
+if [[ "$total_streams" -le 3 ]]; then
+  # If we have discovered instances (typically fewer), require all to work
+  success_threshold=$total_streams
+  log "Discovered instances mode: requiring all $total_streams streams to work"
 else
-  log "No streams reachable (may be normal in test environment)"
+  # Static configuration mode: allow partial success
+  success_threshold=1
+  log "Static configuration mode: requiring at least 1 of $total_streams streams"
+fi
+
+if [ $working_streams -ge $success_threshold ]; then
+  log "✅ Stream test passed: $working_streams/$total_streams streams working (required: $success_threshold)"
+else
+  log "❌ Stream test failed: only $working_streams/$total_streams streams working (required: $success_threshold)"
   fail=1
 fi
 
