@@ -37,8 +37,9 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha
+            type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value={{branch}},enable=true
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -52,11 +53,15 @@ jobs:
       - name: Test CI image
         run: |
           echo "Testing CI base image functionality"
-          docker run --rm ${{ env.REGISTRY }}/mroie/${{ env.IMAGE_NAME }}:latest \
+          # Use the first tag from the build (works for any branch)
+          IMAGE_TAG=$(echo '${{ steps.meta.outputs.tags }}' | head -n1)
+          echo "Testing image: $IMAGE_TAG"
+          docker run --rm "$IMAGE_TAG" \
             bash -c "
               echo 'Testing installed packages...'
               kubectl version --client=true
               helm version --short
+              minikube version --short
               node --version
               npm --version
               docker --version || echo 'Docker client not available in image (expected)'

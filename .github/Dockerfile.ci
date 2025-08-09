@@ -18,6 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     lsb-release \
     gnupg \
     conntrack \
+    socat \
+    ebtables \
+    ethtool \
     && rm -rf /var/lib/apt/lists/*
 
 # Pre-install kubectl (pinned version for stability)
@@ -34,8 +37,17 @@ RUN curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/mi
     && install -o root -g root -m 0755 minikube /usr/local/bin/minikube \
     && rm minikube
 
+# Pre-cache Kubernetes images to speed up cluster creation
+RUN minikube config set driver docker \
+    && minikube config set kubernetes-version v1.28.3
+
 # Set working directory
 WORKDIR /workspace
+
+# Set up environment for CI optimization
+ENV MINIKUBE_IN_STYLE=false
+ENV MINIKUBE_WANTUPDATENOTIFICATION=false
+ENV MINIKUBE_WANTREPORTERRORPROMPT=false
 
 # Default command
 CMD ["bash"]

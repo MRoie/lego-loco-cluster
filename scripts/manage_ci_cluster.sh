@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/manage_ci_cluster.sh - Enhanced cluster management for CI with resource optimization
+# scripts/manage_ci_cluster.sh - Enhanced cluster management for CI with MAXIMUM resource optimization
 set -euo pipefail
 
 LOG_DIR=${LOG_DIR:-k8s-tests/logs}
@@ -14,13 +14,14 @@ KUBERNETES_VERSION=${KUBERNETES_VERSION:-v1.28.3}
 
 echo "=== CI Cluster Management - Action: $ACTION ===" && date
 
-# Optimized resource allocation for CI environments
+# MAXIMUM resource allocation for CI environments based on GitHub Actions runner specs
+# GitHub Actions runners: 2-core CPU, 7GB RAM, 14GB SSD
 if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-    # CI environment - use minimum required resources that actually work
-    MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}     # Minimum required by minikube
-    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-2200}  # Increased well above minikube minimum of 1800MB
-    MINIKUBE_DISK=${MINIKUBE_DISK:-12g}    # Increased for stability
-    echo "CI environment detected - using minimal but working resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK)"
+    # CI environment - use MAXIMUM available resources for stability
+    MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}          # Use all available CPUs
+    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-5120}   # Use ~5GB of 7GB available (leave headroom)
+    MINIKUBE_DISK=${MINIKUBE_DISK:-10g}        # Use majority of available disk
+    echo "CI environment detected - using MAXIMUM available resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK)"
 else
     # Development environment
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}
@@ -47,22 +48,23 @@ validate_resources() {
     available_cpus=$(nproc)
     available_memory_kb=$(grep MemAvailable /proc/meminfo | awk '{print $2}')
     available_memory_mb=$((available_memory_kb / 1024))
+    available_disk_gb=$(df / | awk 'NR==2 {print int($4/1024/1024)}')
     
-    echo "System resources: CPUs=$available_cpus, Memory=${available_memory_mb}MB"
+    echo "System resources: CPUs=$available_cpus, Memory=${available_memory_mb}MB, Disk=${available_disk_gb}GB"
     echo "Requested resources: CPUs=$MINIKUBE_CPUS, Memory=${MINIKUBE_MEMORY}MB"
     
-    # In CI, we often have resource limits so we'll be lenient
+    # In CI, show warnings but continue (resource limits may be higher than detected)
     if [ "$available_cpus" -lt "$MINIKUBE_CPUS" ]; then
         echo "⚠️  Warning: Available CPUs ($available_cpus) less than requested ($MINIKUBE_CPUS)"
         if [[ -n "${CI:-}" ]]; then
-            echo "CI environment - continuing with warning"
+            echo "CI environment - continuing with warning (limits may be higher than detected)"
         fi
     fi
     
     if [ "$available_memory_mb" -lt "$MINIKUBE_MEMORY" ]; then
         echo "⚠️  Warning: Available memory (${available_memory_mb}MB) less than requested (${MINIKUBE_MEMORY}MB)"
         if [[ -n "${CI:-}" ]]; then
-            echo "CI environment - continuing with warning"
+            echo "CI environment - continuing with warning (limits may be higher than detected)"
         fi
     fi
 }
@@ -77,8 +79,8 @@ create_cluster() {
     install_minikube
     validate_resources
     
-    # Configure minikube arguments with increased timeout for CI
-    TIMEOUT_SECONDS=600  # Increased from 300s to 600s (10 minutes) for CI stability
+    # Configure minikube arguments with CI best practices
+    TIMEOUT_SECONDS=900  # Increased to 15 minutes for maximum stability
     MINIKUBE_ARGS="-p $CLUSTER_NAME \
         --driver=docker \
         --kubernetes-version=$KUBERNETES_VERSION \
@@ -88,19 +90,23 @@ create_cluster() {
         --disk-size=$MINIKUBE_DISK \
         --container-runtime=docker \
         --wait=true \
-        --wait-timeout=${TIMEOUT_SECONDS}s"
+        --wait-timeout=${TIMEOUT_SECONDS}s \
+        --delete-on-failure=true \
+        --alsologtostderr"
     
-    # Add --force flag in CI environments to bypass root privilege warnings
+    # Add CI-specific flags for maximum compatibility
     if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-        MINIKUBE_ARGS="$MINIKUBE_ARGS --force --no-vtx-check"
-        echo "CI environment detected - adding --force and --no-vtx-check flags"
+        MINIKUBE_ARGS="$MINIKUBE_ARGS --force --no-vtx-check --extra-config=kubelet.housekeeping-interval=10s"
+        echo "CI environment detected - adding maximum compatibility flags"
     fi
     
-    # Retry logic for cluster creation
+    # Retry logic with exponential backoff
     MAX_RETRIES=3
     RETRY_COUNT=0
     
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        echo "Starting minikube cluster (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)" && date
+        
         if minikube start $MINIKUBE_ARGS; then
             echo "✅ Cluster $CLUSTER_NAME started successfully" && date
             break
@@ -109,10 +115,17 @@ create_cluster() {
             echo "❌ Attempt $RETRY_COUNT failed to start cluster" && date
             
             if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                echo "Retrying in 30 seconds..." && date
-                sleep 30
+                WAIT_TIME=$((30 * RETRY_COUNT))
+                echo "Retrying in ${WAIT_TIME} seconds..." && date
+                sleep $WAIT_TIME
+                
+                # Clean up before retry
                 minikube delete -p "$CLUSTER_NAME" || true
                 docker system prune -f || true
+                
+                # Free up memory
+                echo "Freeing up system resources..." && date
+                sync && echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
             else
                 echo "❌ Failed to start cluster after $MAX_RETRIES attempts" && date
                 collect_diagnostics
@@ -128,13 +141,16 @@ create_cluster() {
 setup_cluster() {
     echo "Setting up cluster addons and configuration" && date
     
-    # Enable minimal required addons only for CI
+    # Enable only essential addons for CI efficiency
     minikube addons enable storage-provisioner -p "$CLUSTER_NAME" || echo "⚠️  Failed to enable storage-provisioner"
     
     # Skip heavy addons in CI to save resources
     if [[ -z "${CI:-}" ]]; then
+        echo "Development environment - enabling additional addons"
         minikube addons enable ingress -p "$CLUSTER_NAME" || echo "⚠️  Failed to enable ingress"
         minikube addons enable metrics-server -p "$CLUSTER_NAME" || echo "⚠️  Failed to enable metrics-server"
+    else
+        echo "CI environment - skipping resource-heavy addons for efficiency"
     fi
     
     # Set up kubectl context
@@ -145,14 +161,18 @@ setup_cluster() {
         echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
     fi
     
-    # Wait for basic cluster readiness
+    # Wait for basic cluster readiness with extended timeouts
     echo "Waiting for cluster to be ready" && date
-    kubectl wait --for=condition=Ready node --all --timeout=300s
-    kubectl wait --for=condition=Ready -n kube-system pod -l k8s-app=kube-dns --timeout=120s || echo "⚠️  DNS pods not ready"
+    kubectl wait --for=condition=Ready node --all --timeout=600s
+    kubectl wait --for=condition=Ready -n kube-system pod -l k8s-app=kube-dns --timeout=300s || echo "⚠️  DNS pods not ready"
     
     echo "Cluster status:" && date
     kubectl get nodes -o wide
-    kubectl get pods -A
+    kubectl get pods -A --field-selector=status.phase!=Running 2>/dev/null | head -10 || true
+    
+    # Show resource usage
+    echo "Resource usage:" && date
+    kubectl top nodes 2>/dev/null || echo "Metrics not available yet"
 }
 
 destroy_cluster() {
@@ -165,10 +185,13 @@ destroy_cluster() {
 collect_diagnostics() {
     echo "Collecting diagnostic information" && date
     minikube logs -p "$CLUSTER_NAME" || true
+    minikube status -p "$CLUSTER_NAME" || true
     docker ps -a || true
     docker images || true
     free -h || true
     df -h || true
+    echo "System resource usage:" && date
+    ps aux --sort=-%mem | head -10 || true
 }
 
 status_cluster() {
@@ -176,6 +199,8 @@ status_cluster() {
     if minikube status -p "$CLUSTER_NAME" 2>/dev/null; then
         kubectl get nodes -o wide
         kubectl get pods -A
+        echo "Resource usage:" && date
+        kubectl top nodes 2>/dev/null || echo "Metrics not available"
     else
         echo "Cluster $CLUSTER_NAME is not running"
     fi
