@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('../utils/logger');
 
 class KubernetesDiscovery {
   constructor() {
@@ -10,7 +11,7 @@ class KubernetesDiscovery {
     
     // Initialize asynchronously
     this.init().catch(error => {
-      console.warn('Failed to initialize KubernetesDiscovery:', error);
+      logger.warn("Failed to initialize KubernetesDiscovery", { error });
     });
   }
 
@@ -23,11 +24,11 @@ class KubernetesDiscovery {
       // Try to load in-cluster config first (when running in Kubernetes)
       if (fs.existsSync('/var/run/secrets/kubernetes.io/serviceaccount/token')) {
         this.kc.loadFromCluster();
-        console.log('Loaded Kubernetes in-cluster configuration');
+        logger.info("Loaded Kubernetes in-cluster configuration");
       } else {
         // Fallback to default kubeconfig
         this.kc.loadFromDefault();
-        console.log('Loaded Kubernetes configuration from default kubeconfig');
+        logger.info("Loaded Kubernetes configuration from default kubeconfig");
       }
       
       this.k8sApi = this.kc.makeApiClient(k8s.CoreV1Api);
@@ -42,26 +43,26 @@ class KubernetesDiscovery {
       // Try to detect namespace from environment or service account
       if (process.env.KUBERNETES_NAMESPACE) {
         this.namespace = process.env.KUBERNETES_NAMESPACE;
-        console.log(`Using namespace from KUBERNETES_NAMESPACE: ${this.namespace}`);
+        logger.info("Using namespace from KUBERNETES_NAMESPACE", { namespace: this.namespace });
       } else if (fs.existsSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace')) {
         this.namespace = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace', 'utf8').trim();
-        console.log(`Using namespace from service account: ${this.namespace}`);
+        logger.info("Using namespace from service account", { namespace: this.namespace });
       } else {
         // In CI environments, use default namespace
         this.namespace = 'default';
-        console.log(`Using default namespace: ${this.namespace}`);
+        logger.info("Using default namespace", { namespace: this.namespace });
       }
       
       // Validate namespace is not empty
       if (!this.namespace || this.namespace.trim() === '') {
         this.namespace = 'default';
-        console.warn('Namespace was empty, falling back to default');
+        logger.warn("Namespace was empty, falling back to default");
       }
       
-      console.log(`Kubernetes discovery initialized for namespace: ${this.namespace}`);
+      logger.info("Kubernetes discovery initialized for namespace", { namespace: this.namespace });
     } catch (error) {
-      console.warn('Failed to initialize Kubernetes client:', error.message);
-      console.warn('Auto-discovery will be disabled. Falling back to static configuration.');
+      logger.warn('Failed to initialize Kubernetes client', { error: error.message });
+      logger.warn('Auto-discovery will be disabled. Falling back to static configuration.');
     }
   }
 
