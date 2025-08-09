@@ -33,7 +33,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/mroie/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -52,7 +52,7 @@ jobs:
       - name: Test CI image
         run: |
           echo "Testing CI base image functionality"
-          docker run --rm ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:latest \
+          docker run --rm ${{ env.REGISTRY }}/mroie/${{ env.IMAGE_NAME }}:latest \
             bash -c "
               echo 'Testing installed packages...'
               kubectl version --client=true
