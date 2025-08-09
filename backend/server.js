@@ -290,6 +290,68 @@ app.get("/api/quality/recovery-status", (req, res) => {
   }
 });
 
+// ========== CIRCUIT BREAKER MONITORING API ==========
+
+// Get circuit breaker metrics
+app.get("/api/circuit-breaker/metrics", (req, res) => {
+  try {
+    const circuitBreakerManager = require('./services/circuitBreaker');
+    const metrics = circuitBreakerManager.getAllMetrics();
+    const summary = circuitBreakerManager.getSummary();
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      summary,
+      breakers: metrics
+    });
+  } catch (e) {
+    console.error("Failed to get circuit breaker metrics:", e.message);
+    res.status(500).json({ error: "Failed to get circuit breaker metrics" });
+  }
+});
+
+// Get circuit breaker summary
+app.get("/api/circuit-breaker/summary", (req, res) => {
+  try {
+    const circuitBreakerManager = require('./services/circuitBreaker');
+    const summary = circuitBreakerManager.getSummary();
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      ...summary
+    });
+  } catch (e) {
+    console.error("Failed to get circuit breaker summary:", e.message);
+    res.status(500).json({ error: "Failed to get circuit breaker summary" });
+  }
+});
+
+// Get Kubernetes discovery circuit breaker info
+app.get("/api/circuit-breaker/kubernetes", async (req, res) => {
+  try {
+    const k8sInfo = await instanceManager.getKubernetesInfo();
+    const k8sDiscovery = instanceManager.k8sDiscovery;
+    
+    if (k8sDiscovery && k8sDiscovery.getCircuitBreakerMetrics) {
+      const cbMetrics = k8sDiscovery.getCircuitBreakerMetrics();
+      res.json({
+        timestamp: new Date().toISOString(),
+        kubernetesDiscovery: k8sInfo,
+        circuitBreaker: cbMetrics
+      });
+    } else {
+      res.json({
+        timestamp: new Date().toISOString(),
+        kubernetesDiscovery: k8sInfo,
+        circuitBreaker: { error: 'Circuit breaker metrics not available' }
+      });
+    }
+  } catch (e) {
+    console.error("Failed to get Kubernetes circuit breaker info:", e.message);
+    res.status(500).json({ error: "Failed to get Kubernetes circuit breaker info" });
+  }
+});
+
 // Start/stop quality monitoring
 app.post("/api/quality/monitor/:action", (req, res) => {
   try {
