@@ -1,19 +1,25 @@
-const k8s = require('@kubernetes/client-node');
 const fs = require('fs');
 const path = require('path');
 
 class KubernetesDiscovery {
   constructor() {
-    this.kc = new k8s.KubeConfig();
+    this.kc = null;
     this.k8sApi = null;
     this.namespace = 'default';
     this.initialized = false;
     
-    this.init();
+    // Initialize asynchronously
+    this.init().catch(error => {
+      console.warn('Failed to initialize KubernetesDiscovery:', error);
+    });
   }
 
-  init() {
+  async init() {
     try {
+      // Dynamic import for ES module
+      const k8s = await import('@kubernetes/client-node');
+      this.kc = new k8s.KubeConfig();
+      
       // Try to load in-cluster config first (when running in Kubernetes)
       if (fs.existsSync('/var/run/secrets/kubernetes.io/serviceaccount/token')) {
         this.kc.loadFromCluster();
