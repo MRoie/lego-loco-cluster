@@ -15,10 +15,146 @@ const server = http.createServer(app);
 // Parse JSON bodies for API endpoints
 app.use(express.json());
 
-// simple health endpoint for Kubernetes-style checks
+// Enhanced health endpoint with detailed system information
 app.get("/health", (req, res) => {
-  console.log("Health check requested - live reloading test!");
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  console.log("Health check requested");
+  
+  const healthData = {
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: process.env.npm_package_version || "unknown",
+    node_version: process.version,
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+      external: Math.round(process.memoryUsage().external / 1024 / 1024),
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024)
+    },
+    environment: process.env.NODE_ENV || "development",
+    kubernetes_namespace: process.env.KUBERNETES_NAMESPACE || null,
+    config_directory: FINAL_CONFIG_DIR,
+    services: {
+      instance_manager: instanceManager ? "initialized" : "not_initialized",
+      quality_monitor: qualityMonitor ? "initialized" : "not_initialized"
+    }
+  };
+  
+  res.json(healthData);
+});
+
+// Readiness endpoint with dependency checks
+app.get("/ready", async (req, res) => {
+  console.log("Readiness check requested");
+  
+  const checks = {
+    timestamp: new Date().toISOString(),
+    overall_status: "unknown",
+    checks: {}
+  };
+  
+  let allHealthy = true;
+  
+  try {
+    // Check instance manager initialization
+    checks.checks.instance_manager = {
+      status: instanceManager && instanceManager.initialized ? "healthy" : "unhealthy",
+      message: instanceManager && instanceManager.initialized ? "Instance manager initialized" : "Instance manager not initialized"
+    };
+    if (!instanceManager || !instanceManager.initialized) {
+      allHealthy = false;
+    }
+    
+    // Check config directory accessibility
+    try {
+      const configExists = fs.existsSync(FINAL_CONFIG_DIR);
+      checks.checks.config_directory = {
+        status: configExists ? "healthy" : "unhealthy",
+        message: configExists ? `Config directory accessible at ${FINAL_CONFIG_DIR}` : `Config directory not found at ${FINAL_CONFIG_DIR}`,
+        path: FINAL_CONFIG_DIR
+      };
+      if (!configExists) {
+        allHealthy = false;
+      }
+    } catch (error) {
+      checks.checks.config_directory = {
+        status: "unhealthy",
+        message: `Config directory check failed: ${error.message}`,
+        path: FINAL_CONFIG_DIR
+      };
+      allHealthy = false;
+    }
+    
+    // Check essential config files
+    const essentialConfigs = ["instances.json", "status.json"];
+    checks.checks.config_files = {
+      status: "healthy",
+      message: "All essential config files accessible",
+      files: {}
+    };
+    
+    for (const configFile of essentialConfigs) {
+      const configPath = path.join(FINAL_CONFIG_DIR, configFile);
+      const exists = fs.existsSync(configPath);
+      checks.checks.config_files.files[configFile] = {
+        status: exists ? "accessible" : "missing",
+        path: configPath
+      };
+      if (!exists) {
+        checks.checks.config_files.status = "unhealthy";
+        checks.checks.config_files.message = "Some essential config files are missing";
+        allHealthy = false;
+      }
+    }
+    
+    // Check quality monitor
+    checks.checks.quality_monitor = {
+      status: qualityMonitor ? "healthy" : "unhealthy",
+      message: qualityMonitor ? "Quality monitor initialized" : "Quality monitor not initialized"
+    };
+    if (!qualityMonitor) {
+      allHealthy = false;
+    }
+    
+    // Check if we can retrieve instances (tests the full dependency chain)
+    try {
+      const instances = await instanceManager.getInstances();
+      checks.checks.instances_api = {
+        status: "healthy",
+        message: `Successfully retrieved ${instances.length} instances`,
+        instance_count: instances.length
+      };
+    } catch (error) {
+      checks.checks.instances_api = {
+        status: "unhealthy",
+        message: `Failed to retrieve instances: ${error.message}`
+      };
+      allHealthy = false;
+    }
+    
+    // Memory check - warn if using more than 512MB
+    const memoryUsage = process.memoryUsage().heapUsed / 1024 / 1024;
+    checks.checks.memory = {
+      status: memoryUsage < 512 ? "healthy" : "warning",
+      message: `Memory usage: ${Math.round(memoryUsage)}MB`,
+      usage_mb: Math.round(memoryUsage),
+      threshold_mb: 512
+    };
+    
+  } catch (error) {
+    console.error("Readiness check error:", error);
+    allHealthy = false;
+    checks.checks.general_error = {
+      status: "unhealthy",
+      message: `Readiness check failed: ${error.message}`
+    };
+  }
+  
+  checks.overall_status = allHealthy ? "ready" : "not_ready";
+  
+  // Return 503 Service Unavailable if not ready, 200 if ready
+  const statusCode = allHealthy ? 200 : 503;
+  res.status(statusCode).json(checks);
 });
 
 // Directory that holds JSON config files
