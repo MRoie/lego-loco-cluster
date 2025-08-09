@@ -531,7 +531,7 @@ fi
 
 # Error Budget Analysis
 total_slos=${#SERVICE_SLOS[@]}
-if [ $TESTS_RUN -gt 0 ]; then
+if [ $TESTS_RUN -gt 0 ] && [ $total_slos -gt 0 ]; then
     success_rate=$(( (total_slos * TESTS_RUN - SLO_VIOLATIONS) * 100 / (total_slos * TESTS_RUN) ))
 else
     success_rate=0
