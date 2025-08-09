@@ -247,16 +247,17 @@ fi
 log_success "QEMU started successfully (PID: $EMU_PID)"
 
 # === STEP 6: Video Streaming Setup ===
-log_info "=== Starting video stream ==="
+log_info "=== Starting video stream at 1024x768 for Lego Loco compatibility ==="
+log_info "Stream configuration: 1024x768@25fps, bitrate=1200kbps (optimized for higher resolution)"
 gst-launch-1.0 -v \
   ximagesrc display-name=:$DISPLAY_NUM use-damage=0 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoconvert ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoscale ! \
-  video/x-raw,width=640,height=480,framerate=25/1 ! \
+  video/x-raw,width=1024,height=768,framerate=25/1 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  x264enc tune=zerolatency bitrate=500 speed-preset=ultrafast key-int-max=25 ! \
+  x264enc tune=zerolatency bitrate=1200 speed-preset=ultrafast key-int-max=25 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   rtph264pay config-interval=1 ! \
   udpsink host=127.0.0.1 port=5000 sync=false async=false &
@@ -266,19 +267,30 @@ if ! kill -0 $GSTREAMER_PID 2>/dev/null; then
   log_warn "GStreamer failed to start, video streaming may not work"
 else
   log_success "GStreamer started with PID: $GSTREAMER_PID"
+  log_info "Stream details: 1024x768@25fps H.264 stream on UDP port 5000"
+  
+  # SRE Stream Health Check
+  log_info "Performing SRE stream health validation..."
+  sleep 3  # Allow stream to initialize
+  
+  if kill -0 $GSTREAMER_PID 2>/dev/null && netstat -un 2>/dev/null | grep -q ":5000 "; then
+    log_success "✅ Stream health validation passed - 1024x768 H.264 stream active"
+  else
+    log_warn "⚠️  Stream health validation incomplete - monitoring required"
+  fi
 fi
 
 # === Container Ready ===
 log_success "=== Container setup complete! ==="
 log_info "Services available:"
 log_info "  - VNC: localhost:5901 (connect with VNC viewer)"
-log_info "  - Video stream: UDP H.264 on port 5000"
+log_info "  - Video stream: UDP H.264 on port 5000 (1024x768@25fps)"
 log_info "  - Display: $DISPLAY"
 log_info "Running processes:"
 log_info "  - QEMU PID: $EMU_PID"
 log_info "  - Xvfb PID: $XVFB_PID"
 log_info "  - VNC PID: $VNC_PID"
-log_info "  - GStreamer PID: ${GSTREAMER_PID:-N/A}"
+log_info "  - GStreamer PID: ${GSTREAMER_PID:-N/A} (1024x768 stream)"
 
 # Cleanup function
 cleanup() {

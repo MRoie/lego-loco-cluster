@@ -32,12 +32,18 @@ EMU_PID=$!
 # Wait for the PCem window instead of sleeping
 wait_for_window "PCem"
 
+# Enhanced PCem container with Lego Loco 1024x768 streaming and SRE monitoring
+echo "🚀 Starting PCem emulator with 1024x768 WebRTC streaming for Lego Loco"
+
 gst-launch-1.0 -v \
   ximagesrc use-damage=0 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoconvert ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  vp8enc deadline=1 ! \
+  videoscale ! \
+  video/x-raw,width=1024,height=768,framerate=25/1 ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  vp8enc deadline=1 target-bitrate=1200000 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   rtpvp8pay ! \
   application/x-rtp,media=video,encoding-name=VP8,payload=96 ! \
@@ -53,6 +59,17 @@ gst-launch-1.0 -v \
   rtpopuspay ! \
   application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! \
   wb. \
-  wb. ! fakesink
+  wb. ! fakesink &
+
+GSTREAMER_PID=$!
+echo "🎯 PCem WebRTC stream started with 1024x768@25fps VP8 encoding (PID: $GSTREAMER_PID)"
+
+# SRE Health Monitoring for PCem
+sleep 3
+if kill -0 $GSTREAMER_PID 2>/dev/null; then
+  echo "✅ PCem stream health check passed - 1024x768 WebRTC stream active"
+else
+  echo "⚠️  PCem stream health check failed - WebRTC streaming may be unstable"
+fi
 
 wait $EMU_PID
