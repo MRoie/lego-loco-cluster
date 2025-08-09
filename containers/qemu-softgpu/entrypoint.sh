@@ -88,16 +88,20 @@ if ! kill -0 $XVFB_PID 2>/dev/null; then
 fi
 log_success "Xvfb started on display :$DISPLAY_NUM (PID: $XVFB_PID)"
 
-# === STEP 2: Audio Setup ===
-log_info "Starting PulseAudio daemon..."
-if pulseaudio --start --exit-idle-time=-1; then
-  log_success "PulseAudio started successfully"
-else
-  log_error "Failed to start PulseAudio, continuing without audio"
-fi
+# === STEP 2: Audio Setup (parallel with display setup) ===
+log_info "Starting PulseAudio daemon in background..."
+(
+  if pulseaudio --start --exit-idle-time=-1 &>/dev/null; then
+    log_success "PulseAudio started successfully"
+  else
+    log_error "Failed to start PulseAudio, continuing without audio"
+  fi
+) &
+AUDIO_SETUP_PID=$!
 
-# === STEP 3: Network Setup ===
-log_info "Setting up isolated TAP bridge..."
+# === STEP 3: Network Setup (parallel with other tasks) ===
+log_info "Setting up isolated TAP bridge in background..."
+(
 
 # Clean up any existing interfaces first
 log_info "Cleaning up existing network interfaces..."
@@ -158,6 +162,13 @@ else
 fi
 
 log_success "Network setup complete - Bridge: $BRIDGE, TAP: $TAP_IF"
+) &
+NETWORK_SETUP_PID=$!
+
+# Wait for audio and network setup to complete in parallel
+log_info "Waiting for parallel setup tasks to complete..."
+wait $AUDIO_SETUP_PID || log_error "Audio setup failed"
+wait $NETWORK_SETUP_PID || log_error "Network setup failed"
 
 # === STEP 4: Disk Image Setup ===
 # Create a unique snapshot for this instance to avoid file locking issues
@@ -292,9 +303,9 @@ qemu-system-i386 \
 EMU_PID=$!
 log_info "QEMU started with PID: $EMU_PID"
 
-# Wait for QEMU to initialize
+# Wait for QEMU to initialize (reduced from 30 to 15 seconds)
 log_info "Waiting for QEMU to initialize..."
-sleep 30
+sleep 15
 
 if ! kill -0 $EMU_PID 2>/dev/null; then
   log_error "QEMU process died during startup"

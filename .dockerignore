@@ -1,0 +1,76 @@
+# Git and version control
+.git
+.gitignore
+.github
+
+# Node.js
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts and logs
+logs
+*.log
+dist
+build
+.cache
+
+# Documentation
+*.md
+docs
+README.md
+CHANGELOG.md
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Development and testing
+.env
+.env.local
+.env.*.local
+tests
+test
+k8s-tests
+benchmark
+
+# Kubernetes and deployment
+k8s
+helm
+kustomize
+compose
+
+# Temporary files
+tmp
+temp
+*.tmp
+*.temp
+
+# Screenshots and media
+vnc-screenshots
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Build tools and scripts (exclude from container builds)
+Makefile
+scripts
+tools
+
+# Package files (keep package.json but exclude lock files for flexibility)
+package-lock.json
+yarn.lock
