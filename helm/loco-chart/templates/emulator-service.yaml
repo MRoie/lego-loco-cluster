@@ -12,6 +12,7 @@ spec:
   selector:
     app: {{ include "loco.fullname" . }}-emulator
     app.kubernetes.io/component: emulator
+    app.kubernetes.io/part-of: lego-loco-cluster
   ports:
   - name: vnc
     port: {{ .Values.emulator.servicePort }}
