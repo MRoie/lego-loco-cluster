@@ -10,44 +10,135 @@ LOG_DIR="k8s-tests/logs"
 BUILD_CONTAINERS=${BUILD_CONTAINERS:-true}
 
 mkdir -p "$LOG_DIR"
-exec > >(tee -a "$LOG_DIR/comprehensive-monitoring-test.log") 2>&1
+MAIN_LOG="$LOG_DIR/comprehensive-monitoring-test.log"
+DETAILED_LOG="$LOG_DIR/comprehensive-monitoring-detailed.log"
+
+exec > >(tee -a "$MAIN_LOG") 2>&1
 
 echo "🧪 Comprehensive QEMU Monitoring Integration Test with Real Containers" && date
+echo "Detailed logs will be written to: $DETAILED_LOG"
 
-# Function to wait for condition
+# Enhanced logging function
+log_detailed() {
+    echo "$*" | tee -a "$DETAILED_LOG"
+}
+
+log_section() {
+    local section="$1"
+    echo "=== $section ===" | tee -a "$DETAILED_LOG"
+    date | tee -a "$DETAILED_LOG"
+}
+
+# Function to collect comprehensive test state
+collect_test_state() {
+    local state_file="$LOG_DIR/test-state-$(date +%s).log"
+    log_detailed "Collecting comprehensive test state to $state_file"
+    
+    {
+        echo "=== CLUSTER STATE ==="
+        kubectl get nodes -o wide || true
+        kubectl get pods -A || true
+        kubectl get services -A || true
+        kubectl get events -A --sort-by='.lastTimestamp' | tail -20 || true
+        
+        echo "=== NAMESPACE RESOURCES ==="
+        kubectl get all -n "$NAMESPACE" -o wide || true
+        kubectl describe pods -n "$NAMESPACE" || true
+        
+        echo "=== CONTAINER LOGS ==="
+        for pod in $(kubectl get pods -n "$NAMESPACE" -o name | head -3); do
+            echo "--- Logs for $pod ---"
+            kubectl logs "$pod" -n "$NAMESPACE" --tail=50 || true
+        done
+        
+        echo "=== DOCKER STATE ==="
+        docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+        docker images | grep -E "(loco|qemu)" || true
+        
+        echo "=== SYSTEM RESOURCES ==="
+        free -h || true
+        df -h || true
+        ps aux --sort=-%mem | head -10 || true
+        
+    } > "$state_file" 2>&1
+}
+
+# Function to wait for condition with enhanced logging
 wait_for_condition() {
     local condition="$1"
     local description="$2"
     local timeout="${3:-60}"
     
-    echo "⏳ Waiting for: $description"
+    log_section "WAITING FOR CONDITION: $description"
+    log_detailed "Condition: $condition"
+    log_detailed "Timeout: $timeout seconds"
+    
     local count=0
     while ! eval "$condition" && [ $count -lt $timeout ]; do
         sleep 2
         ((count += 2))
         if [ $((count % 10)) -eq 0 ]; then
             echo "   ... still waiting ($count/$timeout seconds)"
+            log_detailed "Still waiting for condition at $count seconds"
+            # Collect state every 30 seconds for debugging
+            if [ $((count % 30)) -eq 0 ]; then
+                collect_test_state
+            fi
         fi
     done
     
     if [ $count -ge $timeout ]; then
         echo "❌ Timeout waiting for: $description"
+        log_detailed "TIMEOUT: Failed to meet condition after $timeout seconds"
+        collect_test_state
         return 1
     fi
     
     echo "✅ Success: $description"
+    log_detailed "SUCCESS: Condition met after $count seconds"
     return 0
 }
 
-# Function to build and load container images
+# Function to build and load container images with detailed logging
 build_and_load_containers() {
-    echo "🔨 Building and loading container images"
+    log_section "BUILDING AND LOADING CONTAINER IMAGES"
     
     # Build qemu-softgpu container
     echo "Building qemu-softgpu container..."
+    log_detailed "Starting qemu-softgpu container build"
     cd containers/qemu-softgpu
-    if ! docker build -t loco-qemu-softgpu:test .; then
+    
+    if ! docker build -t loco-qemu-softgpu:test . > "$LOG_DIR/qemu-build.log" 2>&1; then
         echo "❌ Failed to build qemu-softgpu container"
+        log_detailed "FAILED: qemu-softgpu container build failed"
+        echo "Build log:"
+        tail -20 "$LOG_DIR/qemu-build.log"
+        return 1
+    fi
+    
+    log_detailed "SUCCESS: qemu-softgpu container built"
+    
+    # Load into minikube
+    echo "Loading qemu-softgpu container into minikube..."
+    log_detailed "Loading container into minikube cluster"
+    
+    if ! minikube image load loco-qemu-softgpu:test -p "$CLUSTER_NAME" > "$LOG_DIR/qemu-load.log" 2>&1; then
+        echo "❌ Failed to load qemu-softgpu container into minikube"
+        log_detailed "FAILED: qemu-softgpu container load failed"
+        echo "Load log:"
+        tail -20 "$LOG_DIR/qemu-load.log"
+        return 1
+    fi
+    
+    log_detailed "SUCCESS: qemu-softgpu container loaded into minikube"
+    cd ../..
+    
+    # Verify images in cluster
+    echo "Verifying container images in cluster..."
+    minikube image ls -p "$CLUSTER_NAME" | grep -E "(loco|qemu)" | tee -a "$DETAILED_LOG" || true
+    
+    log_detailed "Container build and load completed successfully"
+}
         exit 1
     fi
     if ! minikube image load loco-qemu-softgpu:test; then
