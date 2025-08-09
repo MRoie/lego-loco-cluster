@@ -147,26 +147,140 @@ TIMEOUT_SECONDS=600       # Reduced to 10 minutes
 - **Resource Constraints**: Both strategies optimized for GitHub Actions specs
 - **Debugging Capability**: Can force specific cluster type via environment variables
 
-## **NEXT STEPS & VALIDATION** 🚀
+## **LATEST CI STATUS ANALYSIS - Runs #109-110** 📊
 
-### **Expected Results (Next CI Run)**
-1. ✅ **prepare-ci-image**: Should continue working
-2. ✅ **build**: Should continue working  
-3. ✅ **e2e**: Should continue working (API fixes maintained)
-4. 🎯 **cluster-integration**: Should complete in 2-3 minutes with KIND
-5. 🎯 **e2e-live**: Should execute successfully with working cluster
+### **Current Status (Latest CI Runs)**
 
-### **Success Criteria**
-- **Cluster creation**: < 5 minutes (vs previous 20+ minute timeouts)
-- **Integration tests**: All tests execute and pass
-- **Overall CI time**: < 15 minutes total (vs previous cancellations)
-- **Success rate**: 95%+ (vs previous 40%)
+#### **Run #109 (Hybrid Solution)**
+- ✅ **prepare-ci-image**: SUCCESS (6 seconds)
+- ✅ **build**: SUCCESS (1m 18s) 
+- ✅ **e2e**: SUCCESS (1m 17s) - API fixes working
+- 🔄 **cluster-integration**: IN PROGRESS at "Create Kubernetes cluster (KIND/minikube hybrid)" step
 
-### **Monitoring & Validation**
-- **Artifact collection**: Enhanced logs for both KIND and minikube
-- **Performance tracking**: Startup time monitoring
-- **Fallback validation**: Ensure minikube works when KIND fails
-- **Resource usage**: Monitor resource consumption patterns
+#### **Run #110 (Current)**
+- ✅ **prepare-ci-image**: SUCCESS (6 seconds)
+- ✅ **build**: SUCCESS (1m 8s)
+- 🔄 **e2e**: RUNNING (Initialize containers)
+- 🔄 **cluster-integration**: RUNNING (Initialize containers)
+
+### **KEY OBSERVATIONS** 🔍
+
+#### **✅ CONFIRMED WORKING**
+1. **CI Image Optimization**: Pre-built image detection working correctly
+2. **Build Process**: Consistent ~1 minute build times, all packages installing correctly
+3. **E2E API Fixes**: Kubernetes namespace issues resolved - no more "namespace null" errors
+4. **Hybrid Strategy Implementation**: Scripts deployed and being executed
+
+#### **🔄 CURRENTLY TESTING**
+1. **KIND Primary Strategy**: First attempt in hybrid approach
+2. **Cluster Creation Speed**: Testing 2-3 minute vs 20+ minute previous performance
+3. **Sequential Test Execution**: Avoiding concurrency conflicts
+
+#### **📈 PERFORMANCE IMPROVEMENTS OBSERVED**
+| Component | Before Hybrid | After Hybrid | Status |
+|-----------|---------------|--------------|---------|
+| **prepare-ci-image** | 6s | 6s | ✅ Maintained |
+| **build** | 1m 20s | 1m 10s | ✅ Slight improvement |
+| **e2e** | 1m 20s | 1m 17s | ✅ Consistent |
+| **cluster-integration** | 20+ min timeout | **🔄 TESTING** | **In Progress** |
+
+### **SUCCESS CRITERIA VALIDATION**
+
+#### **✅ ACHIEVED**
+- **Fast Job Startup**: CI image optimization working (6s vs manual install)
+- **API Compatibility**: No more namespace parameter errors
+- **E2E Reliability**: 100% success rate maintained
+
+#### **🔄 IN VALIDATION**
+- **Cluster Creation Speed**: Hybrid KIND/minikube approach testing
+- **Integration Test Success**: Sequential execution preventing conflicts
+- **Overall CI Reliability**: Targeting 95%+ success rate
+
+### **NEXT VALIDATION MILESTONES** 🎯
+
+#### **Immediate (Current Runs)**
+1. **KIND Success**: Verify sub-5-minute cluster creation with KIND
+2. **Integration Tests**: All network/TCP/broadcast tests execute successfully  
+3. **E2E Live**: Cluster connectivity validation
+4. **Artifact Collection**: Comprehensive diagnostics gathering
+
+#### **Success Metrics**
+- **Cluster Creation**: < 5 minutes (vs 20+ minute timeouts)
+- **Total CI Duration**: < 20 minutes (vs previous cancellations)
+- **Test Coverage**: All integration tests execute and provide results
+- **Success Rate**: Target 95%+ (currently testing)
+
+## **CONTINUOUS RCA & MONITORING** 🔍
+
+### **WATCH POINTS FOR CURRENT RUNS**
+
+#### **Cluster Creation Performance**
+```bash
+# Monitor for these patterns in logs:
+✅ "✅ Cluster created successfully with kind" (optimal)
+⚠️  "⚠️ Primary strategy kind failed, trying fallback minikube" (acceptable)
+❌ "❌ Both strategies failed" (needs immediate attention)
+```
+
+#### **Resource Usage Patterns** 
+- **KIND**: Expected 2-3 minutes, <2GB RAM usage
+- **Minikube**: Expected 8-10 minutes, <4GB RAM usage  
+- **Container Performance**: CI image vs fallback timing differences
+
+#### **Integration Test Sequence**
+1. **Network Tests**: Basic cluster connectivity validation
+2. **TCP Tests**: Service-to-service communication
+3. **Broadcast Tests**: Multi-pod communication patterns
+4. **Monitoring Tests**: Full stack health validation
+
+### **POTENTIAL ISSUES TO TRACK** ⚠️
+
+#### **KIND-Specific Challenges**
+- **Docker-in-Docker**: May have compatibility issues in some CI environments
+- **Image Pull**: Network timeouts during node image downloads
+- **Port Conflicts**: Host port binding issues in shared runners
+
+#### **Minikube Fallback Concerns**
+- **Memory Pressure**: 4GB requirement in 7GB runner environment
+- **Virtualization**: Nested virtualization limitations persist
+- **Timeout Management**: 10-minute window may still be too aggressive
+
+#### **General CI Infrastructure**
+- **Runner Variability**: Performance differences between GitHub Actions runners
+- **Network Conditions**: Download speeds affecting cluster bootstrap time
+- **Concurrent Resource**: Multiple builds competing for cluster creation
+
+### **ESCALATION TRIGGERS** 🚨
+
+#### **Immediate Action Required If:**
+- Both KIND and minikube strategies fail consistently (>2 runs)
+- Cluster creation exceeds 15 minutes even with fallback
+- Integration tests fail due to infrastructure (not code) issues
+- CI image becomes unavailable and fallback fails
+
+#### **Optimization Opportunities If:**
+- KIND success rate > 80%: Consider removing minikube fallback
+- Minikube never needed: Optimize KIND configuration further
+- Test execution < 5 minutes: Consider expanding test coverage
+- Success rate > 98%: Explore additional optimization strategies
+
+### **NEXT ITERATION IMPROVEMENTS** 🚀
+
+#### **If Current Solution Works (>90% success)**
+1. **Performance Tuning**: Optimize KIND configuration for sub-2-minute creation
+2. **Test Expansion**: Add more integration scenarios with stable foundation
+3. **Resource Monitoring**: Implement detailed resource tracking
+4. **Documentation**: Create troubleshooting guides for common issues
+
+#### **If Issues Persist (<75% success)**  
+1. **Alternative Strategies**: Investigate k3s, k0s, or microk8s options
+2. **External Clusters**: Consider cloud-based test clusters
+3. **Test Mocking**: Implement cluster simulation for faster feedback
+4. **Infrastructure Review**: Evaluate different CI platforms
+
+---
+
+**LIVE MONITORING**: Track runs #109-110 for validation of hybrid approach effectiveness and identification of any remaining infrastructure gaps.
 
 ## **TECHNICAL DEBT RESOLVED** ✅
 
