@@ -7,7 +7,7 @@ set -euo pipefail
 # Configuration
 HEALTH_PORT=${HEALTH_PORT:-8080}
 HEALTH_LOG="/tmp/health.log"
-VNC_DISPLAY=${VNC_DISPLAY:-:1}
+VNC_DISPLAY=${VNC_DISPLAY:-:${DISPLAY_NUM:-1}}
 AUDIO_DEVICE=${AUDIO_DEVICE:-pulse}
 
 # Logging function
@@ -17,7 +17,7 @@ log() {
 
 # Get QEMU process health
 get_qemu_health() {
-    local qemu_pid=$(pgrep qemu-system-i386 || echo "")
+    local qemu_pid=$(pgrep -f qemu-system-i386 || echo "")
     if [ -z "$qemu_pid" ]; then
         echo "false"
         return
@@ -99,7 +99,11 @@ get_audio_health() {
     # Check ALSA devices as fallback
     local alsa_devices=0
     if command -v aplay >/dev/null 2>&1; then
-        alsa_devices=$(aplay -l 2>/dev/null | grep -c "card " || echo "0")
+        alsa_devices=$(aplay -l 2>/dev/null | grep -c "card " 2>/dev/null | head -1)
+        # Handle case where grep -c returns nothing
+        if [ -z "$alsa_devices" ]; then
+            alsa_devices=0
+        fi
     fi
     
     audio_health=$(cat <<EOF
@@ -123,7 +127,7 @@ get_system_performance() {
     local load_average=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | tr -d ',' || echo "0")
     
     # Check for QEMU specific performance
-    local qemu_pid=$(pgrep qemu-system-i386 || echo "")
+    local qemu_pid=$(pgrep -f qemu-system-i386 || echo "")
     local qemu_cpu="0"
     local qemu_memory="0"
     
