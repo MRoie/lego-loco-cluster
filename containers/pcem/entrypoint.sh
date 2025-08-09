@@ -33,8 +33,26 @@ EMU_PID=$!
 wait_for_window "PCem"
 
 gst-launch-1.0 -v \
-  ximagesrc use-damage=0 ! videoconvert ! queue ! vp8enc deadline=1 ! rtpvp8pay ! application/x-rtp,media=video,encoding-name=VP8,payload=96 ! webrtcbin bundle-policy=max-bundle name=wb \
-  pulsesrc ! audioconvert ! audioresample ! opusenc ! rtpopuspay ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! wb. \
+  ximagesrc use-damage=0 ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  videoconvert ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  vp8enc deadline=1 ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  rtpvp8pay ! \
+  application/x-rtp,media=video,encoding-name=VP8,payload=96 ! \
+  webrtcbin bundle-policy=max-bundle name=wb \
+  pulsesrc ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  audioconvert ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  audioresample ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  opusenc ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  rtpopuspay ! \
+  application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! \
+  wb. \
   wb. ! fakesink
 
 wait $EMU_PID

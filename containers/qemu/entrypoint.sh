@@ -283,12 +283,16 @@ log_info "VNC display available on :5901"
 log_info "Starting GStreamer video stream..."
 gst-launch-1.0 -v \
   ximagesrc display-name=:$DISPLAY_NUM use-damage=0 ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoconvert ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoscale ! \
-  video/x-raw,width=640,height=480 ! \
-  x264enc tune=zerolatency bitrate=500 speed-preset=ultrafast ! \
-  rtph264pay ! \
-  udpsink host=127.0.0.1 port=5000 &
+  video/x-raw,width=640,height=480,framerate=25/1 ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  x264enc tune=zerolatency bitrate=500 speed-preset=ultrafast key-int-max=25 ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  rtph264pay config-interval=1 ! \
+  udpsink host=127.0.0.1 port=5000 sync=false async=false &
 GSTREAMER_PID=$!
 
 log_success "GStreamer started with PID: $GSTREAMER_PID"
