@@ -37,6 +37,11 @@ RUN curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/mi
     && install -o root -g root -m 0755 minikube /usr/local/bin/minikube \
     && rm minikube
 
+# Pre-install KIND (Kubernetes in Docker) - CI-friendly alternative to minikube
+RUN curl -Lo kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 \
+    && install -o root -g root -m 0755 kind /usr/local/bin/kind \
+    && rm kind
+
 # Pre-cache Kubernetes images to speed up cluster creation
 RUN minikube config set driver docker \
     && minikube config set kubernetes-version v1.28.3
