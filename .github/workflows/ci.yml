@@ -28,10 +28,19 @@ jobs:
           CI_IMAGE="${{ env.CI_BASE_IMAGE }}"
           FALLBACK_IMAGE="${{ env.CI_FALLBACK_IMAGE }}"
           
-          # Try to pull the CI image
+          echo "Checking for CI image: $CI_IMAGE"
+          
+          # Also try branch-specific tag as fallback
+          BRANCH_TAG="ghcr.io/mroie/lego-loco-cluster-ci:$(echo '${{ github.head_ref || github.ref_name }}' | sed 's/[^a-zA-Z0-9.-]/-/g')"
+          
+          # Try to pull the latest tag first
           if docker pull "$CI_IMAGE" 2>/dev/null; then
             echo "CI image available: $CI_IMAGE"
             echo "image=$CI_IMAGE" >> $GITHUB_OUTPUT
+          # Try branch-specific tag
+          elif docker pull "$BRANCH_TAG" 2>/dev/null; then
+            echo "Branch-specific CI image available: $BRANCH_TAG"
+            echo "image=$BRANCH_TAG" >> $GITHUB_OUTPUT
           else
             echo "CI image not available, using fallback: $FALLBACK_IMAGE"
             echo "image=$FALLBACK_IMAGE" >> $GITHUB_OUTPUT
