@@ -17,12 +17,12 @@ echo "=== CI Cluster Management - Action: $ACTION ===" && date
 # MAXIMUM resource allocation for CI environments based on GitHub Actions runner specs
 # GitHub Actions runners: 2-core CPU, 7GB RAM, 14GB SSD
 if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-    # CI environment - use MAXIMUM available resources for stability
+    # CI environment - use LIGHTWEIGHT resources optimized for container environments
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}          # Use all available CPUs
-    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-4096}   # Use ~4GB of 7GB available (conservative for CI)
-    MINIKUBE_DISK=${MINIKUBE_DISK:-8g}         # Use majority of available disk
-    TIMEOUT_SECONDS=1200  # Increased to 20 minutes for maximum stability in CI
-    echo "CI environment detected - using MAXIMUM available resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK, Timeout: ${TIMEOUT_SECONDS}s)"
+    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-3072}   # Use 3GB of 7GB available (more conservative)
+    MINIKUBE_DISK=${MINIKUBE_DISK:-6g}         # Reduced disk to prevent timeout issues
+    TIMEOUT_SECONDS=900  # Reduced to 15 minutes for faster failure detection
+    echo "CI environment detected - using LIGHTWEIGHT optimized resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK, Timeout: ${TIMEOUT_SECONDS}s)"
 else
     # Development environment
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}
@@ -101,10 +101,17 @@ create_cluster() {
         --alsologtostderr \
         --v=2"
     
-    # Add CI-specific flags for maximum compatibility
+    # Add CI-specific flags for maximum compatibility and performance
     if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-        MINIKUBE_ARGS="$MINIKUBE_ARGS --force --no-vtx-check --extra-config=kubelet.housekeeping-interval=10s"
-        echo "CI environment detected - adding maximum compatibility flags"
+        MINIKUBE_ARGS="$MINIKUBE_ARGS --force --no-vtx-check \
+            --extra-config=kubelet.housekeeping-interval=10s \
+            --extra-config=kubelet.image-gc-high-threshold=99 \
+            --extra-config=kubelet.image-gc-low-threshold=90 \
+            --extra-config=kubelet.minimum-container-ttl-duration=300s \
+            --extra-config=apiserver.enable-admission-plugins=DefaultStorageClass,DefaultTolerationSeconds \
+            --addons=storage-provisioner \
+            --embed-certs=true"
+        echo "CI environment detected - adding maximum compatibility and performance flags"
     fi
     
     echo "Final minikube arguments: $MINIKUBE_ARGS" && date
