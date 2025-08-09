@@ -67,24 +67,49 @@ export default function useWebRTC(targetId) {
       stats.forEach((report) => {
         if (report.type === 'inbound-rtp' && report.mediaType === 'video') {
           // Video quality metrics
-          if (report.bytesReceived && report.timestamp) {
-            const bitrate = Math.round((report.bytesReceived * 8) / (report.timestamp / 1000));
-            metrics.bitrate = bitrate;
+          const prev = prevStatsRef.current[report.id] || {};
+          // Bitrate calculation using delta bytes and delta time
+          if (
+            typeof report.bytesReceived === 'number' &&
+            typeof report.timestamp === 'number' &&
+            typeof prev.bytesReceived === 'number' &&
+            typeof prev.timestamp === 'number'
+          ) {
+            const deltaBytes = report.bytesReceived - prev.bytesReceived;
+            const deltaTimeMs = report.timestamp - prev.timestamp;
+            if (deltaBytes > 0 && deltaTimeMs > 0) {
+              const bitrate = Math.round((deltaBytes * 8) / (deltaTimeMs / 1000));
+              metrics.bitrate = bitrate;
+            }
           }
-          
-          if (report.framesDecoded && report.timestamp) {
-            metrics.frameRate = Math.round(report.framesDecoded / (report.timestamp / 1000));
+          // Frame rate calculation using delta frames and delta time
+          if (
+            typeof report.framesDecoded === 'number' &&
+            typeof report.timestamp === 'number' &&
+            typeof prev.framesDecoded === 'number' &&
+            typeof prev.timestamp === 'number'
+          ) {
+            const deltaFrames = report.framesDecoded - prev.framesDecoded;
+            const deltaTimeMs = report.timestamp - prev.timestamp;
+            if (deltaFrames > 0 && deltaTimeMs > 0) {
+              metrics.frameRate = Math.round(deltaFrames / (deltaTimeMs / 1000));
+            }
           }
-          
+          // Save resolution
           if (report.frameWidth && report.frameHeight) {
             metrics.resolution = `${report.frameWidth}x${report.frameHeight}`;
           }
-          
           // Packet loss calculation
           if (report.packetsLost && report.packetsReceived) {
             const totalPackets = report.packetsLost + report.packetsReceived;
             metrics.packetLoss = totalPackets > 0 ? (report.packetsLost / totalPackets) * 100 : 0;
           }
+          // Store current values for next interval
+          prevStatsRef.current[report.id] = {
+            bytesReceived: report.bytesReceived,
+            framesDecoded: report.framesDecoded,
+            timestamp: report.timestamp
+          };
         }
 
         if (report.type === 'candidate-pair' && report.state === 'succeeded') {
