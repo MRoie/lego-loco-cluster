@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# k8s-tests/test-websocket.sh -- verify websocket and stream endpoints (Kubernetes discovery ONLY)
+# k8s-tests/test-websocket.sh -- verify websocket and stream endpoints (STRICT Kubernetes discovery ONLY)
 set -euo pipefail
 
 command -v curl >/dev/null 2>&1 || { echo "curl not found" >&2; exit 1; }
@@ -13,13 +13,14 @@ LOG_FILE="$LOG_DIR/test-websocket.log"
 log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*"; }
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-log "Starting websocket test (Kubernetes discovery ONLY - static config disabled)"
+log "Starting STRICT websocket test (Kubernetes discovery ONLY - NO test environment fallback)"
 
 BACKEND_URL=${BACKEND_URL:-http://localhost:3001}
 
 fail=0
 
 # Check backend health
+log "Testing backend health endpoint..."
 status=$(curl -o /dev/null -s -w "%{http_code}" "$BACKEND_URL/health" || echo "000")
 if [ "$status" = "200" ]; then
   log "✅ Backend health check passed"
@@ -29,6 +30,7 @@ else
 fi
 
 # WebSocket connectivity using backend's node_modules
+log "Testing WebSocket connectivity..."
 (
   cd backend && node - "$BACKEND_URL" <<'NODE'
 const WebSocket = require('ws');
@@ -41,10 +43,13 @@ ws.on('error', () => process.exit(1));
 NODE
 ) && log "✅ WebSocket active test passed" || { log "❌ WebSocket active test failed"; fail=1; }
 
-# Test discovery info and ensure Kubernetes discovery is working
-log "Testing Kubernetes discovery status..."
+# STRICT: Test discovery info and REQUIRE real Kubernetes discovery
+log "Testing STRICT Kubernetes discovery status..."
 discovery_response=$(curl -s "$BACKEND_URL/api/instances/discovery-info" || echo '{}')
+log "Discovery response: $discovery_response"
+
 using_k8s=$(echo "$discovery_response" | grep -o '"usingAutoDiscovery":true' || echo "")
+has_k8s_info=$(echo "$discovery_response" | grep -o '"kubernetes":{' || echo "")
 
 if [[ -z "$using_k8s" ]]; then
   log "❌ CRITICAL: Backend is not using Kubernetes auto-discovery!"
@@ -55,19 +60,32 @@ else
   log "✅ Backend confirmed using Kubernetes auto-discovery"
 fi
 
-# Get discovered instances from backend API (NO static config allowed)
-log "Fetching discovered instances from backend API..."
-instances_response=$(curl -s "$BACKEND_URL/api/instances" || echo '[]')
+if [[ -z "$has_k8s_info" ]]; then
+  log "❌ CRITICAL: No Kubernetes cluster information detected!"
+  log "This indicates the backend is not properly connected to a Kubernetes cluster"
+  fail=1
+  exit 1
+else
+  log "✅ Kubernetes cluster information detected"
+fi
 
+# STRICT: Get discovered instances from backend API (NO empty list allowed in STRICT mode)
+log "Fetching discovered instances from backend API (STRICT mode - no empty lists allowed)..."
+instances_response=$(curl -s "$BACKEND_URL/api/instances" || echo '[]')
+log "Instances response: $instances_response"
+
+# Check for specific test environment variable to allow empty discovery
 if [[ "$instances_response" == "[]" ]] || [[ -z "$instances_response" ]]; then
-  # In CI/test environments without actual Kubernetes cluster, this is expected
-  if [[ -n "${CI:-}" ]] || [[ -n "${NODE_ENV:-}" && "${NODE_ENV}" == "test" ]]; then
-    log "⚠️  No instances discovered from Kubernetes in test environment - this is expected for e2e tests"
-    log "✅ Test passed: Backend using Kubernetes discovery (no static config fallback)"
+  # Only allow empty responses if explicitly testing with a mock cluster
+  if [[ "${ALLOW_EMPTY_DISCOVERY:-}" == "true" ]]; then
+    log "⚠️  Empty discovery allowed by ALLOW_EMPTY_DISCOVERY=true"
+    log "✅ Test passed: Backend using Kubernetes discovery (empty result allowed in mock environment)"
     exit 0
   else
-    log "❌ CRITICAL: No instances discovered from Kubernetes!"
-    log "This test requires active Kubernetes pods with proper labels"
+    log "❌ CRITICAL: No instances discovered from Kubernetes cluster!"
+    log "In STRICT mode, this test requires actual running pods with proper labels"
+    log "Expected labels: app.kubernetes.io/component=emulator, app.kubernetes.io/part-of=lego-loco-cluster"
+    log "Use ALLOW_EMPTY_DISCOVERY=true to test discovery functionality without real pods"
     fail=1
     exit 1
   fi
@@ -79,11 +97,12 @@ total_streams=$(echo "$STREAMS" | wc -l)
 
 if [[ -z "$STREAMS" ]] || [[ "$total_streams" -eq 0 ]]; then
   log "❌ CRITICAL: No stream URLs found in discovered instances!"
+  log "Instances response: $instances_response"
   fail=1
   exit 1
 fi
 
-log "Found $total_streams discovered instances from Kubernetes"
+log "Found $total_streams discovered instances from Kubernetes cluster"
 
 working_streams=0
 
@@ -91,6 +110,7 @@ for url in $STREAMS; do
   # Skip empty lines
   [[ -z "$url" ]] && continue
   
+  log "Testing stream: $url"
   status=$(curl -o /dev/null -s -w "%{http_code}" --max-time 5 -I "$url" || echo "000")
   if [ "$status" = "200" ]; then
     log "✅ Stream reachable: $url"
@@ -101,17 +121,18 @@ for url in $STREAMS; do
 done
 
 # SUCCESS CRITERIA: ALL discovered instances must work (100% success rate)
-log "Evaluating success criteria: $working_streams/$total_streams streams working"
+log "Evaluating STRICT success criteria: $working_streams/$total_streams streams working"
 
 if [ $working_streams -eq $total_streams ] && [ $total_streams -gt 0 ]; then
   log "✅ Stream test passed: ALL $working_streams/$total_streams discovered streams working (100% success rate)"
 else
   log "❌ Stream test failed: only $working_streams/$total_streams discovered streams working"
-  log "REQUIREMENT: ALL discovered Kubernetes instances must be working (100% success rate)"
+  log "STRICT REQUIREMENT: ALL discovered Kubernetes instances must be working (100% success rate)"
   fail=1
 fi
 
 # Basic check that frontend serves video elements
+log "Testing frontend integration..."
 status=$(curl -o /tmp/frontend.html -s -w "%{http_code}" "$BACKEND_URL" || echo "000")
 if [ "$status" = "200" ]; then
   count=$(grep -c "<video" /tmp/frontend.html)
@@ -127,8 +148,8 @@ else
 fi
 
 if [ $fail -eq 0 ]; then
-  log "✅ WebSocket and stream test passed (Kubernetes discovery: $total_streams instances, 100% success)"
+  log "✅ STRICT WebSocket and stream test passed (Kubernetes discovery: $total_streams instances, 100% success)"
 else
-  log "❌ WebSocket and stream test failed"
+  log "❌ STRICT WebSocket and stream test failed"
   exit 1
 fi
