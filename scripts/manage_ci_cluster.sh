@@ -19,14 +19,16 @@ echo "=== CI Cluster Management - Action: $ACTION ===" && date
 if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
     # CI environment - use MAXIMUM available resources for stability
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}          # Use all available CPUs
-    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-5120}   # Use ~5GB of 7GB available (leave headroom)
-    MINIKUBE_DISK=${MINIKUBE_DISK:-10g}        # Use majority of available disk
-    echo "CI environment detected - using MAXIMUM available resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK)"
+    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-4096}   # Use ~4GB of 7GB available (conservative for CI)
+    MINIKUBE_DISK=${MINIKUBE_DISK:-8g}         # Use majority of available disk
+    TIMEOUT_SECONDS=1200  # Increased to 20 minutes for maximum stability in CI
+    echo "CI environment detected - using MAXIMUM available resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK, Timeout: ${TIMEOUT_SECONDS}s)"
 else
     # Development environment
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}
     MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-4096}
     MINIKUBE_DISK=${MINIKUBE_DISK:-20g}
+    TIMEOUT_SECONDS=900
     echo "Development environment - using standard resources"
 fi
 
@@ -85,7 +87,6 @@ create_cluster() {
     validate_resources
     
     # Configure minikube arguments with CI best practices
-    TIMEOUT_SECONDS=900  # Increased to 15 minutes for maximum stability
     MINIKUBE_ARGS="-p $CLUSTER_NAME \
         --driver=docker \
         --kubernetes-version=$KUBERNETES_VERSION \
@@ -98,7 +99,7 @@ create_cluster() {
         --wait-timeout=${TIMEOUT_SECONDS}s \
         --delete-on-failure=true \
         --alsologtostderr \
-        --v=3"
+        --v=2"
     
     # Add CI-specific flags for maximum compatibility
     if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
