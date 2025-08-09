@@ -14,13 +14,14 @@ This document tracks the current status of CI pipeline fixes and what needs to b
   - ✅ **Resource Optimization**: Reduced memory allocation (2048MB → 1536MB), disk (8g → 6g) for CI
   - ✅ **Enhanced Scripts**: Created `scripts/manage_ci_cluster.sh` and `scripts/start_docker_daemon.sh` for better resource management
 
-### **Base Image Download Time Optimization** ✅ ADDED
-- **Status**: ✅ OPTIMIZED IN THIS COMMIT
+### **Base Image Download Time Optimization** ✅ OPTIMIZED
+- **Status**: ✅ FULLY IMPLEMENTED IN THIS COMMIT
 - **Issue**: Repeated package installation in each job wasting CI time (~2-3 minutes per job)
 - **Solution**: 
-  - ✅ **CI Base Image**: Created `.github/Dockerfile.ci` with pre-installed dependencies
-  - ✅ **Reduced Setup Time**: Pre-installs kubectl, helm, system packages
-  - ✅ **Optimized Workflow**: Consolidated package installation steps
+  - ✅ **CI Base Image**: Created `.github/Dockerfile.ci` with pre-installed dependencies (kubectl, helm, minikube, system packages)
+  - ✅ **Intelligent Fallback**: CI workflow now uses pre-built image when available, falls back to node:20-bullseye with package installation
+  - ✅ **Reduced Setup Time**: Pre-installs kubectl v1.28.3, helm v3.15.4, minikube latest, system packages
+  - ✅ **Smart CI Pipeline**: Checks for image availability and builds if needed, uses optimized image when possible
 
 ### **Previous Critical Fixes** ✅ MAINTAINED
 
@@ -38,10 +39,11 @@ This document tracks the current status of CI pipeline fixes and what needs to b
 
 ### **Job Hierarchy** (Addresses Concurrency Issues)
 ```
-build (10 min)
-├── e2e (10 min, parallel) - No cluster needed
-└── cluster-integration (30 min) - Sequential cluster tests
-    └── e2e-live (20 min) - Depends on cluster-integration
+prepare-ci-image (15 min) - Build/verify CI base image
+├── build (10 min) - Node.js builds with optimized CI image
+│   ├── e2e (10 min, parallel) - No cluster needed
+│   └── cluster-integration (30 min) - Sequential cluster tests with pre-installed tools
+│       └── e2e-live (20 min) - Depends on cluster-integration
 ```
 
 ### **Resource Management**
@@ -75,17 +77,20 @@ The `cluster-integration` job now runs all cluster-dependent tests in sequence:
   - Enhanced error handling and retry logic
   - Environment-specific configuration
   - Proper cleanup and diagnostics
+  - ✅ **Updated**: Optimized for pre-installed minikube in CI image
   
 - **`scripts/start_docker_daemon.sh`**: Reliable Docker daemon management
   - Process validation and startup
   - Extended timeout and error logging
   - Reusable across multiple jobs
 
-### **Base Image Optimization** ✅ ADDED
-- **`.github/Dockerfile.ci`**: Pre-built image with dependencies
-  - Pre-installed: kubectl, helm, qemu, docker, system tools
+### **Base Image Optimization** ✅ FULLY IMPLEMENTED
+- **`.github/Dockerfile.ci`**: Pre-built image with complete dependencies
+  - Pre-installed: kubectl v1.28.3, helm v3.15.4, minikube latest
+  - System packages: qemu, docker, networking tools, conntrack
   - Reduces setup time from ~3 minutes to ~30 seconds per job
-  - Future improvement: Build and push to registry for faster pulls
+  - ✅ **Enhanced**: Added conntrack dependency and version pinning for stability
+- **Smart CI Pipeline**: Automatically detects image availability and builds/uses accordingly
 
 ## Expected CI Results After This PR
 

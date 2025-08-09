@@ -17,15 +17,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-transport-https \
     lsb-release \
     gnupg \
+    conntrack \
     && rm -rf /var/lib/apt/lists/*
 
-# Pre-install kubectl and helm to reduce setup time
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+# Pre-install kubectl (pinned version for stability)
+RUN curl -LO "https://dl.k8s.io/release/v1.28.3/bin/linux/amd64/kubectl" \
     && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
     && rm kubectl
 
-RUN curl https://get.helm.sh/helm-v3.14.3-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm \
+# Pre-install helm (latest stable version)
+RUN curl https://get.helm.sh/helm-v3.15.4-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm \
     && chmod +x /usr/local/bin/helm
+
+# Pre-install minikube to reduce setup time in CI
+RUN curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 \
+    && install -o root -g root -m 0755 minikube /usr/local/bin/minikube \
+    && rm minikube
 
 # Set working directory
 WORKDIR /workspace

@@ -38,7 +38,7 @@ install_minikube() {
         export PATH="$PWD:$PATH"
         echo "Minikube installed and added to PATH"
     else
-        echo "Minikube already installed: $(minikube version --short)"
+        echo "Minikube already available: $(minikube version --short)"
     fi
 }
 

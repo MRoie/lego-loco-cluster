@@ -8,22 +8,60 @@ on:
 
 # Global environment variables
 env:
-  CI_BASE_IMAGE: "node:20-bullseye"
+  CI_BASE_IMAGE: "ghcr.io/${{ github.repository }}/lego-loco-cluster-ci:latest"
+  CI_FALLBACK_IMAGE: "node:20-bullseye"
   REGISTRY: ghcr.io
   IMAGE_NAME: lego-loco-cluster-ci
 
 jobs:
+  # Check if CI base image is available, build if needed
+  prepare-ci-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      ci-image: ${{ steps.check-image.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check if CI image exists
+        id: check-image
+        run: |
+          CI_IMAGE="${{ env.CI_BASE_IMAGE }}"
+          FALLBACK_IMAGE="${{ env.CI_FALLBACK_IMAGE }}"
+          
+          # Try to pull the CI image
+          if docker pull "$CI_IMAGE" 2>/dev/null; then
+            echo "CI image available: $CI_IMAGE"
+            echo "image=$CI_IMAGE" >> $GITHUB_OUTPUT
+          else
+            echo "CI image not available, using fallback: $FALLBACK_IMAGE"
+            echo "image=$FALLBACK_IMAGE" >> $GITHUB_OUTPUT
+          fi
+      - name: Build CI image if needed
+        if: steps.check-image.outputs.image == env.CI_FALLBACK_IMAGE
+        run: |
+          echo "Building CI image since it's not available..."
+          docker build -f .github/Dockerfile.ci -t "${{ env.CI_BASE_IMAGE }}" .
+          echo "CI image built successfully"
+
   # Build the backend and frontend assets
   build:
+    needs: prepare-ci-image
     runs-on: ubuntu-latest
     timeout-minutes: 10
     container:
-      image: node:20-bullseye
+      image: ${{ needs.prepare-ci-image.outputs.ci-image }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install system packages (fallback only)
+        if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          echo "Using fallback image, installing basic packages..."
+          apt-get update && apt-get install -y --no-install-recommends curl jq
       - name: Install Node dependencies and build frontend
         run: |
           # Backend packages
@@ -33,11 +71,11 @@ jobs:
 
   # Sequential cluster-based integration tests to resolve concurrency issues
   cluster-integration:
-    needs: build
+    needs: [build, prepare-ci-image]
     runs-on: ubuntu-22.04
     timeout-minutes: 30  # Extended timeout for sequential tests
     container:
-      image: node:20-bullseye
+      image: ${{ needs.prepare-ci-image.outputs.ci-image }}
       options: --privileged
     strategy:
       # Run tests sequentially to avoid minikube concurrency issues
@@ -47,21 +85,34 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install system packages
+      - name: Install system packages (fallback only)
+        if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          echo "Using fallback image, installing required packages..."
           apt-get update
           apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
             pulseaudio docker.io tcpdump netcat-openbsd curl jq \
-            ca-certificates apt-transport-https lsb-release gnupg
-      - name: Install kubectl and helm
+            ca-certificates apt-transport-https lsb-release gnupg conntrack
+      - name: Install kubectl and helm (fallback only)
+        if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
         run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          curl -LO "https://dl.k8s.io/release/v1.28.3/bin/linux/amd64/kubectl"
           install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-          curl https://get.helm.sh/helm-v3.14.3-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
+          curl https://get.helm.sh/helm-v3.15.4-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
           chmod +x /usr/local/bin/helm
+          curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+          install -o root -g root -m 0755 minikube /usr/local/bin/minikube
+      - name: Verify pre-installed tools
+        run: |
+          echo "Verifying CI tools..."
+          kubectl version --client=true
+          helm version --short
+          minikube version --short
+          docker --version
+          echo "All tools verified successfully"
       - name: Start Docker daemon
         run: scripts/start_docker_daemon.sh
       - name: Install Node dependencies
@@ -100,21 +151,23 @@ jobs:
 
   # Run end-to-end tests against local services (no cluster needed)
   e2e:
-    needs: build
+    needs: [build, prepare-ci-image]
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     container:
-      image: node:20-bullseye
+      image: ${{ needs.prepare-ci-image.outputs.ci-image }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install system packages
+      - name: Install system packages (fallback only)
+        if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          apt-get update
+          echo "Using fallback image, installing basic packages..."
+          apt-get update && apt-get install -y --no-install-recommends curl jq
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
@@ -135,25 +188,45 @@ jobs:
 
   # Deploy services in Minikube and run live end-to-end tests
   e2e-live:
-    needs: [build, cluster-integration]  # Run after cluster integration tests complete
+    needs: [build, cluster-integration, prepare-ci-image]  # Run after cluster integration tests complete
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     container:
-      image: node:20-bullseye
+      image: ${{ needs.prepare-ci-image.outputs.ci-image }}
       options: --privileged
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install system packages
+      - name: Install system packages (fallback only)
+        if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          echo "Using fallback image, installing required packages..."
           apt-get update
           apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
-            pulseaudio docker.io tcpdump netcat-openbsd
+            pulseaudio docker.io tcpdump netcat-openbsd curl jq \
+            ca-certificates apt-transport-https lsb-release gnupg conntrack
+      - name: Install kubectl and helm (fallback only)
+        if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
+        run: |
+          curl -LO "https://dl.k8s.io/release/v1.28.3/bin/linux/amd64/kubectl"
+          install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+          curl https://get.helm.sh/helm-v3.15.4-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
+          chmod +x /usr/local/bin/helm
+          curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+          install -o root -g root -m 0755 minikube /usr/local/bin/minikube
+      - name: Verify pre-installed tools
+        run: |
+          echo "Verifying CI tools..."
+          kubectl version --client=true
+          helm version --short
+          minikube version --short
+          docker --version
+          echo "All tools verified successfully"
       - name: Start Docker daemon
         run: scripts/start_docker_daemon.sh
       - name: Install Node dependencies
