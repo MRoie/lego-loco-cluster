@@ -25,6 +25,12 @@ class KubernetesDiscovery {
       }
       
       this.k8sApi = this.kc.makeApiClient(k8s.CoreV1Api);
+      
+      // Configure API client for proper HTTPS/TLS handling
+      if (this.k8sApi.defaultHeaders) {
+        this.k8sApi.defaultHeaders['User-Agent'] = 'lego-loco-cluster-backend/1.0';
+      }
+      
       this.initialized = true;
       
       // Try to detect namespace from environment or service account
@@ -78,11 +84,15 @@ class KubernetesDiscovery {
       // Discover StatefulSet pods with emulator label
       console.log(`Calling listNamespacedPod with namespace: "${namespace}"`);
       
-      // Use options object - required by newer @kubernetes/client-node versions
-      const podsResponse = await this.k8sApi.listNamespacedPod({
-        namespace: namespace,
-        labelSelector: 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster'
-      });
+      // Use positional parameters for better compatibility across client-node versions
+      const podsResponse = await this.k8sApi.listNamespacedPod(
+        namespace,
+        undefined, // pretty
+        undefined, // allowWatchBookmarks  
+        undefined, // _continue
+        undefined, // fieldSelector
+        'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster' // labelSelector
+      );
 
       if (!podsResponse || !podsResponse.body) {
         console.log('No pods response or body from Kubernetes API');
@@ -166,10 +176,15 @@ class KubernetesDiscovery {
       // Ensure namespace is a valid string
       const namespace = String(this.namespace).trim();
       
-      const servicesResponse = await this.k8sApi.listNamespacedService({
-        namespace: namespace,
-        labelSelector: 'app.kubernetes.io/part-of=lego-loco-cluster'
-      });
+      // Use positional parameters for better compatibility
+      const servicesResponse = await this.k8sApi.listNamespacedService(
+        namespace,
+        undefined, // pretty
+        undefined, // allowWatchBookmarks
+        undefined, // _continue
+        undefined, // fieldSelector
+        'app.kubernetes.io/part-of=lego-loco-cluster' // labelSelector
+      );
 
       if (!servicesResponse || !servicesResponse.body) {
         console.log('No services response or body from Kubernetes API');

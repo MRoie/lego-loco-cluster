@@ -9,96 +9,67 @@ class InstanceManager {
     this.cachedInstances = null;
     this.lastDiscoveryTime = null;
     this.discoveryInterval = 30000; // 30 seconds
-    this.staticInstances = null;
+    this.initialized = false;
     
-    // Start background discovery if Kubernetes is available
-    if (this.k8sDiscovery.isAvailable()) {
+    // Initialize async
+    this.initializeAsync();
+  }
+
+  async initializeAsync() {
+    if (!this.k8sDiscovery.isAvailable()) {
+      console.error('❌ Kubernetes discovery not available. Static configuration is disabled. Backend requires Kubernetes environment.');
+      throw new Error('Kubernetes discovery not available and static configuration is disabled');
+    }
+
+    // Test actual connectivity by trying to discover instances
+    try {
+      console.log('🔍 Testing Kubernetes connectivity...');
+      await this.k8sDiscovery.discoverEmulatorInstances();
+      console.log('✅ Kubernetes connectivity confirmed - static configuration disabled');
       this.startBackgroundDiscovery();
-    } else {
-      console.log('Kubernetes discovery not available, using static configuration only');
+      this.initialized = true;
+    } catch (error) {
+      console.error('❌ Kubernetes connectivity test failed:', error.message);
+      console.error('Static configuration is disabled. Backend requires active Kubernetes cluster.');
+      
+      // Don't throw here - let the server start but API calls will fail with meaningful errors
+      console.warn('⚠️  Backend starting in degraded mode - API calls will fail until Kubernetes is available');
     }
   }
 
   async getInstances() {
-    // Try Kubernetes discovery first if available
-    if (this.k8sDiscovery.isAvailable()) {
-      const now = Date.now();
-      
-      // Use cached instances if recent
-      if (this.cachedInstances && this.lastDiscoveryTime && 
-          (now - this.lastDiscoveryTime) < this.discoveryInterval) {
-        return this.cachedInstances;
-      }
-      
-      try {
-        const discoveredInstances = await this.k8sDiscovery.discoverEmulatorInstances();
-        
-        if (discoveredInstances.length > 0) {
-          this.cachedInstances = discoveredInstances;
-          this.lastDiscoveryTime = now;
-          console.log(`Auto-discovered ${discoveredInstances.length} instances from Kubernetes`);
-          return discoveredInstances;
-        }
-      } catch (error) {
-        console.error('Kubernetes discovery failed:', error.message);
-      }
+    // Check if initialized first
+    if (!this.initialized) {
+      throw new Error('InstanceManager not initialized. Kubernetes discovery failed and static configuration is disabled.');
     }
 
-    // Fallback to static instances.json
-    return this.getStaticInstances();
-  }
-
-  getStaticInstances() {
-    if (this.staticInstances) {
-      return this.staticInstances;
+    // ENFORCE Kubernetes-only discovery - NO static fallback
+    if (!this.k8sDiscovery.isAvailable()) {
+      throw new Error('Kubernetes discovery is not available. Static configuration fallback has been disabled. Please ensure the backend is running in a Kubernetes environment with proper RBAC permissions.');
     }
 
-    try {
-      const instancesFile = path.join(this.configDir, 'instances.json');
-      
-      if (!fs.existsSync(instancesFile)) {
-        console.warn('instances.json not found, returning empty array');
-        return [];
-      }
-      
-      let data = fs.readFileSync(instancesFile, 'utf-8');
-      
-      // Allow simple // comments in JSON files
-      data = data.replace(/^\s*\/\/.*$/gm, "");
-      
-      this.staticInstances = JSON.parse(data);
-      console.log(`Loaded ${this.staticInstances.length} instances from static configuration`);
-      
-      return this.staticInstances;
-    } catch (error) {
-      console.error('Failed to load static instances:', error.message);
-      return [];
-    }
-  }
-
-  async getProvisionedInstances() {
-    const allInstances = await this.getInstances();
+    const now = Date.now();
     
-    // For Kubernetes-discovered instances, filter by ready status
-    if (this.k8sDiscovery.isAvailable() && this.cachedInstances) {
-      return allInstances.filter(instance => instance.ready);
+    // Use cached instances if recent
+    if (this.cachedInstances && this.lastDiscoveryTime && 
+        (now - this.lastDiscoveryTime) < this.discoveryInterval) {
+      return this.cachedInstances;
     }
     
-    // For static instances, apply existing logic
     try {
-      const statusData = this.loadConfig('status');
+      const discoveredInstances = await this.k8sDiscovery.discoverEmulatorInstances();
       
-      return allInstances
-        .map(instance => ({
-          ...instance,
-          status: statusData[instance.id] || 'unknown',
-          provisioned: statusData[instance.id] === 'ready' || statusData[instance.id] === 'running',
-          ready: statusData[instance.id] === 'ready'
-        }))
-        .filter(instance => instance.provisioned);
+      if (discoveredInstances.length === 0) {
+        throw new Error('No emulator instances discovered from Kubernetes cluster. Ensure pods are running with proper labels: app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster');
+      }
+      
+      this.cachedInstances = discoveredInstances;
+      this.lastDiscoveryTime = now;
+      console.log(`✅ Auto-discovered ${discoveredInstances.length} instances from Kubernetes (static config disabled)`);
+      return discoveredInstances;
     } catch (error) {
-      console.error('Failed to load status data for static instances:', error.message);
-      return allInstances.filter(instance => instance.provisioned !== false);
+      console.error('❌ Kubernetes discovery failed:', error.message);
+      throw new Error(`Kubernetes discovery failed: ${error.message}. Static configuration is disabled.`);
     }
   }
 
@@ -172,26 +143,13 @@ class InstanceManager {
     }
   }
 
-  loadConfig(name) {
-    const file = path.join(this.configDir, `${name}.json`);
-    
-    if (!fs.existsSync(file)) {
-      throw new Error(`Config file not found: ${file}`);
-    }
-    
-    let data = fs.readFileSync(file, "utf-8");
-    data = data.replace(/^\s*\/\/.*$/gm, "");
-    return JSON.parse(data);
-  }
-
   isUsingKubernetesDiscovery() {
-    return this.k8sDiscovery.isAvailable() && this.cachedInstances !== null;
+    return this.k8sDiscovery.isAvailable();
   }
 
   invalidateCache() {
     this.cachedInstances = null;
     this.lastDiscoveryTime = null;
-    this.staticInstances = null;
   }
 
   async refreshDiscovery() {
