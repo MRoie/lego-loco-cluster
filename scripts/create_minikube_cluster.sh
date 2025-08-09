@@ -82,17 +82,25 @@ MAX_RETRIES=3
 RETRY_COUNT=0
 RETRY_DELAY=30
 
+# Configure minikube arguments based on environment
+MINIKUBE_ARGS="--driver=docker \
+    --kubernetes-version=$KUBERNETES_VERSION \
+    --nodes=$WORKERS \
+    --cpus=$MINIKUBE_CPUS \
+    --memory=$MINIKUBE_MEMORY \
+    --disk-size=8g \
+    --container-runtime=docker \
+    --wait=true \
+    --wait-timeout=600s"
+
+# Add --force flag in CI environments to bypass root privilege warnings
+if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+    MINIKUBE_ARGS="$MINIKUBE_ARGS --force"
+    echo "CI environment detected - adding --force flag to bypass root privilege warnings"
+fi
+
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if minikube start \
-        --driver=docker \
-        --kubernetes-version="$KUBERNETES_VERSION" \
-        --nodes="$WORKERS" \
-        --cpus="$MINIKUBE_CPUS" \
-        --memory="$MINIKUBE_MEMORY" \
-        --disk-size=8g \
-        --container-runtime=docker \
-        --wait=true \
-        --wait-timeout=600s; then
+    if minikube start $MINIKUBE_ARGS; then
         echo "✅ Minikube cluster started successfully" && date
         break
     else
