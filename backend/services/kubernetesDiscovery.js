@@ -66,10 +66,21 @@ class KubernetesDiscovery {
 
     try {
       console.log(`Discovering emulator instances in namespace: ${this.namespace}`);
+      console.log(`Namespace type: ${typeof this.namespace}, value: "${this.namespace}"`);
+      
+      // Ensure namespace is a valid string
+      const namespace = String(this.namespace).trim();
+      if (!namespace) {
+        console.error('Namespace is empty after trimming');
+        return [];
+      }
       
       // Discover StatefulSet pods with emulator label
+      console.log(`Calling listNamespacedPod with namespace: "${namespace}"`);
+      
+      // Call API with explicit namespace parameter to avoid null/undefined issues
       const podsResponse = await this.k8sApi.listNamespacedPod(
-        this.namespace,
+        namespace,  // namespace (required)
         undefined, // pretty
         undefined, // allowWatchBookmarks
         undefined, // continue
@@ -150,9 +161,17 @@ class KubernetesDiscovery {
       return {};
     }
 
+    if (!this.namespace || this.namespace.trim() === '') {
+      console.warn('Cannot get services info: Kubernetes namespace is null or empty');
+      return {};
+    }
+
     try {
+      // Ensure namespace is a valid string
+      const namespace = String(this.namespace).trim();
+      
       const servicesResponse = await this.k8sApi.listNamespacedService(
-        this.namespace,
+        namespace,  // namespace (required)
         undefined, // pretty
         undefined, // allowWatchBookmarks
         undefined, // continue
@@ -198,10 +217,12 @@ class KubernetesDiscovery {
     try {
       const watch = new k8s.Watch(this.kc);
       
-      console.log(`Starting watch for emulator pod changes in namespace: ${this.namespace}...`);
+      // Ensure namespace is a valid string
+      const namespace = String(this.namespace).trim();
+      console.log(`Starting watch for emulator pod changes in namespace: ${namespace}...`);
       
       const watchRequest = await watch.watch(
-        `/api/v1/namespaces/${this.namespace}/pods`,
+        `/api/v1/namespaces/${namespace}/pods`,
         { labelSelector: 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster' },
         (type, apiObj) => {
           console.log(`Pod ${type}: ${apiObj.metadata.name} - ${apiObj.status.phase}`);

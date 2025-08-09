@@ -99,6 +99,7 @@ jobs:
       - name: Install kubectl and helm (fallback only)
         if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
         run: |
+          echo "Installing kubectl and helm (not available in fallback image)..."
           curl -LO "https://dl.k8s.io/release/v1.28.3/bin/linux/amd64/kubectl"
           install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
           curl https://get.helm.sh/helm-v3.15.4-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
@@ -107,7 +108,7 @@ jobs:
           install -o root -g root -m 0755 minikube /usr/local/bin/minikube
       - name: Verify pre-installed tools
         run: |
-          echo "Verifying CI tools..."
+          echo "Verifying CI tools (using image: ${{ needs.prepare-ci-image.outputs.ci-image }})..."
           kubectl version --client=true
           helm version --short
           minikube version --short
@@ -213,6 +214,7 @@ jobs:
       - name: Install kubectl and helm (fallback only)
         if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
         run: |
+          echo "Installing kubectl and helm (not available in fallback image)..."
           curl -LO "https://dl.k8s.io/release/v1.28.3/bin/linux/amd64/kubectl"
           install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
           curl https://get.helm.sh/helm-v3.15.4-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
@@ -221,7 +223,7 @@ jobs:
           install -o root -g root -m 0755 minikube /usr/local/bin/minikube
       - name: Verify pre-installed tools
         run: |
-          echo "Verifying CI tools..."
+          echo "Verifying CI tools (using image: ${{ needs.prepare-ci-image.outputs.ci-image }})..."
           kubectl version --client=true
           helm version --short
           minikube version --short
