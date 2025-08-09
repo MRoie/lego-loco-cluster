@@ -101,7 +101,7 @@ create_cluster() {
     MONITOR_PID=$!
     
     # Create cluster with timeout
-    timeout 300 kind create cluster --config="$KIND_CONFIG_FILE" --wait=300s --verbosity=1 > "$LOG_DIR/kind-create.log" 2>&1
+    kind create cluster --config="$KIND_CONFIG_FILE" --wait=300s --verbosity=1 > "$LOG_DIR/kind-create.log" 2>&1
     CREATE_EXIT_CODE=$?
     
     # Stop resource monitoring
