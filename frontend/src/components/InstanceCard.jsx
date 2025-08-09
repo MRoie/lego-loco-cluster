@@ -4,6 +4,7 @@ import ReactVNCViewer from './ReactVNCViewer';
 import useWebRTC from '../hooks/useWebRTC';
 import AudioSinkSelector from './AudioSinkSelector';
 import QualityIndicator from './QualityIndicator';
+import LoadingSpinner from './LoadingSpinner';
 
 /**
  * Individual instance card component for the 3x3 grid
@@ -192,14 +193,11 @@ export default function InstanceCard({ instance, isActive, onClick }) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <div className="text-center">
-                  <motion.div
-                    className="w-10 h-10 border-3 border-yellow-400 border-t-transparent rounded-full mx-auto mb-3"
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                  />
-                  <p className="lego-text font-bold text-yellow-400">Loading stream...</p>
-                </div>
+                <LoadingSpinner 
+                  size="md" 
+                  message="Loading stream..." 
+                  variant="light" 
+                />
               </motion.div>
             )}
           </>
