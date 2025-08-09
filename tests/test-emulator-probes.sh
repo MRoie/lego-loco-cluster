@@ -4,7 +4,7 @@
 # Tests actual probe behavior, timing, and reliability with running services
 # Based on Site Reliability Engineering principles
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
