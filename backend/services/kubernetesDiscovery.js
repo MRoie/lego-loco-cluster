@@ -30,8 +30,20 @@ class KubernetesDiscovery {
       // Try to detect namespace from environment or service account
       if (process.env.KUBERNETES_NAMESPACE) {
         this.namespace = process.env.KUBERNETES_NAMESPACE;
+        console.log(`Using namespace from KUBERNETES_NAMESPACE: ${this.namespace}`);
       } else if (fs.existsSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace')) {
         this.namespace = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace', 'utf8').trim();
+        console.log(`Using namespace from service account: ${this.namespace}`);
+      } else {
+        // In CI environments, use default namespace
+        this.namespace = 'default';
+        console.log(`Using default namespace: ${this.namespace}`);
+      }
+      
+      // Validate namespace is not empty
+      if (!this.namespace || this.namespace.trim() === '') {
+        this.namespace = 'default';
+        console.warn('Namespace was empty, falling back to default');
       }
       
       console.log(`Kubernetes discovery initialized for namespace: ${this.namespace}`);
@@ -47,7 +59,14 @@ class KubernetesDiscovery {
       return [];
     }
 
+    if (!this.namespace || this.namespace.trim() === '') {
+      console.error('Kubernetes namespace is null or empty, cannot discover instances');
+      return [];
+    }
+
     try {
+      console.log(`Discovering emulator instances in namespace: ${this.namespace}`);
+      
       // Discover StatefulSet pods with emulator label
       const podsResponse = await this.k8sApi.listNamespacedPod(
         this.namespace,
@@ -171,10 +190,15 @@ class KubernetesDiscovery {
       return null;
     }
 
+    if (!this.namespace || this.namespace.trim() === '') {
+      console.warn('Cannot watch instances: Kubernetes namespace is null or empty');
+      return null;
+    }
+
     try {
       const watch = new k8s.Watch(this.kc);
       
-      console.log('Starting watch for emulator pod changes...');
+      console.log(`Starting watch for emulator pod changes in namespace: ${this.namespace}...`);
       
       const watchRequest = await watch.watch(
         `/api/v1/namespaces/${this.namespace}/pods`,
@@ -188,13 +212,16 @@ class KubernetesDiscovery {
           }
         },
         (err) => {
-          console.error('Watch error:', err);
+          if (err && err.code !== 'ECONNRESET') {
+            console.error('Watch error:', err.message);
+          }
         }
       );
 
       return watchRequest;
     } catch (error) {
       console.error('Failed to start watching instances:', error.message);
+      // Don't throw error for watch failures, just return null
       return null;
     }
   }
