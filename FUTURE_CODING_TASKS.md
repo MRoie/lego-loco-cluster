@@ -161,3 +161,6 @@ shader_refresh_rate = 0.000000
 
 [GL3 Shaders]
 shaders = 0
+
+
+trigger build
