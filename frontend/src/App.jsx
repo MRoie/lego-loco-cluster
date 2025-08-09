@@ -3,6 +3,7 @@ import { useActive } from "./ActiveContext";
 import { motion, AnimatePresence } from "framer-motion";
 import VRScene from "./VRScene";
 import InstanceCard from "./components/InstanceCard";
+import DiscoveryStatus from "./components/DiscoveryStatus";
 
 
 // Main dashboard component showing the 3×3 grid of instances
@@ -25,17 +26,22 @@ export default function App() {
 
   // Fetch instance list and hotkey mapping from the backend
   useEffect(() => {
-    // Load all instances
-    fetch("/api/instances")
-      .then((r) => r.json())
-      .then(setInstances)
-      .catch((e) => console.error("Failed to fetch instances", e));
-    
-    // Load only provisioned instances
-    fetch("/api/instances/provisioned")
-      .then((r) => r.json())
-      .then(setProvisionedInstances)
-      .catch((e) => console.error("Failed to fetch provisioned instances", e));
+    const loadInstances = () => {
+      // Load all instances
+      fetch("/api/instances")
+        .then((r) => r.json())
+        .then(setInstances)
+        .catch((e) => console.error("Failed to fetch instances", e));
+      
+      // Load only provisioned instances
+      fetch("/api/instances/provisioned")
+        .then((r) => r.json())
+        .then(setProvisionedInstances)
+        .catch((e) => console.error("Failed to fetch provisioned instances", e));
+    };
+
+    // Initial load
+    loadInstances();
     
     fetch("/api/config/hotkeys")
       .then((r) => r.json())
@@ -56,7 +62,19 @@ export default function App() {
     }, 5000);
     
     fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => {});
-    return () => clearInterval(interval);
+    
+    // Listen for discovery refresh events
+    const handleDiscoveryRefresh = () => {
+      console.log('Discovery refreshed, reloading instances');
+      loadInstances();
+    };
+    
+    window.addEventListener('discoveryRefreshed', handleDiscoveryRefresh);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('discoveryRefreshed', handleDiscoveryRefresh);
+    };
   }, []);
 
   // Update active index when activeIds or instances change
@@ -150,22 +168,27 @@ export default function App() {
         <>
           {/* Transparent Header with VR Button */}
           <div className="absolute top-0 right-0 z-10 p-4">
-            <button
-              onClick={() => setVrMode(true)}
-              className="lego-vr-button"
-              title="Enter VR Mode"
-            >
-              {/* VR Headset Icon */}
-              <svg 
-                width="24" 
-                height="24" 
-                viewBox="0 0 24 24" 
-                fill="currentColor"
-                className="w-6 h-6"
+            <div className="flex items-center space-x-4">
+              {/* Discovery Status */}
+              <DiscoveryStatus />
+              {/* VR Button */}
+              <button
+                onClick={() => setVrMode(true)}
+                className="lego-vr-button"
+                title="Enter VR Mode"
               >
-                <path d="M20 8v8a3 3 0 01-3 3h-2.5l-1.5-2H8l-1.5 2H4a3 3 0 01-3-3V8a3 3 0 013-3h13a3 3 0 013 3zM6.5 13.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm11 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
-              </svg>
-            </button>
+                {/* VR Headset Icon */}
+                <svg 
+                  width="24" 
+                  height="24" 
+                  viewBox="0 0 24 24" 
+                  fill="currentColor"
+                  className="w-6 h-6"
+                >
+                  <path d="M20 8v8a3 3 0 01-3 3h-2.5l-1.5-2H8l-1.5 2H4a3 3 0 01-3-3V8a3 3 0 013-3h13a3 3 0 013 3zM6.5 13.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm11 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* 3x3 Grid Container */}

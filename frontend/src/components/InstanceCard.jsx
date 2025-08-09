@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import ReactVNCViewer from './ReactVNCViewer';
 import useWebRTC from '../hooks/useWebRTC';
 import AudioSinkSelector from './AudioSinkSelector';
+import QualityIndicator from './QualityIndicator';
 
 /**
  * Individual instance card component for the 3x3 grid
@@ -13,8 +14,7 @@ import AudioSinkSelector from './AudioSinkSelector';
  * - onClick: callback when card is clicked
  */
 export default function InstanceCard({ instance, isActive, onClick }) {
-  const { videoRef, loading } = useWebRTC(instance.id);
-  
+  const { videoRef, loading, connectionQuality } = useWebRTC(instance.id);
   const getStatusColor = (status) => {
     switch (status) {
       case 'ready':
@@ -118,6 +118,10 @@ export default function InstanceCard({ instance, isActive, onClick }) {
             </div>
             <div className="flex items-center space-x-2">
               <div className={`w-5 h-5 rounded ${getStatusColor(instance.status)} border-3 border-black/30 shadow-sm`} />
+              {/* Quality Indicator - compact display */}
+              {instance.provisioned && (
+                <QualityIndicator instanceId={instance.id} compact={true} />
+              )}
             </div>
           </div>
           

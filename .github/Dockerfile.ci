@@ -1,0 +1,58 @@
+# Base image for CI with pre-installed dependencies to reduce setup time
+FROM node:20-bullseye
+
+# Install system dependencies needed for cluster tests
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    qemu-system-x86 \
+    qemu-kvm \
+    wine \
+    gstreamer1.0-tools \
+    pulseaudio \
+    docker.io \
+    tcpdump \
+    netcat-openbsd \
+    curl \
+    jq \
+    ca-certificates \
+    apt-transport-https \
+    lsb-release \
+    gnupg \
+    conntrack \
+    socat \
+    ebtables \
+    ethtool \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pre-install kubectl (pinned version for stability)
+RUN curl -LO "https://dl.k8s.io/release/v1.28.3/bin/linux/amd64/kubectl" \
+    && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
+    && rm kubectl
+
+# Pre-install helm (latest stable version)
+RUN curl https://get.helm.sh/helm-v3.15.4-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm \
+    && chmod +x /usr/local/bin/helm
+
+# Pre-install minikube to reduce setup time in CI
+RUN curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 \
+    && install -o root -g root -m 0755 minikube /usr/local/bin/minikube \
+    && rm minikube
+
+# Pre-install KIND (Kubernetes in Docker) - CI-friendly alternative to minikube
+RUN curl -Lo kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 \
+    && install -o root -g root -m 0755 kind /usr/local/bin/kind \
+    && rm kind
+
+# Pre-cache Kubernetes images to speed up cluster creation
+RUN minikube config set driver docker \
+    && minikube config set kubernetes-version v1.28.3
+
+# Set working directory
+WORKDIR /workspace
+
+# Set up environment for CI optimization
+ENV MINIKUBE_IN_STYLE=false
+ENV MINIKUBE_WANTUPDATENOTIFICATION=false
+ENV MINIKUBE_WANTREPORTERRORPROMPT=false
+
+# Default command
+CMD ["bash"]

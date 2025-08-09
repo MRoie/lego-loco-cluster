@@ -83,5 +83,30 @@ The core development environment is functional, but several features remain. Use
 4. **Extended Cluster Tests** – expand `k8s-tests/test-network.sh`, add `test-boot.sh`, and run the full suite in CI.
 5. **Frontend, Streaming and VR Polishing** – implement audio device selection, reconnect logic and loading indicators in `useWebRTC`, and deliver a production-ready VR mode with minimal latency.
 
+## Video/Audio Quality Monitoring and Testing (New)
+The backend now includes comprehensive stream quality monitoring with real-time probing and metrics collection. Additional quality monitoring features to implement:
+
+6. **Advanced WebRTC Statistics Integration** – extend the `useWebRTC` hook to collect detailed RTCStats including bandwidth utilization, codec information, network conditions, and adaptive bitrate suggestions. Integrate these client-side metrics with the backend monitoring service.
+
+7. **Quality-Adaptive Streaming** – implement dynamic quality adjustment based on detected network conditions, automatically reducing frame rates, resolution, or switching codecs when packet loss or latency thresholds are exceeded. Add user controls for quality preferences.
+
+8. **Real-time Quality Dashboard** – create a comprehensive monitoring dashboard showing live quality metrics, historical trends, alert notifications for quality degradation, and comparative analysis across all instances. Include quality heat maps and performance charts.
+
+9. ✅ **QEMU Audio/Video Health Probing** – **COMPLETED**: Extended monitoring service to probe actual QEMU audio/video subsystem health beyond network connectivity. Implemented deeper inspection of video frame generation rates, audio buffer states, GPU rendering performance, and network interface health through container health endpoints.
+
+10. **Stream Quality Testing Suite** – create comprehensive automated tests for video/audio quality scenarios including simulated network degradation, bandwidth constraints, codec switching, and multi-instance load testing. Integrate with CI/CD pipeline.
+
+11. ✅ **Quality Failure Detection and Recovery** – **COMPLETED**: Implemented intelligent failure detection that distinguishes between network issues, QEMU problems, and client-side issues. Added automatic recovery mechanisms including stream restart, quality fallback, and instance failover with configurable attempt limits.
+
+12. **Performance Profiling and Optimization** – add detailed performance profiling for the entire streaming pipeline, identify bottlenecks in video encoding, network transmission, and client-side decoding. Implement optimization recommendations and automatic tuning.
+
 Completing these tasks will yield a robust Windows 98 cluster with automated deployment, reliable streaming and a polished VR experience.
 
+
+## Instance Management Revolution (New)
+13. ✅ **Kubernetes Auto-Discovery Integration** – **COMPLETED**: Eliminated the need for manual instances.json maintenance through comprehensive Kubernetes service discovery. Backend now automatically discovers emulator instances from StatefulSet pods with real-time updates, proper RBAC integration, and intelligent fallback to static configuration.
+
+## Enhanced Testing & CI (New)
+14. ✅ **Comprehensive Monitoring Integration Tests** – **COMPLETED**: Added comprehensive test suite validating container health monitoring, API endpoints, auto-discovery, and recovery mechanisms. Integrated monitoring tests into CI pipeline with proper cluster setup and validation.
+
+15. ✅ **Container Health Instrumentation** – **COMPLETED**: Enhanced QEMU containers with detailed health monitoring scripts exposing metrics via HTTP endpoints. Integrated health monitoring into Helm charts with proper port exposure and configuration.

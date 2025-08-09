@@ -6,6 +6,8 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
+const StreamQualityMonitor = require("./services/streamQualityMonitor");
+const InstanceManager = require("./services/instanceManager");
 
 const app = express();
 const server = http.createServer(app);
@@ -27,6 +29,12 @@ const K8S_CONFIG_DIR = "/app/config";
 const FINAL_CONFIG_DIR = fs.existsSync(K8S_CONFIG_DIR) ? K8S_CONFIG_DIR : CONFIG_DIR;
 
 console.log("Using config directory:", FINAL_CONFIG_DIR);
+
+// Initialize instance manager with auto-discovery
+const instanceManager = new InstanceManager(FINAL_CONFIG_DIR);
+
+// Initialize stream quality monitor with InstanceManager for Kubernetes-only discovery
+const qualityMonitor = new StreamQualityMonitor(FINAL_CONFIG_DIR, instanceManager);
 
 // Serve frontend static build
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
@@ -73,49 +81,232 @@ app.get("/api/status", (req, res) => {
   }
 });
 
-// Enhanced instances endpoint that includes status and provisioning info
-app.get("/api/instances", (req, res) => {
+// Enhanced instances endpoint with auto-discovery support
+app.get("/api/instances", async (req, res) => {
   try {
     console.log("Instances request");
-    const instances = loadConfig("instances");
-    const statusData = loadConfig("status");
-    
-    // Enhanced instance data with status information
-    const enhancedInstances = instances.map(instance => ({
-      ...instance,
-      status: statusData[instance.id] || 'unknown',
-      provisioned: statusData[instance.id] === 'ready' || statusData[instance.id] === 'running',
-      ready: statusData[instance.id] === 'ready'
-    }));
-    
-    res.json(enhancedInstances);
+    const instances = await instanceManager.getInstances();
+    res.json(instances);
   } catch (e) {
     console.error("Instances config error:", e.message);
     res.status(503).json([]);
   }
 });
 
-// New endpoint to get provisioned instances only
-app.get("/api/instances/provisioned", (req, res) => {
+// New endpoint to get provisioned instances only with auto-discovery
+app.get("/api/instances/provisioned", async (req, res) => {
   try {
     console.log("Provisioned instances request");
-    const instances = loadConfig("instances");
-    const statusData = loadConfig("status");
-    
-    // Filter to only provisioned instances
-    const provisionedInstances = instances
-      .map(instance => ({
-        ...instance,
-        status: statusData[instance.id] || 'unknown',
-        provisioned: statusData[instance.id] === 'ready' || statusData[instance.id] === 'running',
-        ready: statusData[instance.id] === 'ready'
-      }))
-      .filter(instance => instance.provisioned);
-    
+    const provisionedInstances = await instanceManager.getProvisionedInstances();
     res.json(provisionedInstances);
   } catch (e) {
-    console.error("Provisioned instances config error:", e.message);
+    console.error("Provisioned instances error:", e.message);
     res.status(503).json([]);
+  }
+});
+
+// New endpoint for Kubernetes discovery information
+app.get("/api/instances/discovery-info", async (req, res) => {
+  try {
+    const k8sInfo = await instanceManager.getKubernetesInfo();
+    const isUsingK8sDiscovery = instanceManager.isUsingKubernetesDiscovery();
+    
+    res.json({
+      kubernetesDiscovery: k8sInfo,
+      usingAutoDiscovery: isUsingK8sDiscovery,
+      fallbackToStatic: !isUsingK8sDiscovery
+    });
+  } catch (e) {
+    console.error("Discovery info error:", e.message);
+    res.status(500).json({ error: "Failed to get discovery info" });
+  }
+});
+
+// New endpoint to refresh instance discovery
+app.post("/api/instances/refresh", async (req, res) => {
+  try {
+    console.log("Manual instance discovery refresh requested");
+    const instances = await instanceManager.refreshDiscovery();
+    res.json({
+      message: "Discovery refreshed successfully",
+      instanceCount: instances.length,
+      instances: instances
+    });
+  } catch (e) {
+    console.error("Discovery refresh error:", e.message);
+    res.status(500).json({ error: "Failed to refresh discovery" });
+  }
+});
+
+// ========== STREAM QUALITY MONITORING API ==========
+
+// Get quality metrics for all instances
+app.get("/api/quality/metrics", (req, res) => {
+  try {
+    const metrics = qualityMonitor.getAllMetrics();
+    res.json(metrics);
+  } catch (e) {
+    console.error("Failed to get quality metrics:", e.message);
+    res.status(500).json({ error: "Failed to get quality metrics" });
+  }
+});
+
+// Get quality metrics for a specific instance
+app.get("/api/quality/metrics/:instanceId", (req, res) => {
+  try {
+    const { instanceId } = req.params;
+    const metrics = qualityMonitor.getInstanceMetrics(instanceId);
+    
+    if (!metrics) {
+      return res.status(404).json({ error: "Instance not found or not monitored" });
+    }
+    
+    res.json(metrics);
+  } catch (e) {
+    console.error(`Failed to get quality metrics for ${req.params.instanceId}:`, e.message);
+    res.status(500).json({ error: "Failed to get instance quality metrics" });
+  }
+});
+
+// Get quality summary across all instances
+app.get("/api/quality/summary", (req, res) => {
+  try {
+    const summary = qualityMonitor.getQualitySummary();
+    res.json(summary);
+  } catch (e) {
+    console.error("Failed to get quality summary:", e.message);
+    res.status(500).json({ error: "Failed to get quality summary" });
+  }
+});
+
+// Get deep health information for all instances
+app.get("/api/quality/deep-health", (req, res) => {
+  try {
+    const metrics = qualityMonitor.getAllMetrics();
+    const deepHealthData = {};
+    
+    for (const [instanceId, data] of Object.entries(metrics)) {
+      if (data.deepHealth) {
+        deepHealthData[instanceId] = {
+          instanceId,
+          timestamp: data.timestamp,
+          overallStatus: data.deepHealth.overall_status || 'unknown',
+          deepHealth: data.deepHealth,
+          failureType: data.failureType || 'none',
+          recoveryNeeded: data.recoveryNeeded || false,
+          errors: data.errors || []
+        };
+      }
+    }
+    
+    res.json(deepHealthData);
+  } catch (e) {
+    console.error("Failed to get deep health data:", e.message);
+    res.status(500).json({ error: "Failed to get deep health data" });
+  }
+});
+
+// Get deep health information for a specific instance
+app.get("/api/quality/deep-health/:instanceId", (req, res) => {
+  try {
+    const instanceId = req.params.instanceId;
+    const metrics = qualityMonitor.getInstanceMetrics(instanceId);
+    
+    if (!metrics) {
+      return res.status(404).json({ error: "Instance not found" });
+    }
+    
+    const deepHealthData = {
+      instanceId,
+      timestamp: metrics.timestamp,
+      overallStatus: metrics.deepHealth?.overall_status || 'unknown',
+      deepHealth: metrics.deepHealth || null,
+      failureType: metrics.failureType || 'none',
+      recoveryNeeded: metrics.recoveryNeeded || false,
+      errors: metrics.errors || []
+    };
+    
+    res.json(deepHealthData);
+  } catch (e) {
+    console.error(`Failed to get deep health data for ${req.params.instanceId}:`, e.message);
+    res.status(500).json({ error: "Failed to get instance deep health data" });
+  }
+});
+
+// Trigger recovery for a specific instance
+app.post("/api/quality/recover/:instanceId", (req, res) => {
+  try {
+    const instanceId = req.params.instanceId;
+    const { forceRecovery = false } = req.body;
+    
+    console.log(`🚑 Manual recovery triggered for ${instanceId}`);
+    
+    // Get current metrics to determine failure type
+    const metrics = qualityMonitor.getInstanceMetrics(instanceId);
+    if (!metrics) {
+      return res.status(404).json({ error: "Instance not found" });
+    }
+    
+    const failureType = metrics.failureType || 'mixed';
+    
+    // Trigger recovery asynchronously
+    qualityMonitor.executeRecoveryStrategy(instanceId, failureType)
+      .then((success) => {
+        console.log(`Recovery ${success ? 'succeeded' : 'failed'} for ${instanceId}`);
+      })
+      .catch((error) => {
+        console.error(`Recovery error for ${instanceId}:`, error.message);
+      });
+    
+    res.json({ 
+      message: `Recovery initiated for ${instanceId}`, 
+      failureType,
+      forceRecovery 
+    });
+  } catch (e) {
+    console.error(`Failed to trigger recovery for ${req.params.instanceId}:`, e.message);
+    res.status(500).json({ error: "Failed to trigger recovery" });
+  }
+});
+
+// Get recovery status and attempts
+app.get("/api/quality/recovery-status", (req, res) => {
+  try {
+    const recoveryStatus = {};
+    
+    // Get recovery attempts for all instances
+    for (const [instanceId, attempts] of qualityMonitor.recoveryAttempts || []) {
+      recoveryStatus[instanceId] = {
+        attempts,
+        maxAttempts: qualityMonitor.maxRecoveryAttempts,
+        canRecover: attempts < qualityMonitor.maxRecoveryAttempts
+      };
+    }
+    
+    res.json(recoveryStatus);
+  } catch (e) {
+    console.error("Failed to get recovery status:", e.message);
+    res.status(500).json({ error: "Failed to get recovery status" });
+  }
+});
+
+// Start/stop quality monitoring
+app.post("/api/quality/monitor/:action", (req, res) => {
+  try {
+    const { action } = req.params;
+    
+    if (action === 'start') {
+      qualityMonitor.start();
+      res.json({ status: 'started', message: 'Quality monitoring started' });
+    } else if (action === 'stop') {
+      qualityMonitor.stop();
+      res.json({ status: 'stopped', message: 'Quality monitoring stopped' });
+    } else {
+      res.status(400).json({ error: 'Invalid action. Use start or stop' });
+    }
+  } catch (e) {
+    console.error(`Failed to ${req.params.action} quality monitoring:`, e.message);
+    res.status(500).json({ error: `Failed to ${req.params.action} quality monitoring` });
   }
 });
 
@@ -169,15 +360,19 @@ app.post("/api/active", (req, res) => {
 const proxy = httpProxy.createProxyServer({ ws: true, changeOrigin: true });
 
 // Resolve an instance ID to its upstream target URL
-function getInstanceTarget(id) {
-  // Reload instances dynamically to support scaling
+async function getInstanceTarget(id) {
+  // Reload instances dynamically using instance manager
   try {
-    const instances = loadConfig("instances");
-    const inst = instances.find((i) => i.id === id);
+    const inst = await instanceManager.getInstanceById(id);
+    if (!inst) {
+      throw new Error(`Instance ${id} not found`);
+    }
+    
+    console.log(`Found instance ${id}: ${inst.vncUrl}`);
     // Use vncUrl for direct VNC connection instead of streamUrl (which is for noVNC web interface)
-    return inst ? inst.vncUrl : null;
+    return inst.vncUrl;
   } catch (e) {
-    console.error("Failed to load instances config:", e.message);
+    console.error("Failed to get instance target:", e.message);
     return null;
   }
 }
@@ -296,19 +491,24 @@ server.on("upgrade", (req, socket, head) => {
   const vncMatch = req.url.match(/^\/proxy\/vnc\/([^\/]+)/);
   if (vncMatch) {
     const instanceId = vncMatch[1];
-    const target = getInstanceTarget(instanceId);
     
-    if (target) {
-      console.log(`VNC WebSocket proxy: ${instanceId} -> ${target}`);
-      
-      // Use the VNC WebSocket server
-      vncWss.handleUpgrade(req, socket, head, (ws) => {
-        createVNCBridge(ws, target, instanceId);
-      });
-    } else {
-      console.error(`VNC WebSocket proxy: Unknown instance ${instanceId}`);
+    getInstanceTarget(instanceId).then(target => {
+      if (target) {
+        console.log(`VNC WebSocket proxy: ${instanceId} -> ${target}`);
+        
+        // Use the VNC WebSocket server
+        vncWss.handleUpgrade(req, socket, head, (ws) => {
+          createVNCBridge(ws, target, instanceId);
+        });
+      } else {
+        console.error(`VNC WebSocket proxy: Unknown instance ${instanceId}`);
+        socket.destroy();
+      }
+    }).catch(error => {
+      console.error(`VNC WebSocket proxy error for ${instanceId}:`, error.message);
       socket.destroy();
-    }
+    });
+    
     return;
   }
   
@@ -333,13 +533,21 @@ server.listen(3001, () => {
   console.log("Config directory:", FINAL_CONFIG_DIR);
   console.log("Current active instances:", readActive());
   
-  // Test config loading
-  try {
-    console.log("Testing config loading...");
-    const instances = loadConfig("instances");
-    console.log("Loaded instances:", instances);
-  } catch (e) {
-    console.error("Config loading test failed:", e.message);
+  // Start quality monitoring
+  console.log("🔍 Starting stream quality monitoring service...");
+  qualityMonitor.start();
+  
+  // Test config loading (only in non-test environments)
+  if (process.env.NODE_ENV !== 'test' && !process.env.CI) {
+    try {
+      console.log("Testing config loading...");
+      const instances = loadConfig("instances");
+      console.log("Loaded instances:", instances);
+    } catch (e) {
+      console.error("Config loading test failed:", e.message);
+    }
+  } else {
+    console.log("⚠️  Test environment detected - skipping static config loading test");
   }
 });
 
