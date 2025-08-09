@@ -157,6 +157,40 @@ spec:
           {{- if .Values.emulator.resources }}
           {{- toYaml .Values.emulator.resources | nindent 10 }}
           {{- end }}
+        
+        # Health checks for faster startup detection and failure recovery
+        livenessProbe:
+          exec:
+            command:
+              - /usr/local/bin/health-monitor.sh
+              - check
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+          
+        readinessProbe:
+          exec:
+            command:
+              - /usr/local/bin/health-monitor.sh
+              - check
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+          
+        startupProbe:
+          exec:
+            command:
+              - /usr/local/bin/health-monitor.sh
+              - check
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 12  # Allow up to 60 seconds for startup (12 * 5s)
+          successThreshold: 1
       volumes:
       - name: disk
         {{- if .Values.emulator.diskPVC }}
