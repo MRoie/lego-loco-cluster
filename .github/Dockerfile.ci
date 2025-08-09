@@ -1,0 +1,34 @@
+# Base image for CI with pre-installed dependencies to reduce setup time
+FROM node:20-bullseye
+
+# Install system dependencies needed for cluster tests
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    qemu-system-x86 \
+    qemu-kvm \
+    wine \
+    gstreamer1.0-tools \
+    pulseaudio \
+    docker.io \
+    tcpdump \
+    netcat-openbsd \
+    curl \
+    jq \
+    ca-certificates \
+    apt-transport-https \
+    lsb-release \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pre-install kubectl and helm to reduce setup time
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
+    && rm kubectl
+
+RUN curl https://get.helm.sh/helm-v3.14.3-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm \
+    && chmod +x /usr/local/bin/helm
+
+# Set working directory
+WORKDIR /workspace
+
+# Default command
+CMD ["bash"]

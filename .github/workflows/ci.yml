@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ "run_ci", "copilot/fix-55" ]
 
+# Global environment variables
+env:
+  CI_BASE_IMAGE: "node:20-bullseye"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: lego-loco-cluster-ci
+
 jobs:
   # Build the backend and frontend assets
   build:
@@ -25,14 +31,17 @@ jobs:
           # Frontend packages and production build
           cd frontend && npm install && npm run build && cd ..
 
-
-  integration-network:
+  # Sequential cluster-based integration tests to resolve concurrency issues
+  cluster-integration:
     needs: build
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 30  # Extended timeout for sequential tests
     container:
       image: node:20-bullseye
       options: --privileged
+    strategy:
+      # Run tests sequentially to avoid minikube concurrency issues
+      max-parallel: 1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,164 +54,51 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
-            pulseaudio docker.io tcpdump netcat-openbsd
-      - name: Start Docker daemon
+            pulseaudio docker.io tcpdump netcat-openbsd curl jq \
+            ca-certificates apt-transport-https lsb-release gnupg
+      - name: Install kubectl and helm
         run: |
-          # Start dockerd with better logging and error handling
-          dockerd > /tmp/dockerd.log 2>&1 &
-          DOCKERD_PID=$!
-          echo "Started dockerd with PID: $DOCKERD_PID"
-          
-          # Wait for Docker to be fully ready with extended timeout
-          echo "Waiting for Docker daemon to be ready..."
-          timeout=60
-          while ! docker info >/dev/null 2>&1; do
-            ((timeout--))
-            if [ $timeout -le 0 ]; then
-              echo "Docker daemon failed to start within 60 seconds"
-              echo "Docker daemon logs:"
-              cat /tmp/dockerd.log || true
-              echo "Process list:"
-              ps aux | grep docker || true
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "Docker daemon ready"
-          docker version
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+          curl https://get.helm.sh/helm-v3.14.3-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
+          chmod +x /usr/local/bin/helm
+      - name: Start Docker daemon
+        run: scripts/start_docker_daemon.sh
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
-      - name: Create Minikube cluster
-        run: scripts/create_minikube_cluster.sh
+          cd frontend && npm install && npm run build && cd ..
+      - name: Create Minikube cluster (shared for all tests)
+        run: scripts/manage_ci_cluster.sh create
       - name: Run network tests
-        run: bash k8s-tests/test-network.sh
-      - name: Upload integration network logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-network-logs
-          path: k8s-tests/logs
-      - name: Destroy cluster
-        if: always()
-        run: minikube delete || true
-
-  integration-tcp:
-    needs: build
-    runs-on: ubuntu-22.04
-    timeout-minutes: 15
-    container:
-      image: node:20-bullseye
-      options: --privileged
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install system packages
-        env:
-          DEBIAN_FRONTEND: noninteractive
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
-            pulseaudio docker.io tcpdump netcat-openbsd
-      - name: Start Docker daemon
-        run: |
-          # Start dockerd with better logging and error handling
-          dockerd > /tmp/dockerd.log 2>&1 &
-          DOCKERD_PID=$!
-          echo "Started dockerd with PID: $DOCKERD_PID"
-          
-          # Wait for Docker to be fully ready
-          echo "Waiting for Docker daemon to be ready..."
-          timeout=60
-          while ! docker info >/dev/null 2>&1; do
-            ((timeout--))
-            if [ $timeout -le 0 ]; then
-              echo "Docker daemon failed to start within 60 seconds"
-              echo "Docker daemon logs:"
-              cat /tmp/dockerd.log || true
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "Docker daemon ready"
-          docker version
-      - name: Install Node dependencies
-        run: |
-          cd backend && npm install && cd ..
-      - name: Create Minikube cluster
-        run: scripts/create_minikube_cluster.sh
+          echo "=== Running Network Integration Tests ==="
+          bash k8s-tests/test-network.sh
       - name: Run TCP tests
-        run: bash k8s-tests/test-tcp.sh
-      - name: Upload integration tcp logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-tcp-logs
-          path: k8s-tests/logs
-      - name: Destroy cluster
-        if: always()
-        run: minikube delete || true
-
-  integration-broadcast:
-    needs: build
-    runs-on: ubuntu-22.04
-    timeout-minutes: 15
-    container:
-      image: node:20-bullseye
-      options: --privileged
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install system packages
-        env:
-          DEBIAN_FRONTEND: noninteractive
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
-            pulseaudio docker.io tcpdump netcat-openbsd
-      - name: Start Docker daemon
-        run: |
-          # Start dockerd with better logging and error handling
-          dockerd > /tmp/dockerd.log 2>&1 &
-          DOCKERD_PID=$!
-          echo "Started dockerd with PID: $DOCKERD_PID"
-          
-          # Wait for Docker to be fully ready
-          echo "Waiting for Docker daemon to be ready..."
-          timeout=60
-          while ! docker info >/dev/null 2>&1; do
-            ((timeout--))
-            if [ $timeout -le 0 ]; then
-              echo "Docker daemon failed to start within 60 seconds"
-              echo "Docker daemon logs:"
-              cat /tmp/dockerd.log || true
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "Docker daemon ready"
-          docker version
-      - name: Install Node dependencies
-        run: |
-          cd backend && npm install && cd ..
-      - name: Create Minikube cluster
-        run: scripts/create_minikube_cluster.sh
+          echo "=== Running TCP Integration Tests ==="
+          bash k8s-tests/test-tcp.sh
       - name: Run broadcast tests
-        run: bash k8s-tests/test-broadcast.sh
-      - name: Upload integration broadcast logs
+        run: |
+          echo "=== Running Broadcast Integration Tests ==="
+          bash k8s-tests/test-broadcast.sh
+      - name: Run comprehensive monitoring tests
+        env:
+          BUILD_CONTAINERS: "true"
+        run: |
+          echo "=== Running Comprehensive Monitoring Tests ==="
+          bash scripts/test_comprehensive_monitoring.sh
+      - name: Upload all integration logs
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: integration-broadcast-logs
+          name: cluster-integration-logs
           path: k8s-tests/logs
       - name: Destroy cluster
         if: always()
-        run: minikube delete || true
+        run: scripts/manage_ci_cluster.sh destroy
 
-  # Run end-to-end tests against local services
+  # Run end-to-end tests against local services (no cluster needed)
   e2e:
     needs: build
     runs-on: ubuntu-22.04
@@ -232,82 +128,14 @@ jobs:
         run: scripts/stop_test_services.sh
       - name: Upload e2e logs
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: e2e-logs
           path: k8s-tests/logs
 
-  # Test comprehensive monitoring with real QEMU containers and UI verification
-  comprehensive-monitoring:
-    needs: build
-    runs-on: ubuntu-22.04
-    timeout-minutes: 20
-    container:
-      image: node:20-bullseye
-      options: --privileged
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install system packages
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
-            pulseaudio docker.io tcpdump netcat-openbsd curl jq \
-            ca-certificates apt-transport-https lsb-release gnupg
-      - name: Start Docker daemon
-        run: |
-          # Start dockerd with better logging and error handling
-          dockerd > /tmp/dockerd.log 2>&1 &
-          DOCKERD_PID=$!
-          echo "Started dockerd with PID: $DOCKERD_PID"
-          
-          # Wait for Docker to be fully ready
-          echo "Waiting for Docker daemon to be ready..."
-          timeout=60
-          while ! docker info >/dev/null 2>&1; do
-            ((timeout--))
-            if [ $timeout -le 0 ]; then
-              echo "Docker daemon failed to start within 60 seconds"
-              echo "Docker daemon logs:"
-              cat /tmp/dockerd.log || true
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "Docker daemon ready"
-          docker version
-      - name: Install Node dependencies
-        run: |
-          cd backend && npm install && cd ..
-          cd frontend && npm install && npm run build && cd ..
-      - name: Install kubectl and helm
-        run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-          curl https://get.helm.sh/helm-v3.14.3-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
-          chmod +x /usr/local/bin/helm
-      - name: Create Minikube cluster
-        run: scripts/create_minikube_cluster.sh
-      - name: Build and test real QEMU containers
-        env:
-          BUILD_CONTAINERS: "true"
-        run: bash scripts/test_comprehensive_monitoring.sh
-      - name: Upload comprehensive monitoring logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: comprehensive-monitoring-logs
-          path: k8s-tests/logs
-      - name: Destroy cluster
-        if: always()
-        run: minikube delete || true
-
   # Deploy services in Minikube and run live end-to-end tests
   e2e-live:
-    needs: build
+    needs: [build, cluster-integration]  # Run after cluster integration tests complete
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     container:
@@ -327,33 +155,13 @@ jobs:
             qemu-system-x86 qemu-kvm wine gstreamer1.0-tools \
             pulseaudio docker.io tcpdump netcat-openbsd
       - name: Start Docker daemon
-        run: |
-          # Start dockerd with better logging and error handling
-          dockerd > /tmp/dockerd.log 2>&1 &
-          DOCKERD_PID=$!
-          echo "Started dockerd with PID: $DOCKERD_PID"
-          
-          # Wait for Docker to be fully ready
-          echo "Waiting for Docker daemon to be ready..."
-          timeout=60
-          while ! docker info >/dev/null 2>&1; do
-            ((timeout--))
-            if [ $timeout -le 0 ]; then
-              echo "Docker daemon failed to start within 60 seconds"
-              echo "Docker daemon logs:"
-              cat /tmp/dockerd.log || true
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "Docker daemon ready"
-          docker version
+        run: scripts/start_docker_daemon.sh
       - name: Install Node dependencies
         run: |
           cd backend && npm install && cd ..
           cd frontend && npm install && npm run build && cd ..
       - name: Create Minikube cluster
-        run: scripts/create_minikube_cluster.sh
+        run: scripts/manage_ci_cluster.sh create
       - name: Start forwards
         run: scripts/start_live_cluster.sh
       - name: Run websocket tests against cluster
@@ -365,10 +173,11 @@ jobs:
         run: scripts/stop_live_cluster.sh
       - name: Upload live e2e logs
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: live-e2e-logs
           path: k8s-tests/logs
       - name: Destroy cluster
         if: always()
-        run: minikube delete || true
+        run: scripts/manage_ci_cluster.sh destroy
 
