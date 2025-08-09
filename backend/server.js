@@ -310,6 +310,62 @@ app.post("/api/quality/monitor/:action", (req, res) => {
   }
 });
 
+// Debug health monitoring endpoint for diagnostics
+app.get("/api/debug/health/:instanceId?", async (req, res) => {
+  try {
+    const instanceId = req.params.instanceId;
+    
+    if (instanceId) {
+      // Debug specific instance
+      const instances = await instanceManager.getInstances();
+      const instance = instances.find(i => i.id === instanceId);
+      
+      if (!instance) {
+        return res.status(404).json({ error: "Instance not found" });
+      }
+
+      // Force a fresh health check
+      const healthData = await qualityMonitor.queryQEMUHealthEndpoint(instance);
+      const metrics = qualityMonitor.getInstanceMetrics(instanceId);
+      
+      const debugInfo = {
+        instanceId: instance.id,
+        instance: instance,
+        timestamp: new Date().toISOString(),
+        healthEndpointUrl: instance.healthUrl || `http://${instance.id}:8080`,
+        rawHealthData: healthData,
+        parsedMetrics: metrics,
+        healthDataValid: healthData ? qualityMonitor.validateHealthData(healthData) : false,
+        failureAnalysis: healthData ? qualityMonitor.analyzeFailureType(healthData) : null
+      };
+      
+      res.json(debugInfo);
+    } else {
+      // Debug all instances
+      const instances = await instanceManager.getInstances();
+      const allMetrics = qualityMonitor.getAllMetrics();
+      
+      const debugInfo = {
+        timestamp: new Date().toISOString(),
+        monitoringActive: qualityMonitor.isRunning,
+        totalInstances: instances.length,
+        instancesWithMetrics: Object.keys(allMetrics).length,
+        instances: instances.map(i => ({
+          id: i.id,
+          healthUrl: i.healthUrl || `http://${i.id}:8080`,
+          hasMetrics: !!allMetrics[i.id]
+        })),
+        allMetrics: allMetrics
+      };
+      
+      res.json(debugInfo);
+    }
+  } catch (e) {
+    console.error("Failed to get debug health info:", e.message);
+    res.status(500).json({ error: "Failed to get debug health info", details: e.message });
+  }
+});
+
 // ---------------- Active Instance State ----------------
 const ACTIVE_FILE = path.join(FINAL_CONFIG_DIR, "active.json");
 function readActive() {
