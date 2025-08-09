@@ -91,7 +91,12 @@ class KubernetesDiscovery {
         undefined, // allowWatchBookmarks  
         undefined, // _continue
         undefined, // fieldSelector
-        'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster' // labelSelector
+        'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster', // labelSelector
+        undefined, // limit
+        undefined, // resourceVersion
+        undefined, // resourceVersionMatch
+        undefined, // timeoutSeconds
+        undefined  // watch
       );
 
       if (!podsResponse || !podsResponse.body) {

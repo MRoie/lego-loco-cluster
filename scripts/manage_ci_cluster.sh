@@ -18,8 +18,8 @@ echo "=== CI Cluster Management - Action: $ACTION ===" && date
 if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
     # CI environment - use minimum required resources that actually work
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}     # Minimum required by minikube
-    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-2000}  # Increased to exceed minikube minimum of 1800MB
-    MINIKUBE_DISK=${MINIKUBE_DISK:-10g}    # Increased for stability
+    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-2200}  # Increased well above minikube minimum of 1800MB
+    MINIKUBE_DISK=${MINIKUBE_DISK:-12g}    # Increased for stability
     echo "CI environment detected - using minimal but working resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK)"
 else
     # Development environment
@@ -77,7 +77,8 @@ create_cluster() {
     install_minikube
     validate_resources
     
-    # Configure minikube arguments
+    # Configure minikube arguments with increased timeout for CI
+    TIMEOUT_SECONDS=600  # Increased from 300s to 600s (10 minutes) for CI stability
     MINIKUBE_ARGS="-p $CLUSTER_NAME \
         --driver=docker \
         --kubernetes-version=$KUBERNETES_VERSION \
@@ -87,12 +88,12 @@ create_cluster() {
         --disk-size=$MINIKUBE_DISK \
         --container-runtime=docker \
         --wait=true \
-        --wait-timeout=300s"
+        --wait-timeout=${TIMEOUT_SECONDS}s"
     
     # Add --force flag in CI environments to bypass root privilege warnings
     if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-        MINIKUBE_ARGS="$MINIKUBE_ARGS --force"
-        echo "CI environment detected - adding --force flag"
+        MINIKUBE_ARGS="$MINIKUBE_ARGS --force --no-vtx-check"
+        echo "CI environment detected - adding --force and --no-vtx-check flags"
     fi
     
     # Retry logic for cluster creation

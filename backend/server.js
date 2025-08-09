@@ -33,8 +33,8 @@ console.log("Using config directory:", FINAL_CONFIG_DIR);
 // Initialize instance manager with auto-discovery
 const instanceManager = new InstanceManager(FINAL_CONFIG_DIR);
 
-// Initialize stream quality monitor after config directory is determined
-const qualityMonitor = new StreamQualityMonitor(FINAL_CONFIG_DIR);
+// Initialize stream quality monitor with InstanceManager for Kubernetes-only discovery
+const qualityMonitor = new StreamQualityMonitor(FINAL_CONFIG_DIR, instanceManager);
 
 // Serve frontend static build
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
@@ -537,13 +537,17 @@ server.listen(3001, () => {
   console.log("🔍 Starting stream quality monitoring service...");
   qualityMonitor.start();
   
-  // Test config loading
-  try {
-    console.log("Testing config loading...");
-    const instances = loadConfig("instances");
-    console.log("Loaded instances:", instances);
-  } catch (e) {
-    console.error("Config loading test failed:", e.message);
+  // Test config loading (only in non-test environments)
+  if (process.env.NODE_ENV !== 'test' && !process.env.CI) {
+    try {
+      console.log("Testing config loading...");
+      const instances = loadConfig("instances");
+      console.log("Loaded instances:", instances);
+    } catch (e) {
+      console.error("Config loading test failed:", e.message);
+    }
+  } else {
+    console.log("⚠️  Test environment detected - skipping static config loading test");
   }
 });
 
