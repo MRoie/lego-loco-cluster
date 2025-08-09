@@ -99,7 +99,7 @@ if [[ "$instances_response" == "[]" ]] || [[ -z "$instances_response" ]]; then
 fi
 
 # Parse stream URLs from discovered instances
-STREAMS=$(echo "$instances_response" | grep -o '"streamUrl": "[^"]*"' | cut -d'"' -f4)
+STREAMS=$(echo "$instances_response" | jq -r '.[].streamUrl // empty')
 total_streams=$(echo "$STREAMS" | wc -l)
 
 if [[ -z "$STREAMS" ]] || [[ "$total_streams" -eq 0 ]]; then
