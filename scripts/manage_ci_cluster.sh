@@ -18,14 +18,14 @@ echo "=== CI Cluster Management - Action: $ACTION ===" && date
 if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
     # CI environment - use minimum required resources that actually work
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}     # Minimum required by minikube
-    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-1900}  # Increased to meet minikube minimum (was 1536)
-    MINIKUBE_DISK=${MINIKUBE_DISK:-8g}     # Increased for stability (was 6g)
+    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-2000}  # Increased to exceed minikube minimum of 1800MB
+    MINIKUBE_DISK=${MINIKUBE_DISK:-10g}    # Increased for stability
     echo "CI environment detected - using minimal but working resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK)"
 else
     # Development environment
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}
     MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-4096}
-    MINIKUBE_DISK=${MINIKUBE_DISK:-8g}
+    MINIKUBE_DISK=${MINIKUBE_DISK:-20g}
     echo "Development environment - using standard resources"
 fi
 
