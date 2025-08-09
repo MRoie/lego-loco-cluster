@@ -42,6 +42,7 @@ spec:
       containers:
       - name: nfs-server
         {{- if .Values.storage.strategy.hybrid.enabled }}
+>>>>>>> 8eefe13 (🚀 MAJOR RELEASE: HostPath Storage Strategy with Multistage Docker Builds)
         {{- if .Values.storage.strategy.hybrid.nfs.enabled }}
         image: {{ .Values.storage.strategy.hybrid.nfs.image | default .Values.nfs.image }}
         {{- else }}

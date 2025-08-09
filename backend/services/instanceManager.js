@@ -16,6 +16,16 @@ class InstanceManager {
   }
 
   async initializeAsync() {
+    // Wait a bit for KubernetesDiscovery to initialize
+    let retries = 0;
+    const maxRetries = 10;
+    
+    while (!this.k8sDiscovery.isAvailable() && retries < maxRetries) {
+      console.log(`Waiting for Kubernetes discovery to initialize... (attempt ${retries + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      retries++;
+    }
+    
     if (!this.k8sDiscovery.isAvailable()) {
       console.error('❌ Kubernetes discovery not available. Static configuration is disabled. Backend requires Kubernetes environment.');
       

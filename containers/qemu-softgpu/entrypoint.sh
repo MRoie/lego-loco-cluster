@@ -18,6 +18,10 @@ log_info() {
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] ℹ️  INFO: $1"
 }
 
+log_warning() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] ⚠️  WARNING: $1" >&2
+}
+
 # Configuration with defaults
 BRIDGE=${BRIDGE:-loco-br}
 TAP_IF=${TAP_IF:-tap0}
@@ -216,26 +220,48 @@ fi
 if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
   log_info "Creating snapshot from base image: $DISK"
   
-  # Check if the base disk image exists
-  if [ ! -f "$DISK" ]; then
-    log_error "Base disk image not found: $DISK"
+  # PVC-first strategy: Check for disk image in PVC-mounted directory first
+  DISK_FOUND=false
+  DISK_SOURCE=""
+  
+  # Check if PVC-mounted disk image exists
+  if [ -f "$DISK" ]; then
+    log_success "✅ PVC-mounted disk image found: $DISK"
+    log_info "File details: $(ls -lh "$DISK")"
+    DISK_FOUND=true
+    DISK_SOURCE="PVC"
+  else
+    log_warning "⚠️  PVC-mounted disk image not found: $DISK"
     log_info "Available files in /images:"
     ls -la /images/ 2>/dev/null || log_error "/images directory not accessible"
-    log_info "Available files in /tmp:"
-    ls -la /tmp/ 2>/dev/null || log_error "/tmp directory not accessible"
-    exit 1
+    
+    # Fallback to built-in disk image
+    BUILTIN_DISK="/opt/builtin-images/win98.qcow2.builtin"
+    if [ -f "$BUILTIN_DISK" ]; then
+      log_success "✅ Built-in disk image found: $BUILTIN_DISK"
+      log_info "File details: $(ls -lh "$BUILTIN_DISK")"
+      DISK_FOUND=true
+      DISK_SOURCE="builtin"
+      DISK="$BUILTIN_DISK"
+    else
+      log_error "❌ Neither PVC-mounted nor built-in disk image found"
+      log_info "Available files in /images:"
+      ls -la /images/ 2>/dev/null || log_error "/images directory not accessible"
+      log_info "Available files in /tmp:"
+      ls -la /tmp/ 2>/dev/null || log_error "/tmp directory not accessible"
+      exit 1
+    fi
   fi
   
-  log_success "Base disk image found: $DISK"
-  log_info "File details: $(ls -lh "$DISK")"
-  
-  log_info "Creating QCOW2 snapshot: $SNAPSHOT_NAME"
-  if qemu-img create -f qcow2 -b "$DISK" -F qcow2 "$SNAPSHOT_NAME"; then
-    log_success "Snapshot created successfully"
-    log_info "Snapshot details: $(ls -lh "$SNAPSHOT_NAME")"
-  else
-    log_error "Failed to create snapshot"
-    exit 1
+  if [ "$DISK_FOUND" = true ]; then
+    log_info "Creating QCOW2 snapshot from $DISK_SOURCE disk image: $DISK"
+    if qemu-img create -f qcow2 -b "$DISK" -F qcow2 "$SNAPSHOT_NAME"; then
+      log_success "✅ Snapshot created successfully from $DISK_SOURCE disk"
+      log_info "Snapshot details: $(ls -lh "$SNAPSHOT_NAME")"
+    else
+      log_error "❌ Failed to create snapshot from $DISK_SOURCE disk"
+      exit 1
+    fi
   fi
 else
   log_success "Using pre-built snapshot: $SNAPSHOT_NAME"

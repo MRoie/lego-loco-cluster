@@ -26,9 +26,9 @@ spec:
       {{- end }}
       {{- end }}
       
-      # Init container for storage initialization
-      {{- if .Values.storage.strategy.hostPath.enabled }}
+      # Init containers for storage and disk image initialization
       initContainers:
+      {{- if .Values.storage.strategy.hostPath.enabled }}
       - name: init-hostpath-storage
         image: busybox:1.35
         command: ['sh', '-c']
@@ -48,6 +48,41 @@ spec:
         volumeMounts:
           - name: hostpath-storage
             mountPath: {{ .Values.storage.strategy.hostPath.path }}
+      {{- end }}
+      
+      # Init container for disk image population
+      {{- if .Values.emulator.diskPVC }}
+      - name: init-disk-image
+        image: {{ include "loco.image" (dict "root" . "image" .Values.emulator.image "tag" .Values.emulator.tag) }}
+        imagePullPolicy: {{ .Values.emulator.imagePullPolicy }}
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Initializing disk image in PVC..."
+          
+          # Check if disk image already exists in PVC
+          if [ -f /images/win98.qcow2 ]; then
+            echo "✅ Disk image already exists in PVC"
+            ls -lh /images/win98.qcow2
+            exit 0
+          fi
+          
+          # Check if built-in disk image exists
+          if [ -f /opt/builtin-images/win98.qcow2.builtin ]; then
+            echo "📋 Copying built-in disk image to PVC..."
+            cp /opt/builtin-images/win98.qcow2.builtin /images/win98.qcow2
+            echo "✅ Disk image copied to PVC successfully"
+            ls -lh /images/win98.qcow2
+          else
+            echo "❌ Built-in disk image not found"
+            echo "Available files in /opt/builtin-images:"
+            ls -la /opt/builtin-images/
+            exit 1
+          fi
+        volumeMounts:
+          - name: disk
+            mountPath: /images
+            readOnly: false
       {{- end }}
       
       containers:

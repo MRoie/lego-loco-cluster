@@ -17,8 +17,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # ---- Create images directory and copy win98 image at build time ----
-RUN mkdir -p /images
-COPY --from=win98-extractor /vm/win98_softgpu.qcow2 /images/win98.qcow2
+RUN mkdir -p /images /opt/builtin-images
+COPY --from=win98-extractor /vm/win98_softgpu.qcow2 /opt/builtin-images/win98.qcow2.builtin
 
 # ---- Copy entrypoint and scripts ----
 COPY entrypoint.sh /entrypoint.sh
@@ -27,8 +27,8 @@ COPY health-monitor.sh /usr/local/bin/health-monitor.sh
 RUN chmod +x /entrypoint.sh /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh
 
 # ---- Verify the disk image is available ----
-RUN ls -la /images/ && \
-    qemu-img info /images/win98.qcow2 && \
+RUN ls -la /opt/builtin-images/ && \
+    qemu-img info /opt/builtin-images/win98.qcow2.builtin && \
     echo "✅ Win98 disk image successfully copied at build time"
 
 # ---- Expose health monitoring port ----

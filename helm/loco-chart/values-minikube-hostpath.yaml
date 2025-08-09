@@ -69,8 +69,8 @@ emulator:
   diskPVC: win98-disk
   diskReadOnly: false
 
-  # Snapshot configuration - now enabled since disk image is built-in
-  usePrebuiltSnapshot: true
+  # Snapshot configuration - disabled since disk image is built-in
+  usePrebuiltSnapshot: false
   snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
   snapshotTag: "win98-base"
 
@@ -87,6 +87,7 @@ emulator:
     TAP_IF: "tap0"
     DISK: "/images/win98.qcow2"
     DISPLAY_NUM: "99"
+    USE_PREBUILT_SNAPSHOT: "false"
 
 backend:
   image: compose-backend
