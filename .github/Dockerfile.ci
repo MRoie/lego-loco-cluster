@@ -34,11 +34,6 @@ RUN curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/mi
     && install -o root -g root -m 0755 minikube /usr/local/bin/minikube \
     && rm minikube
 
-# Pre-cache Kubernetes images and dependencies to reduce download time
-RUN minikube start --driver=docker --kubernetes-version=v1.28.3 --no-vtx-check --force || true \
-    && minikube stop || true \
-    && minikube delete || true
-
 # Set working directory
 WORKDIR /workspace
 

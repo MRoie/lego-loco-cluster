@@ -40,8 +40,13 @@ jobs:
         if: steps.check-image.outputs.image == env.CI_FALLBACK_IMAGE
         run: |
           echo "Building CI image since it's not available..."
+          echo "Logging in to container registry..."
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          
+          echo "Building and pushing CI image..."
           docker build -f .github/Dockerfile.ci -t "${{ env.CI_BASE_IMAGE }}" .
-          echo "CI image built successfully"
+          docker push "${{ env.CI_BASE_IMAGE }}"
+          echo "CI image built and pushed successfully"
 
   # Build the backend and frontend assets
   build:

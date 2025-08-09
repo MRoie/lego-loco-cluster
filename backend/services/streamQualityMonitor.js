@@ -10,8 +10,9 @@ const http = require('http');
  * with deep health probing and intelligent failure detection/recovery
  */
 class StreamQualityMonitor {
-  constructor(configDir = '../config') {
+  constructor(configDir = '../config', instanceManager = null) {
     this.configDir = configDir;
+    this.instanceManager = instanceManager;
     this.metrics = new Map(); // instanceId -> metrics
     this.probeInterval = 5000; // 5 seconds
     this.deepProbeInterval = 15000; // 15 seconds for deep health checks
@@ -81,7 +82,7 @@ class StreamQualityMonitor {
    */
   async deepProbeAllInstances() {
     try {
-      const instances = this.loadInstances();
+      const instances = await this.loadInstances();
       const probePromises = instances.map(instance => 
         this.deepProbeInstance(instance).catch(err => {
           console.error(`Deep probe failed for ${instance.id}:`, err.message);
@@ -114,7 +115,7 @@ class StreamQualityMonitor {
   }
   async probeAllInstances() {
     try {
-      const instances = this.loadInstances();
+      const instances = await this.loadInstances();
       const probePromises = instances.map(instance => 
         this.probeInstance(instance).catch(err => {
           console.error(`Probe failed for ${instance.id}:`, err.message);
@@ -765,9 +766,20 @@ class StreamQualityMonitor {
   }
 
   /**
-   * Load instances configuration
+   * Load instances from InstanceManager or fallback to static config
    */
-  loadInstances() {
+  async loadInstances() {
+    // If we have an InstanceManager, use it (Kubernetes-only mode)
+    if (this.instanceManager) {
+      try {
+        return await this.instanceManager.getInstances();
+      } catch (error) {
+        console.error('Failed to load instances from InstanceManager:', error.message);
+        return [];
+      }
+    }
+    
+    // Fallback to static config (legacy mode)
     try {
       const configPath = path.resolve(__dirname, this.configDir, 'instances.json');
       const data = fs.readFileSync(configPath, 'utf-8');
