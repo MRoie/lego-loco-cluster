@@ -259,9 +259,12 @@ class StreamQualityMonitor {
   }
 
   /**
-   * Query QEMU container health endpoint
+   * Query QEMU container health endpoint with improved retry logic
    */
-  async queryQEMUHealthEndpoint(instance) {
+  async queryQEMUHealthEndpoint(instance, retryCount = 0) {
+    const maxRetries = 3;
+    const retryDelay = 1000; // 1 second
+    
     return new Promise((resolve) => {
       // Use healthUrl from configuration if available, otherwise construct it
       const healthUrl = instance.healthUrl || `http://${instance.id}:8080`;
@@ -276,35 +279,121 @@ class StreamQualityMonitor {
         res.on('end', () => {
           try {
             const healthData = JSON.parse(data);
-            resolve(healthData);
+            
+            // Validate critical health data structure
+            if (this.validateHealthData(healthData)) {
+              console.log(`✅ Valid health data received for ${instance.id}`);
+              resolve(healthData);
+            } else {
+              console.warn(`⚠️ Invalid health data structure for ${instance.id}, retrying...`);
+              if (retryCount < maxRetries) {
+                setTimeout(() => {
+                  this.queryQEMUHealthEndpoint(instance, retryCount + 1).then(resolve);
+                }, retryDelay * (retryCount + 1));
+              } else {
+                resolve(null);
+              }
+            }
           } catch (error) {
             console.error(`Failed to parse health data for ${instance.id}:`, error.message);
-            resolve(null);
+            if (retryCount < maxRetries) {
+              setTimeout(() => {
+                this.queryQEMUHealthEndpoint(instance, retryCount + 1).then(resolve);
+              }, retryDelay * (retryCount + 1));
+            } else {
+              resolve(null);
+            }
           }
         });
       });
       
       req.on('error', (error) => {
         console.error(`Health endpoint request failed for ${instance.id}:`, error.message);
-        resolve(null);
+        if (retryCount < maxRetries) {
+          console.log(`🔄 Retrying health check for ${instance.id} (attempt ${retryCount + 1}/${maxRetries})`);
+          setTimeout(() => {
+            this.queryQEMUHealthEndpoint(instance, retryCount + 1).then(resolve);
+          }, retryDelay * (retryCount + 1));
+        } else {
+          resolve(null);
+        }
       });
       
       req.on('timeout', () => {
         console.error(`Health endpoint timeout for ${instance.id}`);
         req.destroy();
-        resolve(null);
+        if (retryCount < maxRetries) {
+          setTimeout(() => {
+            this.queryQEMUHealthEndpoint(instance, retryCount + 1).then(resolve);
+          }, retryDelay * (retryCount + 1));
+        } else {
+          resolve(null);
+        }
       });
     });
   }
 
   /**
-   * Analyze failure type based on health data
+   * Validate health data structure to ensure it has expected fields
+   */
+  validateHealthData(healthData) {
+    if (!healthData || typeof healthData !== 'object') {
+      return false;
+    }
+
+    // Check for required top-level fields
+    const requiredFields = ['timestamp', 'overall_status', 'qemu_healthy'];
+    for (const field of requiredFields) {
+      if (!(field in healthData)) {
+        console.warn(`Missing required field: ${field}`);
+        return false;
+      }
+    }
+
+    // Validate QEMU health is boolean
+    if (typeof healthData.qemu_healthy !== 'boolean') {
+      console.warn('qemu_healthy should be boolean');
+      return false;
+    }
+
+    // Check for required subsystems
+    const requiredSubsystems = ['video', 'audio', 'performance', 'network'];
+    for (const subsystem of requiredSubsystems) {
+      if (!(subsystem in healthData) || typeof healthData[subsystem] !== 'object') {
+        console.warn(`Missing or invalid subsystem: ${subsystem}`);
+        return false;
+      }
+    }
+
+    // Validate video subsystem
+    if (healthData.video) {
+      const videoRequiredFields = ['vnc_available', 'display_active', 'estimated_frame_rate'];
+      for (const field of videoRequiredFields) {
+        if (!(field in healthData.video)) {
+          console.warn(`Missing video field: ${field}`);
+          return false;
+        }
+      }
+    }
+
+    // Validate performance subsystem has qemu_pid
+    if (healthData.performance && !('qemu_pid' in healthData.performance)) {
+      console.warn('Missing performance field: qemu_pid');
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Analyze failure type based on health data with enhanced diagnostics
    */
   analyzeFailureType(healthData) {
     const analysis = {
       type: 'none',
       recoveryNeeded: false,
-      issues: []
+      issues: [],
+      diagnostics: {}
     };
 
     // Check overall QEMU health
@@ -312,28 +401,69 @@ class StreamQualityMonitor {
       analysis.issues.push('qemu_process');
       analysis.type = 'qemu';
       analysis.recoveryNeeded = true;
+      analysis.diagnostics.qemu = {
+        process_found: false,
+        pid: healthData.performance?.qemu_pid || 'none'
+      };
+    } else {
+      analysis.diagnostics.qemu = {
+        process_found: true,
+        pid: healthData.performance?.qemu_pid || 'unknown'
+      };
     }
 
-    // Check video subsystem
-    if (healthData.video && !healthData.video.vnc_available) {
-      analysis.issues.push('vnc_unavailable');
-      if (analysis.type === 'none') analysis.type = 'qemu';
-      analysis.recoveryNeeded = true;
-    } else if (healthData.video && healthData.video.estimated_frame_rate === 0) {
-      analysis.issues.push('no_video_frames');
-      if (analysis.type === 'none') analysis.type = 'qemu';
-      analysis.recoveryNeeded = true;
+    // Check video subsystem with enhanced diagnostics
+    if (healthData.video) {
+      analysis.diagnostics.video = {
+        vnc_available: healthData.video.vnc_available,
+        display_active: healthData.video.display_active,
+        frame_rate: healthData.video.estimated_frame_rate,
+        display: healthData.video.display || 'unknown',
+        vnc_port: healthData.video.vnc_port || 5901
+      };
+
+      if (!healthData.video.vnc_available) {
+        analysis.issues.push('vnc_unavailable');
+        if (analysis.type === 'none') analysis.type = 'qemu';
+        analysis.recoveryNeeded = true;
+      } else if (!healthData.video.display_active) {
+        analysis.issues.push('display_inactive');
+        if (analysis.type === 'none') analysis.type = 'qemu';
+        analysis.recoveryNeeded = true;
+      } else if (healthData.video.estimated_frame_rate === 0) {
+        analysis.issues.push('no_video_frames');
+        if (analysis.type === 'none') analysis.type = 'qemu';
+        analysis.recoveryNeeded = true;
+      }
     }
 
-    // Check audio subsystem
-    if (healthData.audio && !healthData.audio.pulse_running) {
-      analysis.issues.push('audio_subsystem');
-      if (analysis.type === 'none') analysis.type = 'qemu';
-      analysis.recoveryNeeded = true;
+    // Check audio subsystem with enhanced diagnostics
+    if (healthData.audio) {
+      analysis.diagnostics.audio = {
+        pulse_running: healthData.audio.pulse_running,
+        audio_devices: healthData.audio.audio_devices,
+        alsa_devices: healthData.audio.alsa_devices,
+        backend: healthData.audio.audio_backend
+      };
+
+      if (!healthData.audio.pulse_running) {
+        analysis.issues.push('audio_subsystem');
+        if (analysis.type === 'none') analysis.type = 'qemu';
+        analysis.recoveryNeeded = true;
+      }
     }
 
-    // Check network health
+    // Check network health with enhanced diagnostics
     if (healthData.network) {
+      analysis.diagnostics.network = {
+        bridge_up: healthData.network.bridge_up,
+        tap_up: healthData.network.tap_up,
+        tx_packets: healthData.network.tx_packets,
+        rx_packets: healthData.network.rx_packets,
+        tx_errors: healthData.network.tx_errors,
+        rx_errors: healthData.network.rx_errors
+      };
+
       if (!healthData.network.bridge_up || !healthData.network.tap_up) {
         analysis.issues.push('network_interfaces');
         if (analysis.type === 'none') analysis.type = 'network';
@@ -347,13 +477,29 @@ class StreamQualityMonitor {
       }
     }
 
-    // Check performance issues
+    // Check performance issues with enhanced diagnostics
     if (healthData.performance) {
       const cpuUsage = parseFloat(healthData.performance.cpu_usage) || 0;
       const memoryUsage = parseFloat(healthData.performance.memory_usage) || 0;
+      const qemuCpu = parseFloat(healthData.performance.qemu_cpu) || 0;
+      const qemuMemory = parseFloat(healthData.performance.qemu_memory) || 0;
+
+      analysis.diagnostics.performance = {
+        cpu_usage: cpuUsage,
+        memory_usage: memoryUsage,
+        qemu_cpu: qemuCpu,
+        qemu_memory: qemuMemory,
+        load_average: healthData.performance.load_average
+      };
       
       if (cpuUsage > 90 || memoryUsage > 90) {
         analysis.issues.push('performance_degradation');
+        if (analysis.type === 'none') analysis.type = 'qemu';
+        analysis.recoveryNeeded = true;
+      }
+
+      if (qemuCpu > 80) {
+        analysis.issues.push('qemu_high_cpu');
         if (analysis.type === 'none') analysis.type = 'qemu';
         analysis.recoveryNeeded = true;
       }
@@ -361,7 +507,7 @@ class StreamQualityMonitor {
 
     // Determine if multiple issue types exist
     const issueTypes = new Set();
-    if (analysis.issues.some(i => ['qemu_process', 'vnc_unavailable', 'no_video_frames', 'audio_subsystem', 'performance_degradation'].includes(i))) {
+    if (analysis.issues.some(i => ['qemu_process', 'vnc_unavailable', 'display_inactive', 'no_video_frames', 'audio_subsystem', 'performance_degradation', 'qemu_high_cpu'].includes(i))) {
       issueTypes.add('qemu');
     }
     if (analysis.issues.some(i => ['network_interfaces', 'network_errors'].includes(i))) {
@@ -371,6 +517,9 @@ class StreamQualityMonitor {
     if (issueTypes.size > 1) {
       analysis.type = 'mixed';
     }
+
+    // Add overall health status
+    analysis.overall_status = healthData.overall_status;
 
     return analysis;
   }
@@ -788,6 +937,17 @@ class StreamQualityMonitor {
       console.error('Failed to load instances config:', error.message);
       return [];
     }
+  }
+
+  // Public methods to expose validation and analysis for debugging
+  validateHealthData(healthData) {
+    // This method is defined above in the main class, just exposing it publicly
+    return this.validateHealthData(healthData);
+  }
+
+  analyzeFailureType(healthData) {
+    // This method is defined above in the main class, just exposing it publicly
+    return this.analyzeFailureType(healthData);
   }
 }
 
