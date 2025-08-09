@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import LoadingSpinner from './LoadingSpinner';
 
 export default function DiscoveryStatus() {
   const [discoveryInfo, setDiscoveryInfo] = useState(null);
@@ -48,8 +49,9 @@ export default function DiscoveryStatus() {
 
   if (!discoveryInfo) {
     return (
-      <div className="text-xs text-gray-400">
-        Loading discovery info...
+      <div className="flex items-center space-x-2">
+        <LoadingSpinner size="sm" variant="secondary" />
+        <span className="text-xs text-gray-400">Loading discovery...</span>
       </div>
     );
   }
@@ -93,7 +95,7 @@ export default function DiscoveryStatus() {
         title="Refresh instance discovery"
       >
         {isRefreshing ? (
-          <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+          <LoadingSpinner size="sm" variant="light" />
         ) : (
           '🔄'
         )}
