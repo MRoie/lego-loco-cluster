@@ -5,6 +5,7 @@ class KubernetesDiscovery {
   constructor() {
     this.kc = null;
     this.k8sApi = null;
+    this.k8s = null; // Store k8s reference for class-level access
     this.namespace = 'default';
     this.initialized = false;
     
@@ -16,8 +17,9 @@ class KubernetesDiscovery {
 
   async init() {
     try {
-      // Dynamic import for ES module
-      const k8s = await import('@kubernetes/client-node');
+      // Use CommonJS require instead of dynamic import since this is a CommonJS module
+      const k8s = require('@kubernetes/client-node');
+      this.k8s = k8s; // Store reference for later use
       this.kc = new k8s.KubeConfig();
       
       // Try to load in-cluster config first (when running in Kubernetes)
@@ -52,13 +54,21 @@ class KubernetesDiscovery {
         console.log(`Using default namespace: ${this.namespace}`);
       }
       
-      // Validate namespace is not empty
-      if (!this.namespace || this.namespace.trim() === '') {
+      // Validate namespace is not empty or null/undefined
+      if (!this.namespace || this.namespace.trim() === '' || this.namespace === 'null' || this.namespace === 'undefined') {
         this.namespace = 'default';
-        console.warn('Namespace was empty, falling back to default');
+        console.warn('Namespace was empty, null, or undefined - falling back to default');
       }
       
-      console.log(`Kubernetes discovery initialized for namespace: ${this.namespace}`);
+      // Final validation - ensure namespace is a proper string
+      this.namespace = String(this.namespace).trim();
+      if (!this.namespace) {
+        this.namespace = 'default';
+        console.warn('Namespace validation failed - using default namespace');
+      }
+      
+      console.log(`Kubernetes discovery initialized for namespace: "${this.namespace}" (type: ${typeof this.namespace})`);
+      console.log(`Namespace validation - length: ${this.namespace.length}, empty check: ${!this.namespace}`);
     } catch (error) {
       console.warn('Failed to initialize Kubernetes client:', error.message);
       console.warn('Auto-discovery will be disabled. Falling back to static configuration.');
@@ -71,50 +81,56 @@ class KubernetesDiscovery {
       return [];
     }
 
-    if (!this.namespace || this.namespace.trim() === '') {
-      console.error('Kubernetes namespace is null or empty, cannot discover instances');
+    if (!this.namespace || this.namespace.trim() === '' || this.namespace === 'null' || this.namespace === 'undefined') {
+      console.error('Kubernetes namespace is null, undefined, or empty, cannot discover instances');
       return [];
     }
 
     try {
-      console.log(`Discovering emulator instances in namespace: ${this.namespace}`);
-      console.log(`Namespace type: ${typeof this.namespace}, value: "${this.namespace}"`);
+      console.log(`🔍 Discovering emulator instances in namespace: "${this.namespace}"`);
+      console.log(`📊 Debug info - Namespace type: ${typeof this.namespace}, value: "${this.namespace}", length: ${this.namespace.length}`);
       
-      // Ensure namespace is a valid string
+      // Ensure namespace is a valid string with extra validation
       const namespace = String(this.namespace).trim();
-      if (!namespace) {
-        console.error('Namespace is empty after trimming');
+      if (!namespace || namespace === 'null' || namespace === 'undefined') {
+        console.error('❌ Namespace is empty, null, or undefined after validation');
         return [];
       }
       
-      // Discover StatefulSet pods with emulator label
-      console.log(`Calling listNamespacedPod with namespace: "${namespace}"`);
+      // Log detailed API call info
+      console.log(`🚀 Calling Kubernetes API: listNamespacedPod(namespace="${namespace}")`);
+      console.log(`📝 Label selector: "app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster"`);
       
       // Use positional parameters for maximum compatibility with different client-node versions
       const labelSelector = 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster';
-      const podsResponse = await this.k8sApi.listNamespacedPod(
-        namespace,
-        undefined, // pretty
-        undefined, // allowWatchBookmarks
-        undefined, // _continue
-        undefined, // fieldSelector
-        labelSelector,
-        undefined, // limit
-        undefined, // resourceVersion
-        undefined, // resourceVersionMatch
-        undefined, // sendInitialEvents
-        undefined, // timeoutSeconds
-        undefined  // watch
-      );
+      
+      // Add pre-call validation
+      if (typeof namespace !== 'string') {
+        throw new Error(`Namespace parameter must be a string, got ${typeof namespace}: ${namespace}`);
+      }
+      
+      // Use object-based parameters for kubernetes/client-node v1.3.0+
+      const listPodsParams = {
+        namespace: namespace,
+        labelSelector: labelSelector
+      };
+      
+      console.log(`🔧 API call parameters:`, listPodsParams);
+      
+      const podsResponse = await this.k8sApi.listNamespacedPod(listPodsParams);
 
       if (!podsResponse || !podsResponse.body) {
-        console.log('No pods response or body from Kubernetes API');
+        console.log('⚠️ No pods response or body from Kubernetes API');
         return [];
       }
+
+      console.log(`✅ Kubernetes API response received - found ${podsResponse.body.items?.length || 0} pods`);
 
       const instances = [];
       
       for (const pod of podsResponse.body.items || []) {
+        console.log(`📋 Processing pod: ${pod.metadata.name}, phase: ${pod.status.phase}, podIP: ${pod.status.podIP}`);
+        
         if (pod.status.phase === 'Running' && pod.status.podIP) {
           // Extract instance number from pod name (e.g., loco-emulator-0 -> 0)
           const instanceMatch = pod.metadata.name.match(/-(\d+)$/);
@@ -141,7 +157,10 @@ class KubernetesDiscovery {
             }
           };
           
+          console.log(`✅ Added instance: ${instance.id} (${pod.metadata.name})`);
           instances.push(instance);
+        } else {
+          console.log(`⏭️ Skipped pod ${pod.metadata.name}: phase=${pod.status.phase}, podIP=${pod.status.podIP}`);
         }
       }
 
@@ -152,11 +171,21 @@ class KubernetesDiscovery {
         return aNum - bNum;
       });
 
-      console.log(`Discovered ${instances.length} emulator instances from Kubernetes`);
+      console.log(`🎯 Discovered ${instances.length} emulator instances from Kubernetes`);
+      if (instances.length > 0) {
+        console.log(`📋 Instance summary: ${instances.map(i => i.id).join(', ')}`);
+      }
       return instances;
       
     } catch (error) {
-      console.error('Failed to discover instances from Kubernetes:', error.message);
+      console.error('❌ Failed to discover instances from Kubernetes:', error.message);
+      console.error('🔍 Error details:', {
+        errorType: error.constructor.name,
+        errorCode: error.code,
+        namespace: this.namespace,
+        namespaceType: typeof this.namespace,
+        apiAvailable: !!this.k8sApi
+      });
       return [];
     }
   }
@@ -180,36 +209,35 @@ class KubernetesDiscovery {
       return {};
     }
 
-    if (!this.namespace || this.namespace.trim() === '') {
-      console.warn('Cannot get services info: Kubernetes namespace is null or empty');
+    if (!this.namespace || this.namespace.trim() === '' || this.namespace === 'null' || this.namespace === 'undefined') {
+      console.warn('Cannot get services info: Kubernetes namespace is null, undefined, or empty');
       return {};
     }
 
     try {
-      // Ensure namespace is a valid string
+      // Ensure namespace is a valid string with extra validation
       const namespace = String(this.namespace).trim();
-      
-      // Use positional parameters for maximum compatibility with different client-node versions  
-      const labelSelector = 'app.kubernetes.io/part-of=lego-loco-cluster';
-      const servicesResponse = await this.k8sApi.listNamespacedService(
-        namespace,
-        undefined, // pretty
-        undefined, // allowWatchBookmarks
-        undefined, // _continue
-        undefined, // fieldSelector
-        labelSelector,
-        undefined, // limit
-        undefined, // resourceVersion
-        undefined, // resourceVersionMatch
-        undefined, // sendInitialEvents
-        undefined, // timeoutSeconds
-        undefined  // watch
-      );
-
-      if (!servicesResponse || !servicesResponse.body) {
-        console.log('No services response or body from Kubernetes API');
+      if (!namespace || namespace === 'null' || namespace === 'undefined') {
+        console.warn('Namespace validation failed for services info');
         return {};
       }
+      
+      console.log(`🔍 Getting services info for namespace: "${namespace}"`);
+      
+      // Use object-based parameters for kubernetes/client-node v1.3.0+
+      const listServicesParams = {
+        namespace: namespace,
+        labelSelector: labelSelector
+      };
+      
+      const servicesResponse = await this.k8sApi.listNamespacedService(listServicesParams);
+
+      if (!servicesResponse || !servicesResponse.body) {
+        console.log('⚠️ No services response or body from Kubernetes API');
+        return {};
+      }
+
+      console.log(`✅ Found ${servicesResponse.body.items?.length || 0} services`);
 
       const services = {};
       
@@ -221,11 +249,12 @@ class KubernetesDiscovery {
           ports: service.spec.ports,
           selector: service.spec.selector
         };
+        console.log(`📋 Found service: ${service.metadata.name} (${service.spec.type})`);
       }
 
       return services;
     } catch (error) {
-      console.error('Failed to get services info:', error.message);
+      console.error('❌ Failed to get services info:', error.message);
       return {};
     }
   }
@@ -236,17 +265,28 @@ class KubernetesDiscovery {
       return null;
     }
 
-    if (!this.namespace || this.namespace.trim() === '') {
-      console.warn('Cannot watch instances: Kubernetes namespace is null or empty');
+    if (!this.namespace || this.namespace.trim() === '' || this.namespace === 'null' || this.namespace === 'undefined') {
+      console.warn('Cannot watch instances: Kubernetes namespace is null, undefined, or empty');
       return null;
     }
 
     try {
-      const watch = new k8s.Watch(this.kc);
+      // Use the stored k8s reference instead of undefined variable
+      if (!this.k8s) {
+        console.error('❌ Kubernetes client library not available for watch functionality');
+        return null;
+      }
       
-      // Ensure namespace is a valid string
+      const watch = new this.k8s.Watch(this.kc);
+      
+      // Ensure namespace is a valid string with extra validation
       const namespace = String(this.namespace).trim();
-      console.log(`Starting watch for emulator pod changes in namespace: ${namespace}...`);
+      if (!namespace || namespace === 'null' || namespace === 'undefined') {
+        console.warn('Namespace validation failed for watch functionality');
+        return null;
+      }
+      
+      console.log(`🔍 Starting watch for emulator pod changes in namespace: "${namespace}"...`);
       
       // Configure watch with TLS settings for CI environments
       const watchOptions = {
@@ -262,7 +302,7 @@ class KubernetesDiscovery {
         `/api/v1/namespaces/${namespace}/pods`,
         watchOptions,
         (type, apiObj) => {
-          console.log(`Pod ${type}: ${apiObj.metadata.name} - ${apiObj.status.phase}`);
+          console.log(`📋 Pod ${type}: ${apiObj.metadata.name} - ${apiObj.status.phase}`);
           
           // Trigger callback to refresh instance list
           if (callback) {
@@ -271,17 +311,18 @@ class KubernetesDiscovery {
         },
         (err) => {
           if (err && err.code !== 'ECONNRESET') {
-            console.error('Watch error:', err.message);
+            console.error('❌ Watch error:', err.message);
           }
         }
       );
 
+      console.log(`✅ Watch established for namespace: "${namespace}"`);
       return watchRequest;
     } catch (error) {
-      console.error('Failed to start watching instances:', error.message);
+      console.error('❌ Failed to start watching instances:', error.message);
       // In CI environments, don't throw errors for watch failures
       if (process.env.CI || process.env.NODE_ENV === 'test') {
-        console.warn('Watch functionality disabled in CI environment due to TLS restrictions');
+        console.warn('⚠️ Watch functionality disabled in CI environment due to TLS restrictions');
         return null;
       }
       // Don't throw error for watch failures, just return null
