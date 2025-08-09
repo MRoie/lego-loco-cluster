@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const circuitBreakerManager = require('./circuitBreaker');
 
 class KubernetesDiscovery {
   constructor() {
@@ -7,6 +8,9 @@ class KubernetesDiscovery {
     this.k8sApi = null;
     this.namespace = 'default';
     this.initialized = false;
+    this.cachedPods = [];
+    this.cachedServices = {};
+    this.lastCacheUpdate = null;
     
     // Initialize asynchronously
     this.init().catch(error => {
@@ -59,21 +63,93 @@ class KubernetesDiscovery {
       }
       
       console.log(`Kubernetes discovery initialized for namespace: ${this.namespace}`);
+      
+      // Set up circuit breakers for Kubernetes API calls
+      this.setupCircuitBreakers();
     } catch (error) {
       console.warn('Failed to initialize Kubernetes client:', error.message);
       console.warn('Auto-discovery will be disabled. Falling back to static configuration.');
     }
   }
 
+  setupCircuitBreakers() {
+    if (!this.k8sApi) {
+      console.warn('Cannot setup circuit breakers: k8sApi not initialized');
+      return;
+    }
+
+    // Circuit breaker for listNamespacedPod
+    this.listPodsBreaker = circuitBreakerManager.createBreaker(
+      'kubernetes-list-pods',
+      async (namespace, labelSelector) => {
+        return await this.k8sApi.listNamespacedPod(
+          namespace,
+          undefined, // pretty
+          undefined, // allowWatchBookmarks
+          undefined, // _continue
+          undefined, // fieldSelector
+          labelSelector,
+          undefined, // limit
+          undefined, // resourceVersion
+          undefined, // resourceVersionMatch
+          undefined, // sendInitialEvents
+          undefined, // timeoutSeconds
+          undefined  // watch
+        );
+      },
+      {
+        timeout: 10000, // 10 seconds timeout for K8s API calls
+        errorThresholdPercentage: 60,
+        resetTimeout: 30000,
+        fallback: circuitBreakerManager.createCacheFallback(
+          { body: { items: this.cachedPods } },
+          'cached pods data'
+        )
+      }
+    );
+
+    // Circuit breaker for listNamespacedService
+    this.listServicesBreaker = circuitBreakerManager.createBreaker(
+      'kubernetes-list-services',
+      async (namespace, labelSelector) => {
+        return await this.k8sApi.listNamespacedService(
+          namespace,
+          undefined, // pretty
+          undefined, // allowWatchBookmarks
+          undefined, // _continue
+          undefined, // fieldSelector
+          labelSelector,
+          undefined, // limit
+          undefined, // resourceVersion
+          undefined, // resourceVersionMatch
+          undefined, // sendInitialEvents
+          undefined, // timeoutSeconds
+          undefined  // watch
+        );
+      },
+      {
+        timeout: 8000, // 8 seconds timeout for services
+        errorThresholdPercentage: 60,
+        resetTimeout: 30000,
+        fallback: circuitBreakerManager.createCacheFallback(
+          { body: { items: [] } },
+          'cached services data'
+        )
+      }
+    );
+
+    console.log('🔧 Circuit breakers configured for Kubernetes API calls');
+  }
+
   async discoverEmulatorInstances() {
     if (!this.initialized) {
-      console.log('Kubernetes discovery not initialized, returning empty array');
-      return [];
+      console.log('Kubernetes discovery not initialized, returning cached pods');
+      return this.convertPodsToInstances(this.cachedPods);
     }
 
     if (!this.namespace || this.namespace.trim() === '') {
       console.error('Kubernetes namespace is null or empty, cannot discover instances');
-      return [];
+      return this.convertPodsToInstances(this.cachedPods);
     }
 
     try {
@@ -84,81 +160,82 @@ class KubernetesDiscovery {
       const namespace = String(this.namespace).trim();
       if (!namespace) {
         console.error('Namespace is empty after trimming');
-        return [];
+        return this.convertPodsToInstances(this.cachedPods);
       }
       
-      // Discover StatefulSet pods with emulator label
-      console.log(`Calling listNamespacedPod with namespace: "${namespace}"`);
+      // Discover StatefulSet pods with emulator label using circuit breaker
+      console.log(`Calling listNamespacedPod with namespace: "${namespace}" via circuit breaker`);
       
-      // Use positional parameters for maximum compatibility with different client-node versions
       const labelSelector = 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster';
-      const podsResponse = await this.k8sApi.listNamespacedPod(
-        namespace,
-        undefined, // pretty
-        undefined, // allowWatchBookmarks
-        undefined, // _continue
-        undefined, // fieldSelector
-        labelSelector,
-        undefined, // limit
-        undefined, // resourceVersion
-        undefined, // resourceVersionMatch
-        undefined, // sendInitialEvents
-        undefined, // timeoutSeconds
-        undefined  // watch
-      );
+      
+      // Use circuit breaker to make the API call
+      const podsResponse = await this.listPodsBreaker.fire(namespace, labelSelector);
 
       if (!podsResponse || !podsResponse.body) {
-        console.log('No pods response or body from Kubernetes API');
-        return [];
+        console.log('No pods response or body from Kubernetes API, using cached data');
+        return this.convertPodsToInstances(this.cachedPods);
       }
 
-      const instances = [];
-      
-      for (const pod of podsResponse.body.items || []) {
-        if (pod.status.phase === 'Running' && pod.status.podIP) {
-          // Extract instance number from pod name (e.g., loco-emulator-0 -> 0)
-          const instanceMatch = pod.metadata.name.match(/-(\d+)$/);
-          const instanceNumber = instanceMatch ? parseInt(instanceMatch[1]) : 0;
-          
-          const instance = {
-            id: `instance-${instanceNumber}`,
-            name: `Windows 98 - ${instanceNumber === 0 ? 'Game Server' : `Client ${instanceNumber}`}`,
-            description: instanceNumber === 0 ? 'Primary gaming instance with full Lego Loco installation' : 'Player client instance',
-            podName: pod.metadata.name,
-            podIP: pod.status.podIP,
-            streamUrl: `http://localhost:${6080 + instanceNumber}/vnc${instanceNumber}`,
-            vncUrl: `${pod.metadata.name}:5901`,
-            healthUrl: `http://${pod.metadata.name}:8080`,
-            provisioned: true,
-            ready: pod.status.phase === 'Running',
-            status: this.mapPodStatusToInstanceStatus(pod.status),
-            discoveredAt: new Date().toISOString(),
-            kubernetes: {
-              namespace: pod.metadata.namespace,
-              nodeName: pod.spec.nodeName,
-              podIP: pod.status.podIP,
-              startTime: pod.status.startTime
-            }
-          };
-          
-          instances.push(instance);
-        }
-      }
+      // Update cache with fresh data
+      this.cachedPods = podsResponse.body.items || [];
+      this.lastCacheUpdate = new Date().toISOString();
 
-      // Sort instances by instance number
-      instances.sort((a, b) => {
-        const aNum = parseInt(a.id.split('-')[1]);
-        const bNum = parseInt(b.id.split('-')[1]);
-        return aNum - bNum;
-      });
+      const instances = this.convertPodsToInstances(this.cachedPods);
 
       console.log(`Discovered ${instances.length} emulator instances from Kubernetes`);
       return instances;
       
     } catch (error) {
       console.error('Failed to discover instances from Kubernetes:', error.message);
-      return [];
+      
+      // Return cached data as fallback
+      console.log('Falling back to cached pods data');
+      return this.convertPodsToInstances(this.cachedPods);
     }
+  }
+
+  convertPodsToInstances(pods) {
+    const instances = [];
+    
+    for (const pod of pods) {
+      if (pod.status && pod.status.phase === 'Running' && pod.status.podIP) {
+        // Extract instance number from pod name (e.g., loco-emulator-0 -> 0)
+        const instanceMatch = pod.metadata.name.match(/-(\d+)$/);
+        const instanceNumber = instanceMatch ? parseInt(instanceMatch[1]) : 0;
+        
+        const instance = {
+          id: `instance-${instanceNumber}`,
+          name: `Windows 98 - ${instanceNumber === 0 ? 'Game Server' : `Client ${instanceNumber}`}`,
+          description: instanceNumber === 0 ? 'Primary gaming instance with full Lego Loco installation' : 'Player client instance',
+          podName: pod.metadata.name,
+          podIP: pod.status.podIP,
+          streamUrl: `http://localhost:${6080 + instanceNumber}/vnc${instanceNumber}`,
+          vncUrl: `${pod.metadata.name}:5901`,
+          healthUrl: `http://${pod.metadata.name}:8080`,
+          provisioned: true,
+          ready: pod.status.phase === 'Running',
+          status: this.mapPodStatusToInstanceStatus(pod.status),
+          discoveredAt: new Date().toISOString(),
+          kubernetes: {
+            namespace: pod.metadata.namespace,
+            nodeName: pod.spec.nodeName,
+            podIP: pod.status.podIP,
+            startTime: pod.status.startTime
+          }
+        };
+        
+        instances.push(instance);
+      }
+    }
+
+    // Sort instances by instance number
+    instances.sort((a, b) => {
+      const aNum = parseInt(a.id.split('-')[1]);
+      const bNum = parseInt(b.id.split('-')[1]);
+      return aNum - bNum;
+    });
+
+    return instances;
   }
 
   mapPodStatusToInstanceStatus(podStatus) {
@@ -177,38 +254,26 @@ class KubernetesDiscovery {
 
   async getServicesInfo() {
     if (!this.initialized) {
-      return {};
+      return this.cachedServices;
     }
 
     if (!this.namespace || this.namespace.trim() === '') {
       console.warn('Cannot get services info: Kubernetes namespace is null or empty');
-      return {};
+      return this.cachedServices;
     }
 
     try {
       // Ensure namespace is a valid string
       const namespace = String(this.namespace).trim();
       
-      // Use positional parameters for maximum compatibility with different client-node versions  
       const labelSelector = 'app.kubernetes.io/part-of=lego-loco-cluster';
-      const servicesResponse = await this.k8sApi.listNamespacedService(
-        namespace,
-        undefined, // pretty
-        undefined, // allowWatchBookmarks
-        undefined, // _continue
-        undefined, // fieldSelector
-        labelSelector,
-        undefined, // limit
-        undefined, // resourceVersion
-        undefined, // resourceVersionMatch
-        undefined, // sendInitialEvents
-        undefined, // timeoutSeconds
-        undefined  // watch
-      );
+      
+      // Use circuit breaker to make the API call
+      const servicesResponse = await this.listServicesBreaker.fire(namespace, labelSelector);
 
       if (!servicesResponse || !servicesResponse.body) {
-        console.log('No services response or body from Kubernetes API');
-        return {};
+        console.log('No services response or body from Kubernetes API, using cached data');
+        return this.cachedServices;
       }
 
       const services = {};
@@ -223,10 +288,14 @@ class KubernetesDiscovery {
         };
       }
 
+      // Update cache
+      this.cachedServices = services;
+
       return services;
     } catch (error) {
       console.error('Failed to get services info:', error.message);
-      return {};
+      console.log('Falling back to cached services data');
+      return this.cachedServices;
     }
   }
 
@@ -295,6 +364,26 @@ class KubernetesDiscovery {
 
   getNamespace() {
     return this.namespace;
+  }
+
+  /**
+   * Get circuit breaker metrics for monitoring
+   * @returns {Object} Circuit breaker metrics
+   */
+  getCircuitBreakerMetrics() {
+    if (!circuitBreakerManager) {
+      return { error: 'Circuit breaker manager not available' };
+    }
+
+    return {
+      summary: circuitBreakerManager.getSummary(),
+      breakers: circuitBreakerManager.getAllMetrics(),
+      cacheInfo: {
+        cachedPodsCount: this.cachedPods ? this.cachedPods.length : 0,
+        cachedServicesCount: Object.keys(this.cachedServices || {}).length,
+        lastCacheUpdate: this.lastCacheUpdate
+      }
+    };
   }
 }
 
