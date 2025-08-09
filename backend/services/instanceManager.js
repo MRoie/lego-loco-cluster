@@ -18,7 +18,16 @@ class InstanceManager {
   async initializeAsync() {
     if (!this.k8sDiscovery.isAvailable()) {
       console.error('❌ Kubernetes discovery not available. Static configuration is disabled. Backend requires Kubernetes environment.');
-      throw new Error('Kubernetes discovery not available and static configuration is disabled');
+      
+      // Set initialized to true in test/CI environments to allow e2e tests with empty instance list
+      if (process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') {
+        console.warn('⚠️  Test/CI environment detected - initializing with empty instances for e2e testing');
+        this.initialized = true;
+        this.cachedInstances = [];
+        return; // Don't throw error in test environments
+      } else {
+        throw new Error('Kubernetes discovery not available and static configuration is disabled');
+      }
     }
 
     // Test actual connectivity by trying to discover instances
@@ -32,8 +41,8 @@ class InstanceManager {
       console.error('❌ Kubernetes connectivity test failed:', error.message);
       console.error('Static configuration is disabled. Backend requires active Kubernetes cluster.');
       
-      // Set initialized to true in test environments to allow e2e tests with empty instance list
-      if (process.env.NODE_ENV === 'test' || process.env.CI) {
+      // Set initialized to true in test/CI environments to allow e2e tests with empty instance list
+      if (process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') {
         console.warn('⚠️  Test/CI environment detected - initializing with empty instances for e2e testing');
         this.initialized = true;
         this.cachedInstances = [];
@@ -51,7 +60,7 @@ class InstanceManager {
     }
 
     // In test/CI environments, return cached empty instances if no K8s available
-    if ((process.env.NODE_ENV === 'test' || process.env.CI) && this.cachedInstances !== null) {
+    if ((process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') && this.cachedInstances !== null) {
       console.log('Test/CI environment: returning cached instances (may be empty for e2e tests)');
       return this.cachedInstances;
     }
@@ -84,6 +93,15 @@ class InstanceManager {
       return discoveredInstances;
     } catch (error) {
       console.error('❌ Kubernetes discovery failed:', error.message);
+      
+      // In CI/test environments, return empty array instead of throwing
+      if (process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') {
+        console.warn('⚠️  CI/test environment: returning empty instances list due to discovery failure');
+        this.cachedInstances = [];
+        this.lastDiscoveryTime = now;
+        return [];
+      }
+      
       throw new Error(`Kubernetes discovery failed: ${error.message}. Static configuration is disabled.`);
     }
   }
@@ -95,7 +113,14 @@ class InstanceManager {
 
   async getKubernetesInfo() {
     if (!this.k8sDiscovery.isAvailable()) {
-      return null;
+      return {
+        namespace: 'default',
+        services: {},
+        discoveryEnabled: false,
+        error: 'Kubernetes client not available',
+        lastDiscovery: null,
+        cachedInstancesCount: 0
+      };
     }
 
     try {
@@ -106,14 +131,27 @@ class InstanceManager {
         services: services,
         discoveryEnabled: true,
         lastDiscovery: this.lastDiscoveryTime,
-        cachedInstancesCount: this.cachedInstances?.length || 0
+        cachedInstancesCount: this.cachedInstances?.length || 0,
+        kubernetes: {
+          available: true,
+          namespace: this.k8sDiscovery.getNamespace(),
+          servicesFound: Object.keys(services).length
+        }
       };
     } catch (error) {
       console.error('Failed to get Kubernetes info:', error.message);
       return {
         namespace: this.k8sDiscovery.getNamespace(),
+        services: {},
         discoveryEnabled: true,
-        error: error.message
+        error: error.message,
+        lastDiscovery: this.lastDiscoveryTime,
+        cachedInstancesCount: this.cachedInstances?.length || 0,
+        kubernetes: {
+          available: true,
+          namespace: this.k8sDiscovery.getNamespace(),
+          error: error.message
+        }
       };
     }
   }

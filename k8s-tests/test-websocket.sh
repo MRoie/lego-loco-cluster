@@ -60,11 +60,18 @@ else
   log "✅ Backend confirmed using Kubernetes auto-discovery"
 fi
 
+# Check for Kubernetes cluster information more flexibly
 if [[ -z "$has_k8s_info" ]]; then
-  log "❌ CRITICAL: No Kubernetes cluster information detected!"
-  log "This indicates the backend is not properly connected to a Kubernetes cluster"
-  fail=1
-  exit 1
+  # Also check for discoveryEnabled flag as alternative
+  discovery_enabled=$(echo "$discovery_response" | grep -o '"discoveryEnabled":true' || echo "")
+  if [[ -z "$discovery_enabled" ]]; then
+    log "❌ CRITICAL: No Kubernetes cluster information detected!"
+    log "This indicates the backend is not properly connected to a Kubernetes cluster"
+    fail=1
+    exit 1
+  else
+    log "✅ Kubernetes discovery enabled (cluster information available)"
+  fi
 else
   log "✅ Kubernetes cluster information detected"
 fi

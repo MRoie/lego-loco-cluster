@@ -34,15 +34,16 @@ jobs:
           BRANCH_TAG="ghcr.io/mroie/lego-loco-cluster-ci:$(echo '${{ github.head_ref || github.ref_name }}' | sed 's/[^a-zA-Z0-9.-]/-/g')"
           
           # Try to pull the latest tag first
-          if docker pull "$CI_IMAGE" 2>/dev/null; then
+          if docker manifest inspect "$CI_IMAGE" >/dev/null 2>&1; then
             echo "CI image available: $CI_IMAGE"
             echo "image=$CI_IMAGE" >> $GITHUB_OUTPUT
           # Try branch-specific tag
-          elif docker pull "$BRANCH_TAG" 2>/dev/null; then
+          elif docker manifest inspect "$BRANCH_TAG" >/dev/null 2>&1; then
             echo "Branch-specific CI image available: $BRANCH_TAG"
             echo "image=$BRANCH_TAG" >> $GITHUB_OUTPUT
           else
-            echo "CI image not available, using fallback: $FALLBACK_IMAGE"
+            echo "CI images not available, using fallback: $FALLBACK_IMAGE"
+            echo "Attempted images: $CI_IMAGE, $BRANCH_TAG"
             echo "image=$FALLBACK_IMAGE" >> $GITHUB_OUTPUT
           fi
       - name: Build CI image if needed

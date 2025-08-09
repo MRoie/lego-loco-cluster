@@ -84,20 +84,11 @@ class KubernetesDiscovery {
       // Discover StatefulSet pods with emulator label
       console.log(`Calling listNamespacedPod with namespace: "${namespace}"`);
       
-      // Use positional parameters for better compatibility across client-node versions
-      const podsResponse = await this.k8sApi.listNamespacedPod(
-        namespace,
-        undefined, // pretty
-        undefined, // allowWatchBookmarks  
-        undefined, // _continue
-        undefined, // fieldSelector
-        'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster', // labelSelector
-        undefined, // limit
-        undefined, // resourceVersion
-        undefined, // resourceVersionMatch
-        undefined, // timeoutSeconds
-        undefined  // watch
-      );
+      // Call API with proper parameter object format for client-node v1.3+
+      const podsResponse = await this.k8sApi.listNamespacedPod({
+        namespace: namespace,
+        labelSelector: 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster'
+      });
 
       if (!podsResponse || !podsResponse.body) {
         console.log('No pods response or body from Kubernetes API');
@@ -181,15 +172,11 @@ class KubernetesDiscovery {
       // Ensure namespace is a valid string
       const namespace = String(this.namespace).trim();
       
-      // Use positional parameters for better compatibility
-      const servicesResponse = await this.k8sApi.listNamespacedService(
-        namespace,
-        undefined, // pretty
-        undefined, // allowWatchBookmarks
-        undefined, // _continue
-        undefined, // fieldSelector
-        'app.kubernetes.io/part-of=lego-loco-cluster' // labelSelector
-      );
+      // Call API with proper parameter object format for client-node v1.3+
+      const servicesResponse = await this.k8sApi.listNamespacedService({
+        namespace: namespace,
+        labelSelector: 'app.kubernetes.io/part-of=lego-loco-cluster'
+      });
 
       if (!servicesResponse || !servicesResponse.body) {
         console.log('No services response or body from Kubernetes API');
