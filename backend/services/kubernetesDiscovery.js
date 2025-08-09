@@ -68,28 +68,28 @@ class KubernetesDiscovery {
 
   async discoverEmulatorInstances() {
     if (!this.initialized) {
-      console.log('Kubernetes discovery not initialized, returning empty array');
+      logger.warn("Kubernetes discovery not initialized, returning empty array");
       return [];
     }
 
     if (!this.namespace || this.namespace.trim() === '') {
-      console.error('Kubernetes namespace is null or empty, cannot discover instances');
+      logger.error("Kubernetes namespace is null or empty, cannot discover instances");
       return [];
     }
 
     try {
-      console.log(`Discovering emulator instances in namespace: ${this.namespace}`);
-      console.log(`Namespace type: ${typeof this.namespace}, value: "${this.namespace}"`);
+      logger.info("Discovering emulator instances in namespace", { namespace: this.namespace });
+      logger.debug("Namespace debug info", { type: typeof this.namespace, value: this.namespace });
       
       // Ensure namespace is a valid string
       const namespace = String(this.namespace).trim();
       if (!namespace) {
-        console.error('Namespace is empty after trimming');
+        logger.error("Namespace is empty after trimming");
         return [];
       }
       
       // Discover StatefulSet pods with emulator label
-      console.log(`Calling listNamespacedPod with namespace: "${namespace}"`);
+      logger.debug("Calling listNamespacedPod", { namespace });
       
       // Use positional parameters for maximum compatibility with different client-node versions
       const labelSelector = 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster';
@@ -109,7 +109,7 @@ class KubernetesDiscovery {
       );
 
       if (!podsResponse || !podsResponse.body) {
-        console.log('No pods response or body from Kubernetes API');
+        logger.warn("No pods response or body from Kubernetes API");
         return [];
       }
 
@@ -153,11 +153,11 @@ class KubernetesDiscovery {
         return aNum - bNum;
       });
 
-      console.log(`Discovered ${instances.length} emulator instances from Kubernetes`);
+      logger.info("Discovered emulator instances from Kubernetes", { count: instances.length });
       return instances;
       
     } catch (error) {
-      console.error('Failed to discover instances from Kubernetes:', error.message);
+      logger.error("Failed to discover instances from Kubernetes", { error: error.message });
       return [];
     }
   }
@@ -182,7 +182,7 @@ class KubernetesDiscovery {
     }
 
     if (!this.namespace || this.namespace.trim() === '') {
-      console.warn('Cannot get services info: Kubernetes namespace is null or empty');
+      logger.warn("Cannot get services info: Kubernetes namespace is null or empty");
       return {};
     }
 
@@ -208,7 +208,7 @@ class KubernetesDiscovery {
       );
 
       if (!servicesResponse || !servicesResponse.body) {
-        console.log('No services response or body from Kubernetes API');
+        logger.warn("No services response or body from Kubernetes API");
         return {};
       }
 
@@ -226,19 +226,19 @@ class KubernetesDiscovery {
 
       return services;
     } catch (error) {
-      console.error('Failed to get services info:', error.message);
+      logger.error("Failed to get services info", { error: error.message });
       return {};
     }
   }
 
   async watchEmulatorInstances(callback) {
     if (!this.initialized) {
-      console.warn('Cannot watch instances: Kubernetes discovery not initialized');
+      logger.warn("Cannot watch instances: Kubernetes discovery not initialized");
       return null;
     }
 
     if (!this.namespace || this.namespace.trim() === '') {
-      console.warn('Cannot watch instances: Kubernetes namespace is null or empty');
+      logger.warn("Cannot watch instances: Kubernetes namespace is null or empty");
       return null;
     }
 
@@ -247,7 +247,7 @@ class KubernetesDiscovery {
       
       // Ensure namespace is a valid string
       const namespace = String(this.namespace).trim();
-      console.log(`Starting watch for emulator pod changes in namespace: ${namespace}...`);
+      logger.info("Starting watch for emulator pod changes", { namespace });
       
       // Configure watch with TLS settings for CI environments
       const watchOptions = {
@@ -256,14 +256,14 @@ class KubernetesDiscovery {
       
       // Skip TLS verification in CI environments to avoid "HTTP protocol is not allowed" errors
       if (process.env.CI || process.env.NODE_ENV === 'test') {
-        console.log('CI environment detected - configuring watch with relaxed TLS settings');
+        logger.info("CI environment detected - configuring watch with relaxed TLS settings");
       }
       
       const watchRequest = await watch.watch(
         `/api/v1/namespaces/${namespace}/pods`,
         watchOptions,
         (type, apiObj) => {
-          console.log(`Pod ${type}: ${apiObj.metadata.name} - ${apiObj.status.phase}`);
+          logger.debug("Pod change detected", { type, podName: apiObj.metadata.name, phase: apiObj.status.phase });
           
           // Trigger callback to refresh instance list
           if (callback) {
@@ -272,17 +272,17 @@ class KubernetesDiscovery {
         },
         (err) => {
           if (err && err.code !== 'ECONNRESET') {
-            console.error('Watch error:', err.message);
+            logger.error("Watch error", { error: err.message });
           }
         }
       );
 
       return watchRequest;
     } catch (error) {
-      console.error('Failed to start watching instances:', error.message);
+      logger.error("Failed to start watching instances", { error: error.message });
       // In CI environments, don't throw errors for watch failures
       if (process.env.CI || process.env.NODE_ENV === 'test') {
-        console.warn('Watch functionality disabled in CI environment due to TLS restrictions');
+        logger.warn("Watch functionality disabled in CI environment due to TLS restrictions");
         return null;
       }
       // Don't throw error for watch failures, just return null

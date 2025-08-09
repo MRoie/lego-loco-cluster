@@ -1,5 +1,6 @@
 const { describe, it, expect, beforeEach, afterEach } = require('@jest/globals');
 const StreamQualityMonitor = require('../services/streamQualityMonitor');
+const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
@@ -48,11 +49,11 @@ describe('StreamQualityMonitor - Audio and Controls Testing', () => {
     // Set up WebSocket handler to simulate VNC responses
     wss.on('connection', (ws, request) => {
       const url = request.url;
-      console.log('Test WebSocket connection:', url);
+      logger.debug('Test WebSocket connection', { url });
 
       // Simulate VNC handshake
       ws.on('message', (data) => {
-        console.log('Received VNC message:', data.toString());
+        logger.debug('Received VNC message', { message: data.toString() });
         
         // Simulate VNC server response
         if (data.toString().includes('RFB')) {
