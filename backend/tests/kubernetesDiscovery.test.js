@@ -66,15 +66,15 @@ describe('KubernetesDiscovery', () => {
   });
 
   test('should validate namespace parameter for API calls', () => {
-    // Test namespace validation logic
+    // Test namespace validation logic (updated for Helm chart default 'loco')
     const testCases = [
       { input: 'default', expected: 'default' },
       { input: '  default  ', expected: 'default' },
-      { input: '', expected: 'default' },
-      { input: null, expected: 'default' },
-      { input: undefined, expected: 'default' },
-      { input: 'null', expected: 'default' },
-      { input: 'undefined', expected: 'default' }
+      { input: '', expected: 'loco' }, // Updated to match Helm chart default
+      { input: null, expected: 'loco' }, // Updated to match Helm chart default
+      { input: undefined, expected: 'loco' }, // Updated to match Helm chart default
+      { input: 'null', expected: 'loco' }, // Updated to match Helm chart default
+      { input: 'undefined', expected: 'loco' } // Updated to match Helm chart default
     ];
 
     testCases.forEach(({ input, expected }) => {
@@ -82,12 +82,12 @@ describe('KubernetesDiscovery', () => {
       let namespace = input;
       
       if (!namespace || namespace.trim() === '' || namespace === 'null' || namespace === 'undefined') {
-        namespace = 'default';
+        namespace = 'loco'; // Use Helm chart default instead of 'default'
       }
       
       namespace = String(namespace).trim();
       if (!namespace) {
-        namespace = 'default';
+        namespace = 'loco'; // Use Helm chart default
       }
       
       expect(namespace).toBe(expected);

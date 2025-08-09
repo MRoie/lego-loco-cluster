@@ -6,7 +6,7 @@ class KubernetesDiscovery {
     this.kc = null;
     this.k8sApi = null;
     this.k8s = null; // Store k8s reference for class-level access
-    this.namespace = 'default';
+    this.namespace = 'loco'; // Default namespace aligned with Helm chart values.yaml
     this.initialized = false;
     
     // Initialize asynchronously
@@ -49,22 +49,23 @@ class KubernetesDiscovery {
         this.namespace = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace', 'utf8').trim();
         console.log(`Using namespace from service account: ${this.namespace}`);
       } else {
-        // In CI environments, use default namespace
-        this.namespace = 'default';
-        console.log(`Using default namespace: ${this.namespace}`);
+        // In CI environments or when no environment/service account namespace is found,
+        // use 'loco' namespace to align with Helm chart default configuration
+        this.namespace = 'loco';
+        console.log(`Using default namespace from Helm chart: ${this.namespace}`);
       }
       
       // Validate namespace is not empty or null/undefined
       if (!this.namespace || this.namespace.trim() === '' || this.namespace === 'null' || this.namespace === 'undefined') {
-        this.namespace = 'default';
-        console.warn('Namespace was empty, null, or undefined - falling back to default');
+        this.namespace = 'loco'; // Use Helm chart default instead of 'default'
+        console.warn('Namespace was empty, null, or undefined - falling back to Helm chart default: loco');
       }
       
       // Final validation - ensure namespace is a proper string
       this.namespace = String(this.namespace).trim();
       if (!this.namespace) {
-        this.namespace = 'default';
-        console.warn('Namespace validation failed - using default namespace');
+        this.namespace = 'loco'; // Use Helm chart default
+        console.warn('Namespace validation failed - using Helm chart default namespace: loco');
       }
       
       console.log(`Kubernetes discovery initialized for namespace: "${this.namespace}" (type: ${typeof this.namespace})`);
