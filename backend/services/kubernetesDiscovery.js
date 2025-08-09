@@ -225,6 +225,7 @@ class KubernetesDiscovery {
       console.log(`🔍 Getting services info for namespace: "${namespace}"`);
       
       // Use object-based parameters for kubernetes/client-node v1.3.0+
+      const labelSelector = 'app.kubernetes.io/part-of=lego-loco-cluster';
       const listServicesParams = {
         namespace: namespace,
         labelSelector: labelSelector
