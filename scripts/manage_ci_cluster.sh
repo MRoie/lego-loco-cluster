@@ -17,12 +17,12 @@ echo "=== CI Cluster Management - Action: $ACTION ===" && date
 # MAXIMUM resource allocation for CI environments based on GitHub Actions runner specs
 # GitHub Actions runners: 2-core CPU, 7GB RAM, 14GB SSD
 if [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-    # CI environment - use LIGHTWEIGHT resources optimized for container environments
+    # CI environment - use ULTRA-LIGHTWEIGHT resources for fastest startup
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}          # Use all available CPUs
-    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-3072}   # Use 3GB of 7GB available (more conservative)
-    MINIKUBE_DISK=${MINIKUBE_DISK:-6g}         # Reduced disk to prevent timeout issues
-    TIMEOUT_SECONDS=900  # Reduced to 15 minutes for faster failure detection
-    echo "CI environment detected - using LIGHTWEIGHT optimized resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK, Timeout: ${TIMEOUT_SECONDS}s)"
+    MINIKUBE_MEMORY=${MINIKUBE_MEMORY:-2048}   # Reduced to 2GB for faster startup
+    MINIKUBE_DISK=${MINIKUBE_DISK:-4g}         # Reduced disk to 4GB for speed
+    TIMEOUT_SECONDS=600  # Reduced to 10 minutes for faster failure detection
+    echo "CI environment detected - using ULTRA-LIGHTWEIGHT optimized resources (CPUs: $MINIKUBE_CPUS, Memory: ${MINIKUBE_MEMORY}MB, Disk: $MINIKUBE_DISK, Timeout: ${TIMEOUT_SECONDS}s)"
 else
     # Development environment
     MINIKUBE_CPUS=${MINIKUBE_CPUS:-2}
