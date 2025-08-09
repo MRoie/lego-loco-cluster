@@ -381,6 +381,11 @@ test_startup_time_slo() {
             fi
         done
         
+        if [ "$total_pods" -eq 0 ]; then
+            print_fail "No pods processed for startup SLO compliance calculation (division by zero avoided)"
+            SLO_VIOLATIONS=$((SLO_VIOLATIONS + 1))
+            return 1
+        fi
         local success_rate=$(( (total_pods - startup_violations) * 100 / total_pods ))
         local slo_threshold="${SERVICE_SLOS[startup_probe_success_rate]}"
         
