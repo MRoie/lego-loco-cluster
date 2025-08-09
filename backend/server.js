@@ -6,11 +6,68 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
+const client = require('prom-client');
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
 
 const app = express();
 const server = http.createServer(app);
+
+// ========== PROMETHEUS METRICS CONFIGURATION ==========
+
+// Create a Registry to register metrics
+const register = new client.Registry();
+
+// Register default metrics
+client.collectDefaultMetrics({ register });
+
+// Create custom metrics
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [0.001, 0.005, 0.015, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 5.0, 10.0]
+});
+
+const activeConnections = new client.Gauge({
+  name: 'active_connections_total',
+  help: 'Number of active connections',
+  labelNames: ['type']
+});
+
+// Register custom metrics
+register.registerMetric(httpRequestDuration);
+register.registerMetric(activeConnections);
+
+// Middleware to track HTTP request duration
+app.use((req, res, next) => {
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    const route = req.route ? req.route.path : req.path;
+    
+    httpRequestDuration
+      .labels(req.method, route, res.statusCode.toString())
+      .observe(duration);
+  });
+  
+  next();
+});
+
+// Track active HTTP connections
+let activeHttpConnections = 0;
+server.on('connection', (socket) => {
+  activeHttpConnections++;
+  activeConnections.labels('http').set(activeHttpConnections);
+  
+  socket.on('close', () => {
+    activeHttpConnections--;
+    activeConnections.labels('http').set(activeHttpConnections);
+  });
+});
+
+// ========== END PROMETHEUS METRICS CONFIGURATION ==========
 
 // Parse JSON bodies for API endpoints
 app.use(express.json());
@@ -19,6 +76,18 @@ app.use(express.json());
 app.get("/health", (req, res) => {
   console.log("Health check requested - live reloading test!");
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Prometheus metrics endpoint
+app.get("/metrics", async (req, res) => {
+  try {
+    const metrics = await register.metrics();
+    res.set('Content-Type', register.contentType);
+    res.end(metrics);
+  } catch (e) {
+    console.error("Failed to generate metrics:", e.message);
+    res.status(500).end('Error generating metrics');
+  }
 });
 
 // Directory that holds JSON config files
@@ -381,6 +450,10 @@ async function getInstanceTarget(id) {
 function createVNCBridge(ws, targetUrl, instanceId) {
   console.log(`Creating VNC bridge for ${instanceId} to ${targetUrl}`);
   
+  // Track VNC WebSocket connection
+  activeVncConnections++;
+  activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
+  
   // Parse the target URL to get host and port
   // targetUrl format is "localhost:5901" or "host:port"
   let host, port;
@@ -446,12 +519,16 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   // Handle WebSocket close
   ws.on('close', (code, reason) => {
     console.log(`WebSocket closed for VNC bridge ${instanceId}, code: ${code}, reason: ${reason}`);
+    activeVncConnections--;
+    activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
     tcpSocket.destroy();
   });
   
   // Handle WebSocket errors
   ws.on('error', (err) => {
     console.error(`WebSocket error for VNC bridge ${instanceId}:`, err.message);
+    activeVncConnections--;
+    activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
     tcpSocket.destroy();
   });
 }
@@ -459,14 +536,21 @@ function createVNCBridge(ws, targetUrl, instanceId) {
 // --- WebSocket Support for VNC ---
 // VNC WebSocket server for handling VNC connections
 const vncWss = new WebSocketServer({ noServer: true });
+let activeVncConnections = 0;
+
 vncWss.on("error", (err) => {
   console.error("VNC WebSocket server error", err.message);
 });
 
 // WebSocket server for active focus updates
 const activeWss = new WebSocketServer({ noServer: true });
+let activeWsConnections = 0;
+
 activeWss.on("connection", (ws) => {
   activeClients.add(ws);
+  activeWsConnections++;
+  activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
+  
   ws.send(JSON.stringify({ active: readActive() }));
   ws.on("message", (msg) => {
     try {
@@ -480,7 +564,11 @@ activeWss.on("connection", (ws) => {
       console.error("Active WS message error", e.message);
     }
   });
-  ws.on("close", () => activeClients.delete(ws));
+  ws.on("close", () => {
+    activeClients.delete(ws);
+    activeWsConnections--;
+    activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
+  });
 });
 
 // Handle WebSocket upgrades for VNC connections
