@@ -50,7 +50,7 @@ function loadConfig(name) {
 // REST endpoint that returns any JSON config file
 app.get("/api/config/:name", (req, res) => {
   try {
-    logger.log(`Config request for: ${req.params.name}`);
+    logger.info(`Config request for: ${req.params.name}`);
     const data = loadConfig(req.params.name);
     res.json(data);
   } catch (e) {
