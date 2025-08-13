@@ -8,6 +8,39 @@ storage:
   class: "standard"  # Default storage class for PVCs
   nfsSize: "10Gi"
   diskSize: "10Gi"
+  
+  # Storage strategy configuration
+  strategy:
+    # Option 1: HostPath Direct Mounts
+    hostPath:
+      enabled: false  # Disabled by default, enable for local development
+      path: "/tmp/loco-art-shared"
+      createOnStartup: true
+      permissions: "777"
+    
+    # Option 8: Hybrid Storage with Multiple Backends
+    hybrid:
+      enabled: false  # Disabled by default
+      primary: "nfs"  # Default to NFS for production
+      fallback: "emptyDir"
+      
+      # NFS configuration
+      nfs:
+        enabled: true
+        server: "nfs-server"
+        path: "/exports/art"
+      
+      # EmptyDir configuration
+      emptyDir:
+        enabled: false
+        medium: ""
+        sizeLimit: "10Gi"
+      
+      # ConfigMap configuration
+      configMap:
+        enabled: false
+        name: "loco-art-config"
+        dataKey: "art-data"
 
 # Image pull secrets for private registries
 # Uncomment and configure as needed
@@ -47,6 +80,30 @@ emulator:
   usePrebuiltSnapshot: false
   snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
   snapshotTag: "win98-base"
+
+  # Health monitoring configuration
+  healthPort: 8080
+  probes:
+    startup:
+      enabled: true
+      path: /
+      failureThreshold: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+    liveness:
+      enabled: true
+      path: /
+      initialDelaySeconds: 60
+      periodSeconds: 15
+      timeoutSeconds: 10
+      failureThreshold: 3
+    readiness:
+      enabled: true
+      path: /
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
 
   # CPU resources for emulator pods
   resources:

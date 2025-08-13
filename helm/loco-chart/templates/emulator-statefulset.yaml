@@ -118,8 +118,37 @@ spec:
               - SYS_ADMIN
         ports:
         - containerPort: {{ .Values.emulator.servicePort }}
-        - containerPort: 8080
+        - containerPort: {{ .Values.emulator.healthPort }}
           name: health
+        {{- if .Values.emulator.probes.startup.enabled }}
+        startupProbe:
+          httpGet:
+            path: {{ .Values.emulator.probes.startup.path }}
+            port: {{ .Values.emulator.healthPort }}
+          failureThreshold: {{ .Values.emulator.probes.startup.failureThreshold }}
+          periodSeconds: {{ .Values.emulator.probes.startup.periodSeconds }}
+          timeoutSeconds: {{ .Values.emulator.probes.startup.timeoutSeconds }}
+        {{- end }}
+        {{- if .Values.emulator.probes.liveness.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.emulator.probes.liveness.path }}
+            port: {{ .Values.emulator.healthPort }}
+          initialDelaySeconds: {{ .Values.emulator.probes.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.emulator.probes.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.emulator.probes.liveness.timeoutSeconds }}
+          failureThreshold: {{ .Values.emulator.probes.liveness.failureThreshold }}
+        {{- end }}
+        {{- if .Values.emulator.probes.readiness.enabled }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.emulator.probes.readiness.path }}
+            port: {{ .Values.emulator.healthPort }}
+          initialDelaySeconds: {{ .Values.emulator.probes.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.emulator.probes.readiness.periodSeconds }}
+          timeoutSeconds: {{ .Values.emulator.probes.readiness.timeoutSeconds }}
+          failureThreshold: {{ .Values.emulator.probes.readiness.failureThreshold }}
+        {{- end }}
         volumeMounts:
         - name: disk
           mountPath: /images
