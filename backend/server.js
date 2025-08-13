@@ -61,10 +61,17 @@ server.on('connection', (socket) => {
   activeHttpConnections++;
   activeConnections.labels('http').set(activeHttpConnections);
   
-  socket.on('close', () => {
-    activeHttpConnections--;
-    activeConnections.labels('http').set(activeHttpConnections);
-  });
+  let connectionClosed = false;
+  const cleanupConnection = () => {
+    if (!connectionClosed) {
+      connectionClosed = true;
+      activeHttpConnections--;
+      activeConnections.labels('http').set(activeHttpConnections);
+    }
+  };
+  
+  socket.on('close', cleanupConnection);
+  socket.on('error', cleanupConnection);
 });
 
 // ========== END PROMETHEUS METRICS CONFIGURATION ==========
@@ -517,19 +524,25 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   });
   
   // Handle WebSocket close
+  let connectionClosed = false;
+  const cleanupConnection = () => {
+    if (!connectionClosed) {
+      connectionClosed = true;
+      activeVncConnections--;
+      activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
+      tcpSocket.destroy();
+    }
+  };
+  
   ws.on('close', (code, reason) => {
     console.log(`WebSocket closed for VNC bridge ${instanceId}, code: ${code}, reason: ${reason}`);
-    activeVncConnections--;
-    activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
-    tcpSocket.destroy();
+    cleanupConnection();
   });
   
   // Handle WebSocket errors
   ws.on('error', (err) => {
     console.error(`WebSocket error for VNC bridge ${instanceId}:`, err.message);
-    activeVncConnections--;
-    activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
-    tcpSocket.destroy();
+    cleanupConnection();
   });
 }
 
@@ -551,6 +564,16 @@ activeWss.on("connection", (ws) => {
   activeWsConnections++;
   activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
   
+  let connectionClosed = false;
+  const cleanupConnection = () => {
+    if (!connectionClosed) {
+      connectionClosed = true;
+      activeClients.delete(ws);
+      activeWsConnections--;
+      activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
+    }
+  };
+  
   ws.send(JSON.stringify({ active: readActive() }));
   ws.on("message", (msg) => {
     try {
@@ -564,11 +587,8 @@ activeWss.on("connection", (ws) => {
       console.error("Active WS message error", e.message);
     }
   });
-  ws.on("close", () => {
-    activeClients.delete(ws);
-    activeWsConnections--;
-    activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
-  });
+  ws.on("close", cleanupConnection);
+  ws.on("error", cleanupConnection);
 });
 
 // Handle WebSocket upgrades for VNC connections
