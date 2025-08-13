@@ -1,8 +1,12 @@
-const KubernetesDiscovery = require('../services/kubernetesDiscovery');
+let KubernetesDiscovery;
 
 describe('KubernetesDiscovery', () => {
   let discovery;
 
+  beforeAll(async () => {
+    const mod = await import('../services/kubernetesDiscovery');
+    KubernetesDiscovery = mod.default || mod.KubernetesDiscovery || mod;
+  });
   beforeEach(() => {
     discovery = new KubernetesDiscovery();
   });
