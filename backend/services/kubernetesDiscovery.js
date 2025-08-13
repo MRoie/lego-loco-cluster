@@ -159,9 +159,7 @@ class KubernetesDiscovery {
 
       console.log(`✅ Kubernetes API responses received - found ${pods.length} pods and ${statefulSets.length} StatefulSets`);
 
-      const instances = [];
-      const pods = podsResponse.body.items || [];
-      
+      const instances = [];      
       logger.debug("Processing discovered pods", { podCount: pods.length });
       
       for (const pod of pods) {

@@ -62,7 +62,7 @@ app.get("/api/config/:name", (req, res) => {
 // Simple cluster status endpoint used by the UI for boot progress
 app.get("/api/status", (req, res) => {
   try {
-    logger.log("Status request");
+    logger.info("Status request");
     const data = loadConfig("status");
     res.json(data);
   } catch (e) {
@@ -74,7 +74,7 @@ app.get("/api/status", (req, res) => {
 // Instances endpoint for dynamic frontend updates
 app.get("/api/instances", (req, res) => {
   try {
-    logger.log("Instances request");
+    logger.info("Instances request");
     const data = loadConfig("instances");
     res.json(data);
   } catch (e) {
@@ -101,20 +101,20 @@ function getInstanceTarget(id) {
 
 // VNC WebSocket-to-TCP Bridge
 function createVNCBridge(ws, targetUrl, instanceId) {
-  logger.log(`Creating VNC bridge for ${instanceId} to ${targetUrl}`);
+  logger.info(`Creating VNC bridge for ${instanceId} to ${targetUrl}`);
   
   // Parse the target URL to get host and port
   const parsed = url.parse(targetUrl);
   const host = parsed.hostname;
   const port = parseInt(parsed.port) || 5901;
   
-  logger.log(`Connecting to VNC server at ${host}:${port}`);
+  logger.info(`Connecting to VNC server at ${host}:${port}`);
   
   // Create TCP connection to VNC server
   const tcpSocket = net.createConnection(port, host);
   
   tcpSocket.on('connect', () => {
-    logger.log(`VNC bridge connected to ${host}:${port}`);
+    logger.info(`VNC bridge connected to ${host}:${port}`);
   });
   
   tcpSocket.on('error', (err) => {
@@ -125,7 +125,7 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   });
   
   tcpSocket.on('close', () => {
-    logger.log(`VNC TCP socket closed for ${instanceId}`);
+    logger.info(`VNC TCP socket closed for ${instanceId}`);
     if (ws.readyState === ws.OPEN) {
       ws.close();
     }
@@ -155,7 +155,7 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   
   // Handle WebSocket close
   ws.on('close', () => {
-    logger.log(`WebSocket closed for VNC bridge ${instanceId}`);
+    logger.info(`WebSocket closed for VNC bridge ${instanceId}`);
     tcpSocket.destroy();
   });
   
@@ -168,14 +168,14 @@ function createVNCBridge(ws, targetUrl, instanceId) {
 
 // Start HTTP server first
 server.listen(3001, () => {
-  logger.log("Backend running on http://localhost:3001");
-  logger.log("Config directory:", FINAL_CONFIG_DIR);
+  logger.info("Backend running on http://localhost:3001");
+  logger.info("Config directory:", FINAL_CONFIG_DIR);
   
   // Test config loading
   try {
-    logger.log("Testing config loading...");
+    logger.info("Testing config loading...");
     const instances = loadConfig("instances");
-    logger.log("Loaded instances:", instances);
+    logger.info("Loaded instances:", instances);
   } catch (e) {
     logger.error("Config loading test failed:", e.message);
   }
@@ -192,4 +192,4 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-logger.log("Server script loaded successfully");
+logger.info("Server script loaded successfully");
