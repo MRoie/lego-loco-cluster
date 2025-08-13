@@ -13,7 +13,7 @@ const server = http.createServer(app);
 
 // simple health endpoint for Kubernetes-style checks
 app.get("/health", (req, res) => {
-  logger.info("Health check requested");;
+  logger.info("Health check requested");
   res.json({ status: "ok" });
 });
 
