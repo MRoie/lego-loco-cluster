@@ -549,8 +549,6 @@ function createVNCBridge(ws, targetUrl, instanceId) {
 // --- WebSocket Support for VNC ---
 // VNC WebSocket server for handling VNC connections
 const vncWss = new WebSocketServer({ noServer: true });
-let activeVncConnections = 0;
-
 vncWss.on("error", (err) => {
   console.error("VNC WebSocket server error", err.message);
 });
