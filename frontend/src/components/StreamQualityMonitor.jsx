@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { createLogger } from '../utils/logger.js';
 
 /**
  * Stream Quality Monitor Component
  * Displays real-time quality metrics for all instances
  */
 export default function StreamQualityMonitor() {
+  const logger = createLogger('StreamQualityMonitor');
   const [qualityMetrics, setQualityMetrics] = useState({});
   const [summary, setSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +34,7 @@ export default function StreamQualityMonitor() {
       setSummary(summaryData);
       setIsLoading(false);
     } catch (err) {
-      console.error('Failed to fetch quality data:', err);
+      logger.error('Failed to fetch quality data', { error: err.message });
       setError(err.message);
       setIsLoading(false);
     }

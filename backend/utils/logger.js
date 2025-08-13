@@ -70,37 +70,4 @@ if (process.env.NODE_ENV !== 'production') {
   }));
 }
 
-// Add convenience methods for common use cases
-logger.logWithContext = (level, message, context = {}) => {
-  logger.log(level, message, context);
-};
-
-logger.info = (message, context = {}) => {
-  logger.logWithContext('info', message, context);
-};
-
-logger.warn = (message, context = {}) => {
-  logger.logWithContext('warn', message, context);
-};
-
-logger.error = (message, context = {}) => {
-  logger.logWithContext('error', message, context);
-};
-
-logger.infoWithContext = (message, context = {}) => {
-  logger.logWithContext('info', message, context);
-};
-
-logger.warnWithContext = (message, context = {}) => {
-  logger.logWithContext('warn', message, context);
-};
-
-logger.errorWithContext = (message, context = {}) => {
-  logger.logWithContext('error', message, context);
-};
-
-logger.debugWithContext = (message, context = {}) => {
-  logger.logWithContext('debug', message, context);
-};
-
 module.exports = logger;
