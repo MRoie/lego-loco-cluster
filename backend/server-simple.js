@@ -24,7 +24,7 @@ const CONFIG_DIR = process.env.CONFIG_DIR || path.join(__dirname, "../config");
 const K8S_CONFIG_DIR = "/app/config";
 const FINAL_CONFIG_DIR = fs.existsSync(K8S_CONFIG_DIR) ? K8S_CONFIG_DIR : CONFIG_DIR;
 
-logger.info("Using config directory", { configDir: FINAL_CONFIG_DIR });;
+logger.info("Using config directory", { configDir: FINAL_CONFIG_DIR });
 
 // Serve frontend static build
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
