@@ -40,7 +40,7 @@ function loadConfig(name) {
   }
   
   let data = fs.readFileSync(file, "utf-8");
-  logger.log(`Raw config data for ${name}:`, data.substring(0, 200));
+  logger.debug(`Raw config data for ${name}:`, data.substring(0, 200));
   
   // Allow simple // comments in JSON files
   data = data.replace(/^\s*\/\/.*$/gm, "");
