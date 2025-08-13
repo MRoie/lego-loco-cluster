@@ -6,18 +6,65 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
+const logger = require("./utils/logger");
+const client = require('prom-client');
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
 
 const app = express();
 const server = http.createServer(app);
 
+// ========== PROMETHEUS METRICS CONFIGURATION ==========
+
+// Create a Registry to register metrics
+const register = new client.Registry();
+
+// Register default metrics
+client.collectDefaultMetrics({ register });
+
+// Create custom metrics
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [0.001, 0.005, 0.015, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 5.0, 10.0]
+});
+
+const activeConnections = new client.Gauge({
+  name: 'active_connections_total',
+  help: 'Number of active connections',
+  labelNames: ['type']
+});
+
+// Register custom metrics
+register.registerMetric(httpRequestDuration);
+register.registerMetric(activeConnections);
+
+// Middleware to track HTTP request duration
+app.use((req, res, next) => {
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    const route = req.route ? req.route.path : req.path;
+    httpRequestDuration.observe(
+      { method: req.method, route, status_code: res.statusCode },
+      duration
+    );
+  });
+  
+  next();
+});
+
 // Parse JSON bodies for API endpoints
 app.use(express.json());
 
 // Enhanced health endpoint with detailed system information
 app.get("/health", (req, res) => {
-  console.log("Health check requested");
+  logger.info("Health check requested", { 
+    userAgent: req.get('User-Agent'),
+    remoteAddress: req.ip || req.connection.remoteAddress 
+  });
   
   const healthData = {
     status: "ok",
@@ -45,7 +92,10 @@ app.get("/health", (req, res) => {
 
 // Readiness endpoint with dependency checks
 app.get("/ready", async (req, res) => {
-  console.log("Readiness check requested");
+  logger.info("Readiness check requested", { 
+    userAgent: req.get('User-Agent'),
+    remoteAddress: req.ip || req.connection.remoteAddress 
+  });
   
   const checks = {
     timestamp: new Date().toISOString(),
@@ -142,7 +192,7 @@ app.get("/ready", async (req, res) => {
     };
     
   } catch (error) {
-    console.error("Readiness check error:", error);
+    logger.error("Readiness check error:", error);
     allHealthy = false;
     checks.checks.general_error = {
       status: "unhealthy",
@@ -154,7 +204,24 @@ app.get("/ready", async (req, res) => {
   
   // Return 503 Service Unavailable if not ready, 200 if ready
   const statusCode = allHealthy ? 200 : 503;
+  
+  if (!allHealthy) {
+    logger.warn("Service not ready", { checks: checks.checks });
+  }
+  
   res.status(statusCode).json(checks);
+});
+
+// Prometheus metrics endpoint
+app.get("/metrics", async (req, res) => {
+  try {
+    const metrics = await register.metrics();
+    res.set('Content-Type', register.contentType);
+    res.end(metrics);
+  } catch (e) {
+    logger.error("Failed to generate metrics:", e.message);
+    res.status(500).end('Error generating metrics');
+  }
 });
 
 // Directory that holds JSON config files
@@ -164,7 +231,7 @@ const CONFIG_DIR = process.env.CONFIG_DIR || path.join(__dirname, "../config");
 const K8S_CONFIG_DIR = "/app/config";
 const FINAL_CONFIG_DIR = fs.existsSync(K8S_CONFIG_DIR) ? K8S_CONFIG_DIR : CONFIG_DIR;
 
-console.log("Using config directory:", FINAL_CONFIG_DIR);
+logger.info("Using config directory:", { configDirectory: FINAL_CONFIG_DIR });
 
 // Initialize instance manager with auto-discovery
 const instanceManager = new InstanceManager(FINAL_CONFIG_DIR);
@@ -665,37 +732,37 @@ console.log("WebSocket support added");
 
 // Start HTTP server first
 server.listen(3001, () => {
-  console.log("Backend running on http://localhost:3001");
-  console.log("Config directory:", FINAL_CONFIG_DIR);
-  console.log("Current active instances:", readActive());
+  logger.info("Backend running on http://localhost:3001");
+  logger.info("Config directory:", { configDirectory: FINAL_CONFIG_DIR });
+  logger.info("Current active instances:", { activeInstances: readActive() });
   
   // Start quality monitoring
-  console.log("🔍 Starting stream quality monitoring service...");
+  logger.info("🔍 Starting stream quality monitoring service...");
   qualityMonitor.start();
   
   // Test config loading (only in non-test environments)
   if (process.env.NODE_ENV !== 'test' && !process.env.CI) {
     try {
-      console.log("Testing config loading...");
+      logger.info("Testing config loading...");
       const instances = loadConfig("instances");
-      console.log("Loaded instances:", instances);
+      logger.info("Loaded instances:", { instanceCount: instances.length });
     } catch (e) {
-      console.error("Config loading test failed:", e.message);
+      logger.error("Config loading test failed:", e.message);
     }
   } else {
-    console.log("⚠️  Test environment detected - skipping static config loading test");
+    logger.info("⚠️  Test environment detected - skipping static config loading test");
   }
 });
 
 // Add uncaught exception handlers
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
+  logger.error('Uncaught Exception:', err);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Unhandled Rejection at:', { promise, reason });
   process.exit(1);
 });
 
-console.log("Server script loaded successfully");
+logger.info("Server script loaded successfully");

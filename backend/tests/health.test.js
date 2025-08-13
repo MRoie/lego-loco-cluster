@@ -105,6 +105,12 @@ beforeAll(async () => {
     res.json(healthData);
   });
   
+  // Add metrics endpoint
+  testApp.get("/metrics", (req, res) => {
+    res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    res.send('# HELP test_metric Test metric for health tests\n# TYPE test_metric counter\ntest_metric 1\n');
+  });
+  
   // Add readiness endpoint
   testApp.get("/ready", async (req, res) => {
     const checks = {
@@ -406,6 +412,17 @@ describe('Health Check Endpoints', () => {
       expect(response.body.overall_status).toBe('not_ready');
       expect(response.body.checks.instance_manager.status).toBe('unhealthy');
       expect(response.body.checks.config_directory.status).toBe('unhealthy');
+    });
+  });
+  
+  describe('GET /metrics', () => {
+    it('should return metrics in Prometheus format', async () => {
+      const response = await request(app)
+        .get('/metrics')
+        .expect(200);
+      
+      expect(response.headers['content-type']).toMatch(/text\/plain/);
+      expect(response.text).toContain('test_metric');
     });
   });
 });
