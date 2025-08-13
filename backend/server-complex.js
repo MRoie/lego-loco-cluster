@@ -29,7 +29,7 @@ app.use(express.static(path.join(__dirname, "../frontend/dist")));
 // Helper to load JSON config files from the config directory
 function loadConfig(name) {
   const file = path.join(FINAL_CONFIG_DIR, `${name}.json`);
-  logger.log(`Loading config from: ${file}`);
+  logger.info(`Loading config from: ${file}`);
   
   if (!fs.existsSync(file)) {
     logger.error(`Config file not found: ${file}`);
