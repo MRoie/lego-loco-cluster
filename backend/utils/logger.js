@@ -87,7 +87,19 @@ logger.error = (message, context = {}) => {
   logger.logWithContext('error', message, context);
 };
 
-logger.debug = (message, context = {}) => {
+logger.infoWithContext = (message, context = {}) => {
+  logger.logWithContext('info', message, context);
+};
+
+logger.warnWithContext = (message, context = {}) => {
+  logger.logWithContext('warn', message, context);
+};
+
+logger.errorWithContext = (message, context = {}) => {
+  logger.logWithContext('error', message, context);
+};
+
+logger.debugWithContext = (message, context = {}) => {
   logger.logWithContext('debug', message, context);
 };
 
