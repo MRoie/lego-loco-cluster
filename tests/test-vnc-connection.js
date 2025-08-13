@@ -116,6 +116,6 @@ ws.on('close', (code, reason) => {
 
 // Keep the process alive
 setTimeout(() => {
-    console.log('Test timeout - closing connection');
+    logger.info('Test timeout reached, closing connection');
     ws.close();
 }, 30000);
