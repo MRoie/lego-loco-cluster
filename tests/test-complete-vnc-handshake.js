@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
 const WebSocket = require('ws');
+const { createTestLogger } = require('../utils/logger');
 
-console.log('Testing complete VNC handshake through frontend proxy...');
+const logger = createTestLogger('test-complete-vnc-handshake');
+
+logger.info('Starting complete VNC handshake test through frontend proxy');
 
 // Connect to VNC through frontend proxy
 const ws = new WebSocket('ws://localhost:3000/proxy/vnc/instance-0/');
@@ -11,21 +14,21 @@ ws.binaryType = 'arraybuffer';
 let handshakeStep = 0;
 
 ws.on('open', () => {
-    console.log('✅ WebSocket connected');
+    logger.info('WebSocket connected successfully');
 });
 
 ws.on('message', (data) => {
     const bytes = new Uint8Array(data);
-    console.log(`📨 Step ${handshakeStep}: Received ${bytes.length} bytes`);
+    logger.debug('VNC handshake step', { step: handshakeStep, dataLength: bytes.length });
     
     if (handshakeStep === 0) {
         // VNC server version
         const serverVersion = new TextDecoder().decode(bytes.slice(0, 12));
-        console.log(`📋 Server version: ${JSON.stringify(serverVersion)}`);
+        logger.info('Server version received', { serverVersion: JSON.stringify(serverVersion) });
         
         // Send client version
         const clientVersion = 'RFB 003.008\n';
-        console.log(`📤 Sending client version: ${JSON.stringify(clientVersion)}`);
+        logger.info('Sending client version', { clientVersion: JSON.stringify(clientVersion) });
         ws.send(new TextEncoder().encode(clientVersion));
         handshakeStep = 1;
         

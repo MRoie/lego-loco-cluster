@@ -49,6 +49,7 @@ Revolutionary instance management:
 - `scripts/` – helper utilities
 - `tests/` – assorted test configs
 - `docs/` – documentation
+- `docs/LOGGING.md` – comprehensive logging system guide
 - `docs/REPOSITORY_SUMMARY.md` – overview of the project
 - `docs/FUTURE_TASKS.md` – remaining high level goals
 

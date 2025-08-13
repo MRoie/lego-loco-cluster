@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('../utils/logger');
 const KubernetesDiscovery = require('./kubernetesDiscovery');
 
 class InstanceManager {
@@ -21,17 +22,17 @@ class InstanceManager {
     const maxRetries = 10;
     
     while (!this.k8sDiscovery.isAvailable() && retries < maxRetries) {
-      console.log(`Waiting for Kubernetes discovery to initialize... (attempt ${retries + 1}/${maxRetries})`);
+      logger.info("Waiting for Kubernetes discovery to initialize", { attempt: retries + 1, maxRetries });
       await new Promise(resolve => setTimeout(resolve, 1000));
       retries++;
     }
     
     if (!this.k8sDiscovery.isAvailable()) {
-      console.error('❌ Kubernetes discovery not available. Static configuration is disabled. Backend requires Kubernetes environment.');
+      logger.error('Kubernetes discovery not available. Static configuration is disabled. Backend requires Kubernetes environment.');
       
       // Set initialized to true in test/CI environments to allow e2e tests with empty instance list
       if (process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') {
-        console.warn('⚠️  Test/CI environment detected - initializing with empty instances for e2e testing');
+        logger.warn("Test/CI environment detected - initializing with empty instances for e2e testing");
         this.initialized = true;
         this.cachedInstances = [];
         return; // Don't throw error in test environments
@@ -42,23 +43,23 @@ class InstanceManager {
 
     // Test actual connectivity by trying to discover instances
     try {
-      console.log('🔍 Testing Kubernetes connectivity...');
+      logger.info("Testing Kubernetes connectivity...");
       await this.k8sDiscovery.discoverEmulatorInstances();
-      console.log('✅ Kubernetes connectivity confirmed - static configuration disabled');
+      logger.info("Kubernetes connectivity confirmed - static configuration disabled");
       this.startBackgroundDiscovery();
       this.initialized = true;
     } catch (error) {
-      console.error('❌ Kubernetes connectivity test failed:', error.message);
-      console.error('Static configuration is disabled. Backend requires active Kubernetes cluster.');
+      logger.error("Kubernetes connectivity test failed", { error: error.message });
+      logger.error("Static configuration is disabled. Backend requires active Kubernetes cluster.");
       
       // Set initialized to true in test/CI environments to allow e2e tests with empty instance list
       if (process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') {
-        console.warn('⚠️  Test/CI environment detected - initializing with empty instances for e2e testing');
+        logger.warn("Test/CI environment detected - initializing with empty instances for e2e testing");
         this.initialized = true;
         this.cachedInstances = [];
       } else {
         // Don't throw here - let the server start but API calls will fail with meaningful errors
-        console.warn('⚠️  Backend starting in degraded mode - API calls will fail until Kubernetes is available');
+        logger.warn("Backend starting in degraded mode - API calls will fail until Kubernetes is available");
       }
     }
   }
@@ -71,7 +72,7 @@ class InstanceManager {
 
     // In test/CI environments, return cached empty instances if no K8s available
     if ((process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') && this.cachedInstances !== null) {
-      console.log('Test/CI environment: returning cached instances (may be empty for e2e tests)');
+      logger.info("Test/CI environment: returning cached instances (may be empty for e2e tests)");
       return this.cachedInstances;
     }
 
@@ -95,18 +96,18 @@ class InstanceManager {
       this.lastDiscoveryTime = now;
       
       if (discoveredInstances.length === 0) {
-        console.warn('⚠️ No emulator instances discovered from Kubernetes cluster. Ensure pods are running with proper labels: app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster');
+        logger.warn("No emulator instances discovered from Kubernetes cluster. Ensure pods are running with proper labels: app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster");
       } else {
-        console.log(`✅ Auto-discovered ${discoveredInstances.length} instances from Kubernetes (static config disabled)`);
+        logger.info("Auto-discovered instances from Kubernetes", { count: discoveredInstances.length });
       }
       
       return discoveredInstances;
     } catch (error) {
-      console.error('❌ Kubernetes discovery failed:', error.message);
+      logger.error("Kubernetes discovery failed", { error: error.message });
       
       // In CI/test environments, return empty array instead of throwing
       if (process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') {
-        console.warn('⚠️  CI/test environment: returning empty instances list due to discovery failure');
+        logger.warn("CI/test environment: returning empty instances list due to discovery failure");
         this.cachedInstances = [];
         this.lastDiscoveryTime = now;
         return [];
@@ -149,7 +150,7 @@ class InstanceManager {
         }
       };
     } catch (error) {
-      console.error('Failed to get Kubernetes info:', error.message);
+      logger.error("Failed to get Kubernetes info", { error: error.message });
       return {
         namespace: this.k8sDiscovery.getNamespace(),
         services: {},
@@ -167,11 +168,11 @@ class InstanceManager {
   }
 
   startBackgroundDiscovery() {
-    console.log('Starting background instance discovery...');
+    logger.info("Starting background instance discovery...");
     
     // Initial discovery - only if properly initialized
     if (this.initialized) {
-      this.getInstances().catch(console.error);
+      this.getInstances().catch(error => logger.error("Initial background discovery failed", { error: error.message }));
     }
     
     // Set up periodic discovery
@@ -179,13 +180,13 @@ class InstanceManager {
       try {
         await this.k8sDiscovery.discoverEmulatorInstances();
       } catch (error) {
-        console.error('Background discovery error:', error.message);
+        logger.error("Background discovery error", { error: error.message });
       }
     }, this.discoveryInterval);
 
     // Set up watch for real-time updates
     this.watchHandle = this.k8sDiscovery.watchEmulatorInstances((type, pod) => {
-      console.log(`Instance ${type}: ${pod.metadata.name}`);
+      logger.debug("Instance discovered", { type, podName: pod.metadata.name });
       // Invalidate cache to force refresh on next request
       this.cachedInstances = null;
       this.lastDiscoveryTime = null;
@@ -202,7 +203,7 @@ class InstanceManager {
       try {
         this.watchHandle.abort();
       } catch (error) {
-        console.warn('Failed to stop watch handle:', error.message);
+        logger.warn("Failed to stop watch handle", { error: error.message });
       }
       this.watchHandle = null;
     }

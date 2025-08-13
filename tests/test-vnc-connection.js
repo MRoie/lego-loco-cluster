@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
 const WebSocket = require('ws');
+const { createTestLogger } = require('../utils/logger');
 
-console.log('Testing VNC WebSocket connection...');
+const logger = createTestLogger('test-vnc-connection');
+
+logger.info('Starting VNC WebSocket connection test');
 
 // Connect to the VNC proxy
 const ws = new WebSocket('ws://localhost:3001/proxy/vnc/instance-0/');
@@ -10,35 +13,38 @@ const ws = new WebSocket('ws://localhost:3001/proxy/vnc/instance-0/');
 let handshakeStep = 0;
 
 ws.on('open', () => {
-    console.log('WebSocket connected');
+    logger.info('WebSocket connected successfully');
 });
 
 ws.on('message', (data) => {
-    console.log(`Step ${handshakeStep}: Received ${data.length} bytes:`, data);
+    logger.debug('VNC handshake step', { step: handshakeStep, dataLength: data.length });
     
     if (handshakeStep === 0) {
         // VNC server version - respond with client version
         const serverVersion = data.toString();
-        console.log('Server version:', JSON.stringify(serverVersion));
+        logger.info('Received server version', { serverVersion: JSON.stringify(serverVersion) });
         
         const clientVersion = 'RFB 003.008\n';
-        console.log('Sending client version:', JSON.stringify(clientVersion));
+        logger.info('Sending client version', { clientVersion: JSON.stringify(clientVersion) });
         ws.send(clientVersion);
         handshakeStep = 1;
         
     } else if (handshakeStep === 1) {
         // Security types
-        console.log('Security types received');
+        logger.debug('Security types received');
         const numTypes = data[0];
-        console.log('Number of security types:', numTypes);
+        logger.info('Security types available', { numTypes });
         
         if (numTypes > 0) {
+            const securityTypes = [];
             for (let i = 0; i < numTypes; i++) {
-                console.log(`Security type ${i}: ${data[1 + i]}`);
+                const securityType = data[1 + i];
+                securityTypes.push(securityType);
+                logger.debug('Security type discovered', { index: i, type: securityType });
             }
             
             // Select "None" security (type 1)
-            console.log('Selecting security type 1 (None)');
+            logger.info('Selecting security type', { selectedType: 1, description: 'None' });
             ws.send(Buffer.from([1]));
             handshakeStep = 2;
         }
@@ -46,39 +52,39 @@ ws.on('message', (data) => {
     } else if (handshakeStep === 2) {
         // Security result
         const result = data.readUInt32BE(0);
-        console.log('Security result:', result);
+        logger.info('Security handshake result', { result });
         
         if (result === 0) {
-            console.log('Security handshake successful');
-            console.log('Sending ClientInit (shared=1)');
+            logger.info('Security handshake successful');
+            logger.debug('Sending ClientInit', { shared: true });
             ws.send(Buffer.from([1]));
             handshakeStep = 3;
         } else {
-            console.log('Security handshake failed');
+            logger.error('Security handshake failed', { result });
         }
         
     } else if (handshakeStep === 3) {
         // ServerInit
-        console.log('ServerInit received');
+        logger.info('ServerInit received');
         const width = data.readUInt16BE(0);
         const height = data.readUInt16BE(2);
-        console.log(`Framebuffer size: ${width}x${height}`);
+        logger.info('Framebuffer configuration', { width, height });
         
         // Parse pixel format (16 bytes starting at offset 4)
         const pixelFormat = data.slice(4, 20);
-        console.log('Pixel format:', pixelFormat);
+        logger.debug('Pixel format received', { pixelFormat: pixelFormat.toString('hex') });
         
         // Parse name length and name
         const nameLength = data.readUInt32BE(20);
         const name = data.slice(24, 24 + nameLength).toString();
-        console.log(`Desktop name: "${name}"`);
+        logger.info('Desktop configuration', { desktopName: name });
         
-        console.log('VNC handshake complete!');
+        logger.info('VNC handshake completed successfully');
         handshakeStep = 4;
         
         // Request screen update
         setTimeout(() => {
-            console.log('Requesting framebuffer update...');
+            logger.debug('Requesting framebuffer update');
             // FramebufferUpdateRequest: type(3) + incremental(0) + x(0) + y(0) + width + height
             const updateRequest = Buffer.alloc(10);
             updateRequest[0] = 3; // FramebufferUpdateRequest
@@ -92,23 +98,24 @@ ws.on('message', (data) => {
         
     } else {
         // Framebuffer updates
-        console.log(`Framebuffer data received: ${data.length} bytes`);
+        logger.debug('Framebuffer data received', { dataLength: data.length });
         if (data.length > 0) {
-            console.log('First few bytes:', data.slice(0, Math.min(20, data.length)));
+            const preview = data.slice(0, Math.min(20, data.length));
+            logger.debug('Framebuffer data preview', { preview: preview.toString('hex') });
         }
     }
 });
 
 ws.on('error', (err) => {
-    console.error('WebSocket error:', err);
+    logger.error('WebSocket error occurred', { error: err.message });
 });
 
 ws.on('close', (code, reason) => {
-    console.log('WebSocket closed:', code, reason?.toString());
+    logger.info('WebSocket connection closed', { code, reason: reason?.toString() });
 });
 
 // Keep the process alive
 setTimeout(() => {
-    console.log('Test timeout - closing connection');
+    logger.info('Test timeout reached, closing connection');
     ws.close();
 }, 30000);

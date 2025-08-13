@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const { createTestLogger } = require('../utils/logger');
 
 const execAsync = promisify(exec);
 
@@ -14,6 +15,7 @@ class MinikubeVNCTester {
         this.results = [];
         this.screenshotDir = './vnc-screenshots';
         this.frontendUrl = null;
+        this.logger = createTestLogger('test-vnc-minikube');
         
         // Ensure screenshot directory exists
         if (!fs.existsSync(this.screenshotDir)) {
@@ -21,9 +23,8 @@ class MinikubeVNCTester {
         }
     }
 
-    log(message) {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] ${message}`);
+    log(message, context = {}) {
+        this.logger.info(message, context);
     }
 
     async getMinikubeServiceUrl() {

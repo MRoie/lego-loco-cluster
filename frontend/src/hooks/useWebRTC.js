@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { createLogger } from "../utils/logger";
+
+const logger = createLogger('useWebRTC');
 
 /**
  * Establish a WebRTC connection for the given target instance ID.
@@ -49,7 +52,7 @@ export default function useWebRTC(targetId) {
             connectionState: pc.connectionState
           }));
         } catch (error) {
-          console.warn('Failed to get WebRTC stats:', error);
+          logger.warn('Failed to get WebRTC stats', { targetId, error: error.message });
         }
       }, 1000); // Update stats every second
     };
@@ -132,7 +135,7 @@ export default function useWebRTC(targetId) {
         .then((r) => r.json())
         .then((cfg) => cfg.iceServers || [])
         .catch((e) => {
-          console.error("Failed to load WebRTC config", e);
+          logger.error("Failed to load WebRTC config", { targetId, error: e.message });
           return [];
         });
 
@@ -169,7 +172,7 @@ export default function useWebRTC(targetId) {
             videoRef.current.srcObject = stream;
             videoRef.current
               .play()
-              .catch((e) => console.error("video play failed", e));
+              .catch((e) => logger.error("Video play failed", { targetId, error: e.message }));
           }
           if (!audioCtx) startMeter(stream);
           setLoading(false);
@@ -201,11 +204,11 @@ export default function useWebRTC(targetId) {
         };
 
         ws.onerror = (e) => {
-          console.error("WebSocket error", e);
+          logger.error("WebSocket error", { targetId, error: e.message || 'WebSocket connection error' });
         };
 
         ws.onclose = () => {
-          console.log("WebSocket closed for", targetId);
+          logger.debug("WebSocket closed", { targetId });
           scheduleReconnect();
         };
 
@@ -219,7 +222,7 @@ export default function useWebRTC(targetId) {
             // Start monitoring stats when connected
             monitorStats(pc);
           } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-            console.log('Peer connection lost, reconnecting');
+            logger.info('Peer connection lost, reconnecting', { targetId, connectionState: pc.connectionState });
             if (statsTimer) {
               clearInterval(statsTimer);
               statsTimer = null;
@@ -252,7 +255,7 @@ export default function useWebRTC(targetId) {
               try {
                 await pc.addIceCandidate(new RTCIceCandidate(msg.data));
               } catch (e) {
-                console.warn("Failed to add ICE candidate", e);
+                logger.warn("Failed to add ICE candidate", { targetId, error: e.message });
               }
             }
           }

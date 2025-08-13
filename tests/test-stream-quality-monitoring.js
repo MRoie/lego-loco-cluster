@@ -1,6 +1,9 @@
 const StreamQualityMonitor = require('../backend/services/streamQualityMonitor');
 const path = require('path');
 const fs = require('fs');
+const { createTestLogger } = require('../utils/logger');
+
+const logger = createTestLogger('test-stream-quality-monitoring');
 
 // Mock config directory for testing
 const TEST_CONFIG_DIR = path.join(__dirname, 'test-config');

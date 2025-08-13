@@ -3,5 +3,9 @@
   "private": true,
   "devDependencies": {
     "ws": "^8.18.2"
+  },
+  "dependencies": {
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
   }
 }

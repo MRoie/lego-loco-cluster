@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createLogger } from '../utils/logger.js';
 
 /**
  * NoVNC-based VNC viewer component
  * Uses the noVNC library for robust VNC protocol implementation
  */
 export default function NoVNCViewer({ instanceId }) {
+  const logger = createLogger('NoVNCViewer');
   const containerRef = useRef(null);
   const rfbRef = useRef(null);
   const [connected, setConnected] = useState(false);
@@ -22,13 +24,13 @@ export default function NoVNCViewer({ instanceId }) {
   useEffect(() => {
     const loadNoVNC = async () => {
       try {
-        console.log('Loading NoVNC RFB module...');
+        logger.debug('Loading NoVNC RFB module');
         const novncModule = await import('@novnc/novnc/lib/rfb.js');
         const RFBClass = novncModule.default || novncModule.RFB;
         setRFB(() => RFBClass);
-        console.log('NoVNC RFB module loaded successfully');
+        logger.info('NoVNC RFB module loaded successfully');
       } catch (err) {
-        console.error('Failed to load NoVNC:', err);
+        logger.error('Failed to load NoVNC', { error: err.message, instanceId });
         setError(`Failed to load NoVNC: ${err.message}`);
       }
     };
@@ -38,18 +40,22 @@ export default function NoVNCViewer({ instanceId }) {
 
   // Debug logging for hasControl state changes
   useEffect(() => {
-    console.log(`🎮 NoVNC hasControl state changed to: ${hasControl} for instance ${instanceId}`);
+    logger.debug('NoVNC hasControl state changed', { hasControl, instanceId });
   }, [hasControl, instanceId]);
 
-  console.log('NoVNCViewer component mounted for instance:', instanceId);
+  logger.debug('NoVNCViewer component mounted', { instanceId });
 
   useEffect(() => {
     if (!instanceId || !containerRef.current || !RFB) {
-      console.log('Missing instanceId, container ref, or RFB:', { instanceId, container: !!containerRef.current, RFB: !!RFB });
+      logger.debug('Missing dependencies for NoVNC initialization', { 
+        instanceId: !!instanceId, 
+        container: !!containerRef.current, 
+        RFB: !!RFB 
+      });
       return;
     }
 
-    console.log('Starting NoVNC connection for instance:', instanceId);
+    logger.info('Starting NoVNC connection', { instanceId });
     setConnecting(true);
     setConnected(false);
     setError(null);
@@ -69,7 +75,7 @@ export default function NoVNCViewer({ instanceId }) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const vncUrl = `${protocol}//${window.location.host}/proxy/vnc/${instanceId}/`;
     
-    console.log('Connecting to VNC URL:', vncUrl);
+    logger.debug('Connecting to VNC URL', { vncUrl, instanceId });
 
     try {
       // Create RFB instance (noVNC)
@@ -84,7 +90,7 @@ export default function NoVNCViewer({ instanceId }) {
 
       // Event handlers
       rfb.addEventListener('connect', () => {
-        console.log('NoVNC connected to', instanceId);
+        logger.info('NoVNC connected successfully', { instanceId });
         setConnected(true);
         setConnecting(false);
         setHasControl(true);
@@ -101,7 +107,7 @@ export default function NoVNCViewer({ instanceId }) {
       });
 
       rfb.addEventListener('disconnect', (e) => {
-        console.log('NoVNC disconnected:', e.detail);
+        logger.info('NoVNC disconnected', { instanceId, clean: e.detail.clean, reason: e.detail });
         setConnected(false);
         setConnecting(false);
         setHasControl(false);
@@ -112,23 +118,23 @@ export default function NoVNCViewer({ instanceId }) {
       });
 
       rfb.addEventListener('credentialsrequired', () => {
-        console.log('VNC credentials required');
+        logger.warn('VNC credentials required', { instanceId });
         setError('VNC server requires authentication');
         setConnecting(false);
       });
 
       rfb.addEventListener('securityfailure', (e) => {
-        console.error('VNC security failure:', e.detail);
+        logger.error('VNC security failure', { instanceId, detail: e.detail });
         setError('VNC security failure');
         setConnecting(false);
       });
 
       rfb.addEventListener('bell', () => {
-        console.log('VNC bell signal received');
+        logger.debug('VNC bell signal received', { instanceId });
       });
 
       rfb.addEventListener('desktopname', (e) => {
-        console.log('VNC desktop name:', e.detail.name);
+        logger.debug('VNC desktop name received', { instanceId, desktopName: e.detail.name });
       });
 
       // Configure noVNC options
@@ -140,7 +146,7 @@ export default function NoVNCViewer({ instanceId }) {
       rfb.compressionLevel = 2;
 
     } catch (err) {
-      console.error('Failed to create NoVNC RFB:', err);
+      logger.error('Failed to create NoVNC RFB', { instanceId, error: err.message });
       setError(`Connection failed: ${err.message}`);
       setConnecting(false);
     }
@@ -164,7 +170,7 @@ export default function NoVNCViewer({ instanceId }) {
     // VR trigger button handler (for regaining control)
     const handleVRTrigger = (event) => {
       if (event.detail.instanceId === instanceId && !hasControl && connected) {
-        console.log('🎮 VR trigger detected for control regain');
+        logger.debug('VR trigger detected for control regain', { instanceId });
         regainControl();
       }
     };
@@ -172,7 +178,7 @@ export default function NoVNCViewer({ instanceId }) {
     // VR release gesture handler (for releasing control)
     const handleVRRelease = (event) => {
       if (event.detail.instanceId === instanceId && hasControl) {
-        console.log('🎮 VR release gesture detected');
+        logger.debug('VR release gesture detected', { instanceId });
         releaseControl();
       }
     };
@@ -181,14 +187,14 @@ export default function NoVNCViewer({ instanceId }) {
     const handleVRPointer = (event) => {
       if (event.detail.instanceId === instanceId && hasControl && connected && rfbRef.current) {
         const { x, y, button, pressed } = event.detail;
-        console.log(`🎮 VR pointer: (${x}, ${y}) button=${button} pressed=${pressed}`);
+        logger.debug('VR pointer event received', { instanceId, x, y, button, pressed });
         
         if (x >= 0 && y >= 0) {
           const buttonMask = pressed ? (1 << button) : 0;
           try {
             rfbRef.current.sendPointerEvent(x, y, buttonMask);
           } catch (error) {
-            console.error('Error sending VR pointer event:', error);
+          logger.error('Error sending VR pointer event', { instanceId, error: error.message });
           }
         }
       }
@@ -197,7 +203,7 @@ export default function NoVNCViewer({ instanceId }) {
     const handleVRKeyboard = (event) => {
       if (event.detail.instanceId === instanceId && hasControl && connected && rfbRef.current) {
         const { key, pressed } = event.detail;
-        console.log(`🎮 VR keyboard: key=${key} pressed=${pressed}`);
+        logger.debug('VR keyboard event received', { instanceId, key, pressed });
         
         try {
           // Convert VR key to keySym (basic implementation)
@@ -206,7 +212,7 @@ export default function NoVNCViewer({ instanceId }) {
             rfbRef.current.sendKey(keySym, 'Key' + key, pressed);
           }
         } catch (error) {
-          console.error('Error sending VR keyboard event:', error);
+          logger.error('Error sending VR keyboard event', { instanceId, error: error.message });
         }
       }
     };
@@ -233,7 +239,7 @@ export default function NoVNCViewer({ instanceId }) {
       
       // Check for control release sequence
       if (checkControlReleaseSequence(event)) {
-        console.log('🔓 Control release sequence detected!');
+        logger.info('Control release sequence detected', { instanceId });
         releaseControl();
         event.preventDefault();
         event.stopPropagation();
@@ -338,7 +344,7 @@ export default function NoVNCViewer({ instanceId }) {
 
   // Release control of this instance
   const releaseControl = () => {
-    console.log('🔓 Releasing control of NoVNC instance:', instanceId);
+    logger.info('Releasing control of NoVNC instance', { instanceId });
     setHasControl(false);
     keySequenceRef.current = [];
     
@@ -352,19 +358,19 @@ export default function NoVNCViewer({ instanceId }) {
     });
     window.dispatchEvent(releaseEvent);
     
-    console.log('🎮 Control release event dispatched for VR/external controllers');
+    logger.debug('Control release event dispatched for VR/external controllers', { instanceId });
   };
 
   // Regain control of this instance
   const regainControl = () => {
-    console.log(`🔒 regainControl called: connected=${connected}, currentControl=${hasControl}`);
+    logger.debug('regainControl called', { instanceId, connected, currentControl: hasControl });
     
     if (!connected) {
-      console.log('Cannot regain control: VNC not connected');
+      logger.warn('Cannot regain control: VNC not connected', { instanceId });
       return;
     }
     
-    console.log('🔒 Regaining control of NoVNC instance:', instanceId);
+    logger.info('Regaining control of NoVNC instance', { instanceId });
     setHasControl(true);
     keySequenceRef.current = [];
     
@@ -382,15 +388,15 @@ export default function NoVNCViewer({ instanceId }) {
     const canvas = containerRef.current?.querySelector('canvas');
     if (canvas) {
       canvas.focus();
-      console.log('🎯 Canvas focused for keyboard input');
+      logger.debug('Canvas focused for keyboard input', { instanceId });
     }
     
-    console.log('🎮 Control regain event dispatched for VR/external controllers');
-    console.log(`✅ Control regained successfully: hasControl will be=${true}`);
+    logger.debug('Control regain event dispatched for VR/external controllers', { instanceId });
+    logger.info('Control regained successfully', { instanceId, hasControl: true });
   };
 
   const handleReconnect = () => {
-    console.log('🔄 handleReconnect called - triggering reconnection');
+    logger.debug('handleReconnect called - triggering reconnection', { instanceId });
     setError(null);
     
     // Trigger reconnection by changing a dependency
@@ -399,13 +405,13 @@ export default function NoVNCViewer({ instanceId }) {
 
   const handleContainerClick = () => {
     if (!connected) {
-      console.log('Container clicked - attempting to connect');
+      logger.debug('Container clicked - attempting to connect', { instanceId });
       handleReconnect();
       return;
     }
     
     if (!hasControl) {
-      console.log('Container clicked - regaining control');
+      logger.debug('Container clicked - regaining control', { instanceId });
       regainControl();
     }
   };
@@ -517,7 +523,7 @@ export default function NoVNCViewer({ instanceId }) {
           <button 
             className="bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded text-xs mr-1"
             onClick={() => {
-              console.log('🐛 DEBUG: Force regain control');
+              logger.debug('Force regain control triggered', { instanceId });
               regainControl();
             }}
           >
@@ -526,7 +532,7 @@ export default function NoVNCViewer({ instanceId }) {
           <button 
             className="bg-orange-600 hover:bg-orange-700 px-2 py-1 rounded text-xs mr-1"
             onClick={() => {
-              console.log('🐛 DEBUG: Force release control');
+              logger.debug('Force release control triggered', { instanceId });
               releaseControl();
             }}
           >
@@ -535,7 +541,8 @@ export default function NoVNCViewer({ instanceId }) {
           <button 
             className="bg-gray-600 hover:bg-gray-700 px-2 py-1 rounded text-xs"
             onClick={() => {
-              console.log('🐛 DEBUG: Current state:', {
+              logger.debug('Current NoVNC state', {
+                instanceId,
                 connected,
                 hasControl,
                 connecting,
