@@ -1,32 +1,40 @@
 #!/usr/bin/env node
 
 const WebSocket = require('ws');
+const { createTestLogger } = require('../utils/logger');
 
-console.log('Testing WebSocket connection through frontend proxy...');
+const logger = createTestLogger('test-frontend-websocket');
+
+logger.info('Starting WebSocket connection test through frontend proxy');
 
 // Test connection through frontend proxy
 const ws = new WebSocket('ws://localhost:3000/proxy/vnc/instance-0/');
 
 ws.on('open', () => {
-    console.log('✅ WebSocket connected through frontend proxy!');
+    logger.info('WebSocket connected through frontend proxy successfully');
 });
 
 ws.on('message', (data) => {
-    console.log('📨 Received data:', data.length, 'bytes');
-    console.log('First 20 bytes:', data.slice(0, 20));
+    logger.debug('Received data from WebSocket', { 
+      dataLength: data.length,
+      preview: data.slice(0, 20).toString('hex')
+    });
 });
 
 ws.on('error', (err) => {
-    console.error('❌ WebSocket error:', err.message);
+    logger.error('WebSocket error occurred', { error: err.message });
 });
 
 ws.on('close', (code, reason) => {
-    console.log('🔌 WebSocket closed:', code, reason?.toString());
+    logger.info('WebSocket connection closed', { 
+      code, 
+      reason: reason?.toString() 
+    });
     process.exit(0);
 });
 
 // Timeout after 10 seconds
 setTimeout(() => {
-    console.log('⏰ Timeout - closing connection');
+    logger.info('Test timeout reached, closing connection');
     ws.close();
 }, 10000);

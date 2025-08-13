@@ -3,6 +3,7 @@
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const { createTestLogger } = require('../utils/logger');
 
 // Configuration
 const TEST_CONFIG = {
@@ -21,11 +22,11 @@ class VNCTester {
     constructor() {
         this.results = [];
         this.currentTest = null;
+        this.logger = createTestLogger('test-vnc-cluster');
     }
 
     log(message, instance = 'GLOBAL') {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] [${instance}] ${message}`);
+        this.logger.info(message, { instance });
     }
 
     async testVNCConnection(instance) {

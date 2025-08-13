@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import ReactVNCViewer from './ReactVNCViewer';
 import TileControls from './TileControls';
+import { createLogger } from '../utils/logger.js';
 
 /**
  * VNC streaming tile displaying a single instance.
@@ -18,13 +19,15 @@ import TileControls from './TileControls';
  * - setFocused: callback to update focused tile
  */
 export default function StreamTile({ inst, idx, active, setActive, zoom, status, focused, setFocused }) {
+  const logger = createLogger('StreamTile');
+  
   const toggleFullscreen = () => {
     const element = document.querySelector(`[data-instance="${inst.id}"]`);
     if (!element) return;
     if (document.fullscreenElement) {
-      document.exitFullscreen().catch((e) => console.error('exitFullscreen failed', e));
+      document.exitFullscreen().catch((e) => logger.error('exitFullscreen failed', { instanceId: inst.id, error: e.message }));
     } else {
-      element.requestFullscreen().catch((e) => console.error('requestFullscreen failed', e));
+      element.requestFullscreen().catch((e) => logger.error('requestFullscreen failed', { instanceId: inst.id, error: e.message }));
     }
   };
 

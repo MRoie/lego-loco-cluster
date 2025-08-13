@@ -1,6 +1,7 @@
 import 'aframe';
 import React, { useEffect, useState, useRef } from 'react';
 import VRNoVNCViewer from './components/VRNoVNCViewer';
+import { createLogger } from './utils/logger.js';
 
 function positionForIndex(i, cols, rows) {
   const x = (i % cols) - (cols - 1) / 2;
@@ -10,12 +11,13 @@ function positionForIndex(i, cols, rows) {
 }
 
 function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }) {
+  const logger = createLogger(`VRTile-${idx}`);
   const vncRef = useRef(null);
   const planeRef = useRef(null);
   const [textureCreated, setTextureCreated] = useState(false);
 
   const handleVNCConnect = (instanceId) => {
-    console.log(`VR: VNC connected for ${instanceId}`);
+    logger.info('VNC connected for VR tile', { instanceId });
     
     // Get the canvas from the VNC viewer
     const canvas = vncRef.current?.getCanvas();
@@ -73,7 +75,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
   };
 
   const handleVNCDisconnect = (instanceId, details) => {
-    console.log(`VR: VNC disconnected for ${instanceId}`, details);
+    logger.info('VNC disconnected for VR tile', { instanceId, details });
     setTextureCreated(false);
     
     if (planeRef.current) {
@@ -144,6 +146,7 @@ function VRTile({ inst, idx, active, setActive, cols, rows, status, onVNCReady }
 }
 
 export default function VRScene({ onExit }) {
+  const logger = createLogger('VRScene');
   const [instances, setInstances] = useState([]);
   const [active, setActive] = useState(0);
   const [info, setInfo] = useState('');
@@ -227,7 +230,7 @@ export default function VRScene({ onExit }) {
         }
       }
       
-      console.log('VR KVM event to tile', active + 1, e.key);
+      logger.debug('VR KVM event to tile', { tileNumber: active + 1, key: e.key });
     };
     
     window.addEventListener('keydown', handler);
