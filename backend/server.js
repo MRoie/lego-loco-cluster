@@ -16,9 +16,12 @@ const server = http.createServer(app);
 // Parse JSON bodies for API endpoints
 app.use(express.json());
 
-// simple health endpoint for Kubernetes-style checks
+// Simple health endpoint for Kubernetes-style checks
 app.get("/health", (req, res) => {
-  logger.info("Health check requested - live reloading test!");
+  logger.info("Health check requested", { 
+    userAgent: req.get('User-Agent'),
+    remoteAddress: req.ip || req.connection.remoteAddress 
+  });
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
@@ -85,11 +88,19 @@ app.get("/api/status", (req, res) => {
 // Enhanced instances endpoint with auto-discovery support
 app.get("/api/instances", async (req, res) => {
   try {
-    logger.info("Instances request received");
+    logger.info("Instances request received", {
+      userAgent: req.get('User-Agent'),
+      remoteAddress: req.ip || req.connection.remoteAddress
+    });
     const instances = await instanceManager.getInstances();
+    logger.debug("Instances response prepared", { instanceCount: instances.length });
     res.json(instances);
   } catch (e) {
-    logger.error("Instances config error", { error: e.message });
+    logger.error("Instances config error", { 
+      error: e.message, 
+      stack: e.stack,
+      requestUrl: req.url 
+    });
     res.status(503).json([]);
   }
 });
@@ -97,11 +108,19 @@ app.get("/api/instances", async (req, res) => {
 // New endpoint to get provisioned instances only with auto-discovery
 app.get("/api/instances/provisioned", async (req, res) => {
   try {
-    logger.info("Provisioned instances request received");
+    logger.info("Provisioned instances request received", {
+      userAgent: req.get('User-Agent'),
+      remoteAddress: req.ip || req.connection.remoteAddress
+    });
     const provisionedInstances = await instanceManager.getProvisionedInstances();
+    logger.debug("Provisioned instances response prepared", { instanceCount: provisionedInstances.length });
     res.json(provisionedInstances);
   } catch (e) {
-    logger.error("Provisioned instances error", { error: e.message });
+    logger.error("Provisioned instances error", { 
+      error: e.message, 
+      stack: e.stack,
+      requestUrl: req.url 
+    });
     res.status(503).json([]);
   }
 });
@@ -109,16 +128,31 @@ app.get("/api/instances/provisioned", async (req, res) => {
 // New endpoint for Kubernetes discovery information
 app.get("/api/instances/discovery-info", async (req, res) => {
   try {
+    logger.debug("Discovery info request received", {
+      userAgent: req.get('User-Agent'),
+      remoteAddress: req.ip || req.connection.remoteAddress
+    });
     const k8sInfo = await instanceManager.getKubernetesInfo();
     const isUsingK8sDiscovery = instanceManager.isUsingKubernetesDiscovery();
     
-    res.json({
+    const response = {
       kubernetesDiscovery: k8sInfo,
       usingAutoDiscovery: isUsingK8sDiscovery,
       fallbackToStatic: !isUsingK8sDiscovery
+    };
+    
+    logger.debug("Discovery info response prepared", {
+      usingAutoDiscovery: isUsingK8sDiscovery,
+      kubernetesAvailable: !!k8sInfo
     });
+    
+    res.json(response);
   } catch (e) {
-    logger.error("Discovery info error", { error: e.message });
+    logger.error("Discovery info error", { 
+      error: e.message, 
+      stack: e.stack,
+      requestUrl: req.url 
+    });
     res.status(500).json({ error: "Failed to get discovery info" });
   }
 });
@@ -126,15 +160,23 @@ app.get("/api/instances/discovery-info", async (req, res) => {
 // New endpoint to refresh instance discovery
 app.post("/api/instances/refresh", async (req, res) => {
   try {
-    logger.info("Manual instance discovery refresh requested");
+    logger.info("Manual instance discovery refresh requested", {
+      userAgent: req.get('User-Agent'),
+      remoteAddress: req.ip || req.connection.remoteAddress
+    });
     const instances = await instanceManager.refreshDiscovery();
+    logger.info("Discovery refresh completed successfully", { instanceCount: instances.length });
     res.json({
       message: "Discovery refreshed successfully",
       instanceCount: instances.length,
       instances: instances
     });
   } catch (e) {
-    logger.error("Discovery refresh error", { error: e.message });
+    logger.error("Discovery refresh error", { 
+      error: e.message, 
+      stack: e.stack,
+      requestUrl: req.url 
+    });
     res.status(500).json({ error: "Failed to refresh discovery" });
   }
 });
@@ -403,20 +445,27 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   const tcpSocket = net.createConnection(port, host);
   
   tcpSocket.on('connect', () => {
-    logger.info("VNC bridge connected", { instanceId, host, port });
+    logger.info("VNC bridge connected successfully", { instanceId, host, port });
   });
   
   tcpSocket.on('error', (err) => {
-    logger.error("VNC TCP socket error", { instanceId, error: err.message });
+    logger.error("VNC TCP socket error", { 
+      instanceId, 
+      error: err.message, 
+      code: err.code,
+      host, 
+      port,
+      stack: err.stack 
+    });
     if (ws.readyState === ws.OPEN) {
-      ws.close();
+      ws.close(1000, 'TCP connection error');
     }
   });
   
   tcpSocket.on('close', () => {
-    logger.info("VNC TCP socket closed", { instanceId });
+    logger.info("VNC TCP socket closed", { instanceId, host, port });
     if (ws.readyState === ws.OPEN) {
-      ws.close();
+      ws.close(1000, 'TCP connection closed');
     }
   });
   
@@ -425,34 +474,63 @@ function createVNCBridge(ws, targetUrl, instanceId) {
     try {
       // Convert WebSocket message to Buffer if needed
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
-      logger.debug("VNC data forwarding WS->TCP", { instanceId, bytes: buffer.length, preview: buffer.slice(0, 32) });
+      if (logger.level === 'debug') {
+        logger.debug("VNC data forwarding WS->TCP", { 
+          instanceId, 
+          bytes: buffer.length, 
+          preview: buffer.slice(0, 32).toString('hex')
+        });
+      }
       tcpSocket.write(buffer);
     } catch (err) {
-      logger.error("Error forwarding WebSocket to TCP", { instanceId, error: err.message });
+      logger.error("Error forwarding WebSocket to TCP", { 
+        instanceId, 
+        error: err.message,
+        stack: err.stack 
+      });
     }
   });
   
   // Forward data from TCP socket to WebSocket
   tcpSocket.on('data', (data) => {
     try {
-      logger.debug("VNC data forwarding TCP->WS", { instanceId, bytes: data.length, preview: data.slice(0, 32) });
+      if (logger.level === 'debug') {
+        logger.debug("VNC data forwarding TCP->WS", { 
+          instanceId, 
+          bytes: data.length, 
+          preview: data.slice(0, 32).toString('hex')
+        });
+      }
       if (ws.readyState === ws.OPEN) {
         ws.send(data);
       }
     } catch (err) {
-      logger.error("Error forwarding TCP to WebSocket", { instanceId, error: err.message });
+      logger.error("Error forwarding TCP to WebSocket", { 
+        instanceId, 
+        error: err.message,
+        stack: err.stack 
+      });
     }
   });
   
   // Handle WebSocket close
   ws.on('close', (code, reason) => {
-    logger.info("WebSocket closed for VNC bridge", { instanceId, code, reason });
+    logger.info("WebSocket closed for VNC bridge", { 
+      instanceId, 
+      code, 
+      reason: reason?.toString() 
+    });
     tcpSocket.destroy();
   });
   
   // Handle WebSocket errors
   ws.on('error', (err) => {
-    logger.error("WebSocket error for VNC bridge", { instanceId, error: err.message });
+    logger.error("WebSocket error for VNC bridge", { 
+      instanceId, 
+      error: err.message,
+      code: err.code,
+      stack: err.stack 
+    });
     tcpSocket.destroy();
   });
 }

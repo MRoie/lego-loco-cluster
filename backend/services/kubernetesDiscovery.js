@@ -17,6 +17,7 @@ class KubernetesDiscovery {
 
   async init() {
     try {
+      logger.info("Initializing Kubernetes discovery");
       // Dynamic import for ES module
       const k8s = await import('@kubernetes/client-node');
       this.kc = new k8s.KubeConfig();
@@ -38,8 +39,6 @@ class KubernetesDiscovery {
         this.k8sApi.defaultHeaders['User-Agent'] = 'lego-loco-cluster-backend/1.0';
       }
       
-      this.initialized = true;
-      
       // Try to detect namespace from environment or service account
       if (process.env.KUBERNETES_NAMESPACE) {
         this.namespace = process.env.KUBERNETES_NAMESPACE;
@@ -59,10 +58,31 @@ class KubernetesDiscovery {
         logger.warn("Namespace was empty, falling back to default");
       }
       
-      logger.info("Kubernetes discovery initialized for namespace", { namespace: this.namespace });
+      // Test API connectivity
+      try {
+        await this.k8sApi.listNamespace();
+        logger.info("Kubernetes API connectivity test successful");
+      } catch (connectError) {
+        logger.warn("Kubernetes API connectivity test failed", { 
+          error: connectError.message,
+          code: connectError.code 
+        });
+        throw connectError;
+      }
+      
+      this.initialized = true;
+      logger.info("Kubernetes discovery initialized successfully", { 
+        namespace: this.namespace,
+        clusterAvailable: true
+      });
     } catch (error) {
-      logger.warn('Failed to initialize Kubernetes client', { error: error.message });
+      logger.warn('Failed to initialize Kubernetes client', { 
+        error: error.message,
+        code: error.code,
+        stack: error.stack
+      });
       logger.warn('Auto-discovery will be disabled. Falling back to static configuration.');
+      this.initialized = false;
     }
   }
 
@@ -79,7 +99,6 @@ class KubernetesDiscovery {
 
     try {
       logger.info("Discovering emulator instances in namespace", { namespace: this.namespace });
-      logger.debug("Namespace debug info", { type: typeof this.namespace, value: this.namespace });
       
       // Ensure namespace is a valid string
       const namespace = String(this.namespace).trim();
@@ -114,8 +133,11 @@ class KubernetesDiscovery {
       }
 
       const instances = [];
+      const pods = podsResponse.body.items || [];
       
-      for (const pod of podsResponse.body.items || []) {
+      logger.debug("Processing discovered pods", { podCount: pods.length });
+      
+      for (const pod of pods) {
         if (pod.status.phase === 'Running' && pod.status.podIP) {
           // Extract instance number from pod name (e.g., loco-emulator-0 -> 0)
           const instanceMatch = pod.metadata.name.match(/-(\d+)$/);
@@ -143,6 +165,17 @@ class KubernetesDiscovery {
           };
           
           instances.push(instance);
+          logger.debug("Instance discovered", { 
+            instanceId: instance.id, 
+            podName: pod.metadata.name, 
+            status: instance.status 
+          });
+        } else {
+          logger.debug("Skipping pod - not running or no IP", { 
+            podName: pod.metadata.name, 
+            phase: pod.status.phase, 
+            podIP: pod.status.podIP 
+          });
         }
       }
 
@@ -153,11 +186,18 @@ class KubernetesDiscovery {
         return aNum - bNum;
       });
 
-      logger.info("Discovered emulator instances from Kubernetes", { count: instances.length });
+      logger.info("Discovered emulator instances from Kubernetes", { 
+        count: instances.length,
+        instanceIds: instances.map(i => i.id)
+      });
       return instances;
       
     } catch (error) {
-      logger.error("Failed to discover instances from Kubernetes", { error: error.message });
+      logger.error("Failed to discover instances from Kubernetes", { 
+        error: error.message,
+        stack: error.stack,
+        namespace: this.namespace
+      });
       return [];
     }
   }
@@ -243,6 +283,8 @@ class KubernetesDiscovery {
     }
 
     try {
+      // Dynamic import for ES module
+      const k8s = await import('@kubernetes/client-node');
       const watch = new k8s.Watch(this.kc);
       
       // Ensure namespace is a valid string
@@ -263,16 +305,31 @@ class KubernetesDiscovery {
         `/api/v1/namespaces/${namespace}/pods`,
         watchOptions,
         (type, apiObj) => {
-          logger.debug("Pod change detected", { type, podName: apiObj.metadata.name, phase: apiObj.status.phase });
+          logger.debug("Pod change detected", { 
+            type, 
+            podName: apiObj.metadata?.name, 
+            phase: apiObj.status?.phase,
+            namespace: apiObj.metadata?.namespace
+          });
           
           // Trigger callback to refresh instance list
-          if (callback) {
-            callback(type, apiObj);
+          if (callback && typeof callback === 'function') {
+            try {
+              callback(type, apiObj);
+            } catch (callbackError) {
+              logger.error("Watch callback error", { error: callbackError.message });
+            }
           }
         },
         (err) => {
           if (err && err.code !== 'ECONNRESET') {
-            logger.error("Watch error", { error: err.message });
+            logger.error("Watch error", { 
+              error: err.message,
+              code: err.code,
+              namespace
+            });
+          } else if (err) {
+            logger.debug("Watch connection reset", { namespace });
           }
         }
       );
