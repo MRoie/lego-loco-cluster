@@ -6,14 +6,30 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
+const fetch = require("node-fetch");
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
+const EnterpriseHealthMonitor = require("./services/enterpriseHealthMonitor");
+const EnterpriseSecurity = require("./services/enterpriseSecurity");
 
 const app = express();
 const server = http.createServer(app);
 
-// Parse JSON bodies for API endpoints
-app.use(express.json());
+// Initialize enterprise security
+const security = new EnterpriseSecurity({
+  authEnabled: process.env.ENABLE_AUTH === 'true',
+  apiKeys: process.env.API_KEYS ? process.env.API_KEYS.split(',') : [],
+  rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX) || 100,
+  rateLimitWindow: parseInt(process.env.RATE_LIMIT_WINDOW) || 15 * 60 * 1000,
+  auditEnabled: process.env.ENABLE_AUDIT !== 'false',
+  validationEnabled: process.env.ENABLE_VALIDATION !== 'false'
+});
+
+// Apply enterprise security middleware
+security.getAllMiddleware().forEach(middleware => app.use(middleware));
+
+// Parse JSON bodies for API endpoints with size limit
+app.use(express.json({ limit: '10mb' }));
 
 // simple health endpoint for Kubernetes-style checks
 app.get("/health", (req, res) => {
@@ -35,6 +51,31 @@ const instanceManager = new InstanceManager(FINAL_CONFIG_DIR);
 
 // Initialize stream quality monitor with InstanceManager for Kubernetes-only discovery
 const qualityMonitor = new StreamQualityMonitor(FINAL_CONFIG_DIR, instanceManager);
+
+// Initialize enterprise health monitor
+const enterpriseHealthMonitor = new EnterpriseHealthMonitor(instanceManager, {
+  checkInterval: parseInt(process.env.HEALTH_CHECK_INTERVAL) || 30000,
+  cpuThreshold: parseInt(process.env.CPU_THRESHOLD) || 80,
+  memoryThreshold: parseInt(process.env.MEMORY_THRESHOLD) || 85,
+  frameRateThreshold: parseInt(process.env.FRAME_RATE_THRESHOLD) || 10,
+  webhookUrl: process.env.ALERT_WEBHOOK_URL,
+  alertEmail: process.env.ALERT_EMAIL,
+  autoRestart: process.env.AUTO_RESTART !== 'false',
+  maxRestartAttempts: parseInt(process.env.MAX_RESTART_ATTEMPTS) || 3
+});
+
+// Start enterprise health monitoring
+enterpriseHealthMonitor.start();
+
+// Health monitoring event handlers
+enterpriseHealthMonitor.on('alert', (alert) => {
+  console.log(`🚨 ALERT [${alert.severity}]: ${alert.message} (Instance: ${alert.instanceId})`);
+});
+
+enterpriseHealthMonitor.on('healthCheck', (results) => {
+  const healthyCount = results.results.filter(r => r.status === 'healthy').length;
+  console.log(`📊 Health Check: ${healthyCount}/${results.totalInstances} instances healthy`);
+});
 
 // Serve frontend static build
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
@@ -102,6 +143,107 @@ app.get("/api/instances/provisioned", async (req, res) => {
   } catch (e) {
     console.error("Provisioned instances error:", e.message);
     res.status(503).json([]);
+  }
+});
+
+// Enterprise health monitoring endpoints
+app.get("/api/health/system", (req, res) => {
+  try {
+    const systemStatus = enterpriseHealthMonitor.getSystemStatus();
+    res.json(systemStatus);
+  } catch (e) {
+    console.error("System health error:", e.message);
+    res.status(503).json({ error: "Health monitoring unavailable" });
+  }
+});
+
+app.get("/api/health/instances", async (req, res) => {
+  try {
+    const instances = await instanceManager.getProvisionedInstances();
+    const healthPromises = instances.map(async (instance) => {
+      try {
+        const healthUrl = `http://${instance.host}:${instance.healthPort || 8080}/health`;
+        const response = await fetch(healthUrl, { timeout: 5000 });
+        const healthData = await response.json();
+        return {
+          instanceId: instance.id,
+          status: 'healthy',
+          data: healthData,
+          lastCheck: new Date().toISOString()
+        };
+      } catch (error) {
+        return {
+          instanceId: instance.id,
+          status: 'unhealthy',
+          error: error.message,
+          lastCheck: new Date().toISOString()
+        };
+      }
+    });
+    
+    const healthResults = await Promise.allSettled(healthPromises);
+    const results = healthResults.map(result => 
+      result.status === 'fulfilled' ? result.value : {
+        status: 'error',
+        error: result.reason?.message
+      }
+    );
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      totalInstances: instances.length,
+      healthyCount: results.filter(r => r.status === 'healthy').length,
+      unhealthyCount: results.filter(r => r.status === 'unhealthy').length,
+      results
+    });
+  } catch (e) {
+    console.error("Instance health check error:", e.message);
+    res.status(503).json({ error: "Instance health check failed" });
+  }
+});
+
+// Security metrics endpoint
+app.get("/api/security/metrics", security.apiKeyAuth(), (req, res) => {
+  try {
+    const metrics = security.getMetrics();
+    res.json(metrics);
+  } catch (e) {
+    console.error("Security metrics error:", e.message);
+    res.status(503).json({ error: "Security metrics unavailable" });
+  }
+});
+
+// Security health check endpoint
+app.get("/api/security/health", security.securityHealthCheck());
+
+// Performance metrics endpoint
+app.get("/api/metrics", async (req, res) => {
+  try {
+    const systemStatus = enterpriseHealthMonitor.getSystemStatus();
+    const instances = await instanceManager.getProvisionedInstances();
+    
+    const metrics = {
+      timestamp: new Date().toISOString(),
+      system: {
+        uptime: systemStatus.uptime,
+        healthMonitoring: systemStatus.metrics
+      },
+      instances: {
+        total: instances.length,
+        provisioned: instances.filter(i => i.status === 'running').length
+      },
+      security: security.getMetrics(),
+      performance: {
+        nodeVersion: process.version,
+        memoryUsage: process.memoryUsage(),
+        cpuUsage: process.cpuUsage()
+      }
+    };
+    
+    res.json(metrics);
+  } catch (e) {
+    console.error("Metrics error:", e.message);
+    res.status(503).json({ error: "Metrics unavailable" });
   }
 });
 
@@ -607,15 +749,39 @@ server.listen(3001, () => {
   }
 });
 
+// Add enterprise security error handler
+app.use(security.errorHandler());
+
 // Add uncaught exception handlers
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
+  enterpriseHealthMonitor.stop();
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  enterpriseHealthMonitor.stop();
   process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  enterpriseHealthMonitor.stop();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  enterpriseHealthMonitor.stop();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
 console.log("Server script loaded successfully");
