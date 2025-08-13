@@ -457,10 +457,6 @@ async function getInstanceTarget(id) {
 function createVNCBridge(ws, targetUrl, instanceId) {
   console.log(`Creating VNC bridge for ${instanceId} to ${targetUrl}`);
   
-  // Track VNC WebSocket connection
-  activeVncConnections++;
-  activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
-  
   // Parse the target URL to get host and port
   // targetUrl format is "localhost:5901" or "host:port"
   let host, port;
@@ -478,72 +474,124 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   
   console.log(`Connecting to VNC server at ${host}:${port}`);
   
+  // Connection state tracking
+  let vncConnectionEstablished = false;
+  let connectionClosed = false;
+  
+  // Connection cleanup function
+  const cleanupConnection = (reason = 'unknown') => {
+    if (!connectionClosed) {
+      connectionClosed = true;
+      console.log(`VNC connection cleanup for ${instanceId} (reason: ${reason})`);
+      
+      // Only decrement if connection was actually established
+      if (vncConnectionEstablished) {
+        activeVncConnections--;
+        console.log(`VNC connections count decremented to ${activeVncConnections} for ${instanceId}`);
+      }
+      
+      // Update metrics
+      activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
+      
+      // Clean up TCP socket
+      if (tcpSocket && !tcpSocket.destroyed) {
+        tcpSocket.destroy();
+      }
+      
+      // Clean up WebSocket
+      if (ws.readyState === ws.OPEN) {
+        ws.close();
+      }
+    }
+  };
+  
   // Create TCP connection to VNC server
   const tcpSocket = net.createConnection(port, host);
   
+  // TCP connection timeout (10 seconds)
+  const connectionTimeout = setTimeout(() => {
+    console.error(`VNC TCP connection timeout for ${instanceId} after 10 seconds`);
+    cleanupConnection('tcp_timeout');
+  }, 10000);
+  
   tcpSocket.on('connect', () => {
-    console.log(`VNC bridge connected to ${host}:${port}`);
+    clearTimeout(connectionTimeout);
+    console.log(`VNC bridge connected to ${host}:${port} for ${instanceId}`);
+    
+    // Now that TCP connection is established, increment VNC connection count
+    if (!connectionClosed) {
+      vncConnectionEstablished = true;
+      activeVncConnections++;
+      activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
+      console.log(`VNC connections count incremented to ${activeVncConnections} for ${instanceId}`);
+    }
   });
   
   tcpSocket.on('error', (err) => {
+    clearTimeout(connectionTimeout);
     console.error(`VNC TCP socket error for ${instanceId}:`, err.message);
-    if (ws.readyState === ws.OPEN) {
-      ws.close();
-    }
+    cleanupConnection('tcp_error');
   });
   
   tcpSocket.on('close', () => {
+    clearTimeout(connectionTimeout);
     console.log(`VNC TCP socket closed for ${instanceId}`);
-    if (ws.readyState === ws.OPEN) {
-      ws.close();
-    }
+    cleanupConnection('tcp_close');
+  });
+  
+  tcpSocket.on('timeout', () => {
+    console.error(`VNC TCP socket timeout for ${instanceId}`);
+    cleanupConnection('tcp_timeout');
   });
   
   // Forward data from WebSocket to TCP socket
   ws.on('message', (data) => {
+    if (connectionClosed || !vncConnectionEstablished || tcpSocket.destroyed) {
+      console.warn(`Ignoring WebSocket message for ${instanceId} - connection not ready`);
+      return;
+    }
+    
     try {
       // Convert WebSocket message to Buffer if needed
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
-      console.log(`VNC WS->TCP ${instanceId}: ${buffer.length} bytes`, buffer.slice(0, 32));
+      console.log(`VNC WS->TCP ${instanceId}: ${buffer.length} bytes`);
       tcpSocket.write(buffer);
     } catch (err) {
       console.error(`Error forwarding WebSocket to TCP for ${instanceId}:`, err.message);
+      cleanupConnection('ws_to_tcp_error');
     }
   });
   
   // Forward data from TCP socket to WebSocket
   tcpSocket.on('data', (data) => {
+    if (connectionClosed || ws.readyState !== ws.OPEN) {
+      console.warn(`Ignoring TCP data for ${instanceId} - WebSocket not ready`);
+      return;
+    }
+    
     try {
-      console.log(`VNC TCP->WS ${instanceId}: ${data.length} bytes`, data.slice(0, 32));
-      if (ws.readyState === ws.OPEN) {
-        ws.send(data);
-      }
+      console.log(`VNC TCP->WS ${instanceId}: ${data.length} bytes`);
+      ws.send(data);
     } catch (err) {
       console.error(`Error forwarding TCP to WebSocket for ${instanceId}:`, err.message);
+      cleanupConnection('tcp_to_ws_error');
     }
   });
   
   // Handle WebSocket close
-  let connectionClosed = false;
-  const cleanupConnection = () => {
-    if (!connectionClosed) {
-      connectionClosed = true;
-      activeVncConnections--;
-      activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
-      tcpSocket.destroy();
-    }
-  };
-  
   ws.on('close', (code, reason) => {
     console.log(`WebSocket closed for VNC bridge ${instanceId}, code: ${code}, reason: ${reason}`);
-    cleanupConnection();
+    cleanupConnection('ws_close');
   });
   
   // Handle WebSocket errors
   ws.on('error', (err) => {
     console.error(`WebSocket error for VNC bridge ${instanceId}:`, err.message);
-    cleanupConnection();
+    cleanupConnection('ws_error');
   });
+  
+  // Set TCP socket timeout
+  tcpSocket.setTimeout(30000); // 30 second idle timeout
 }
 
 // --- WebSocket Support for VNC ---
@@ -556,6 +604,7 @@ vncWss.on("error", (err) => {
 // WebSocket server for active focus updates
 const activeWss = new WebSocketServer({ noServer: true });
 let activeWsConnections = 0;
+let activeVncConnections = 0;
 
 activeWss.on("connection", (ws) => {
   activeClients.add(ws);
