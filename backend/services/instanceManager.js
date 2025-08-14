@@ -1,19 +1,41 @@
 const fs = require('fs');
 const path = require('path');
-const logger = require('../../utils/logger');
+const logger = require('../utils/logger');
 const KubernetesDiscovery = require('./kubernetesDiscovery');
 
 class InstanceManager {
-  constructor(configDir) {
-    this.configDir = configDir;
+  constructor() {
     this.k8sDiscovery = new KubernetesDiscovery();
     this.cachedInstances = null;
     this.lastDiscoveryTime = null;
     this.discoveryInterval = 30000; // 30 seconds
     this.initialized = false;
+    this.initializationError = null;
+    this.criticalFailure = false;
     
-    // Initialize async
-    this.initializeAsync();
+    // Initialize async with proper error handling
+    this.initializeAsync().catch(error => {
+      this.initializationError = error;
+      logger.error('InstanceManager initialization failed', { 
+        error: error.message, 
+        stack: error.stack,
+        allowEmptyDiscovery: process.env.ALLOW_EMPTY_DISCOVERY,
+        nodeEnv: process.env.NODE_ENV,
+        ci: process.env.CI
+      });
+      
+      // In production without ALLOW_EMPTY_DISCOVERY, mark as critical failure but don't exit immediately
+      if (process.env.NODE_ENV !== 'test' && !process.env.CI && process.env.ALLOW_EMPTY_DISCOVERY !== 'true') {
+        this.criticalFailure = true;
+        logger.error('InstanceManager initialization failed and ALLOW_EMPTY_DISCOVERY is not set. Backend will not be functional.');
+        
+        // Set a timeout to exit after logging is flushed
+        setTimeout(() => {
+          logger.error('Exiting due to critical InstanceManager initialization failure');
+          process.exit(1);
+        }, 2000);
+      }
+    });
   }
 
   async initializeAsync() {
@@ -28,6 +50,7 @@ class InstanceManager {
     }
     
     if (!this.k8sDiscovery.isAvailable()) {
+      const error = new Error('Kubernetes discovery not available and static configuration is disabled');
       logger.error('Kubernetes discovery not available. Static configuration is disabled. Backend requires Kubernetes environment.');
       
       // Set initialized to true in test/CI environments to allow e2e tests with empty instance list
@@ -37,7 +60,7 @@ class InstanceManager {
         this.cachedInstances = [];
         return; // Don't throw error in test environments
       } else {
-        throw new Error('Kubernetes discovery not available and static configuration is disabled');
+        throw error;
       }
     }
 
@@ -58,13 +81,18 @@ class InstanceManager {
         this.initialized = true;
         this.cachedInstances = [];
       } else {
-        // Don't throw here - let the server start but API calls will fail with meaningful errors
-        logger.warn("Backend starting in degraded mode - API calls will fail until Kubernetes is available");
+        // Throw the error to be caught by the constructor
+        throw new Error(`Kubernetes connectivity test failed: ${error.message}`);
       }
     }
   }
 
   async getInstances() {
+    // Check if there was an initialization error
+    if (this.initializationError) {
+      throw new Error(`InstanceManager initialization failed: ${this.initializationError.message}`);
+    }
+    
     // Check if initialized first
     if (!this.initialized) {
       throw new Error('InstanceManager not initialized. Kubernetes discovery failed and static configuration is disabled.');

@@ -68,7 +68,7 @@ registryConfig:
     server: ""  # e.g., "your-company.jfrog.io"
 
 emulator:
-  image: qemu-loco
+  image: ghcr.io/mroie/lego-loco-cluster/win98-softgpu
   tag: latest
   imagePullPolicy: IfNotPresent
 

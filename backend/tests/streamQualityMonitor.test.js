@@ -1,6 +1,6 @@
 const { describe, it, expect, beforeEach, afterEach } = require('@jest/globals');
 const StreamQualityMonitor = require('../services/streamQualityMonitor');
-const logger = require('../../utils/logger');
+const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');

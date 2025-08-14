@@ -6,7 +6,7 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
-const logger = require("../utils/logger");
+const logger = require("./utils/logger");
 
 const app = express();
 const server = http.createServer(app);

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocket } = require('ws');
 const http = require('http');
-const logger = require('../../utils/logger');
+const logger = require('../utils/logger');
 
 /**
  * Stream Quality Monitoring Service
@@ -11,8 +11,7 @@ const logger = require('../../utils/logger');
  * with deep health probing and intelligent failure detection/recovery
  */
 class StreamQualityMonitor {
-  constructor(configDir = '../config', instanceManager = null) {
-    this.configDir = configDir;
+  constructor(instanceManager = null) {
     this.instanceManager = instanceManager;
     this.metrics = new Map(); // instanceId -> metrics
     this.probeInterval = 5000; // 5 seconds
@@ -770,7 +769,7 @@ class StreamQualityMonitor {
    * Load instances from InstanceManager or fallback to static config
    */
   async loadInstances() {
-    // If we have an InstanceManager, use it (Kubernetes-only mode)
+    // Use InstanceManager for Kubernetes discovery
     if (this.instanceManager) {
       try {
         return await this.instanceManager.getInstances();
@@ -780,15 +779,9 @@ class StreamQualityMonitor {
       }
     }
     
-    // Fallback to static config (legacy mode)
-    try {
-      const configPath = path.resolve(__dirname, this.configDir, 'instances.json');
-      const data = fs.readFileSync(configPath, 'utf-8');
-      return JSON.parse(data);
-    } catch (error) {
-      logger.error("Failed to load instances config", { error: error.message });
-      return [];
-    }
+    // No fallback - return empty array if no InstanceManager
+    logger.warn("No InstanceManager available, returning empty instances list");
+    return [];
   }
 }
 

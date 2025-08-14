@@ -26,9 +26,20 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
-const logger = require("../utils/logger");
+const logger = require("./utils/logger");
+
+// Log early startup
+logger.info("Starting Lego Loco Cluster Backend Server");
+logger.info("Environment variables", {
+  NODE_ENV: process.env.NODE_ENV,
+  CI: process.env.CI,
+  ALLOW_EMPTY_DISCOVERY: process.env.ALLOW_EMPTY_DISCOVERY
+});
+
 const client = require('prom-client');
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
+
+logger.info("Loading InstanceManager...");
 const InstanceManager = require("./services/instanceManager");
 
 const app = express();
@@ -97,20 +108,15 @@ server.on('connection', (socket) => {
 
 // ========== END PROMETHEUS METRICS CONFIGURATION ==========
 
-// Directory that holds JSON config files
-const CONFIG_DIR = process.env.CONFIG_DIR || path.join(__dirname, "../config");
-
-// For Kubernetes deployment, check if the absolute path exists
-const K8S_CONFIG_DIR = "/app/config";
-const FINAL_CONFIG_DIR = fs.existsSync(K8S_CONFIG_DIR) ? K8S_CONFIG_DIR : CONFIG_DIR;
-
-logger.info("Using config directory", { configDir: FINAL_CONFIG_DIR });
-
 // Initialize instance manager with auto-discovery
-const instanceManager = new InstanceManager(FINAL_CONFIG_DIR);
+logger.info("Initializing InstanceManager...");
+const instanceManager = new InstanceManager();
 
 // Initialize stream quality monitor with InstanceManager for Kubernetes-only discovery
-const qualityMonitor = new StreamQualityMonitor(FINAL_CONFIG_DIR, instanceManager);
+logger.info("Initializing StreamQualityMonitor...");
+const qualityMonitor = new StreamQualityMonitor(instanceManager);
+
+logger.info("Initialization complete, setting up Express app...");
 
 // Parse JSON bodies for API endpoints
 app.use(express.json());
@@ -141,7 +147,7 @@ app.get("/health", (req, res) => {
     },
     environment: process.env.NODE_ENV || "development",
     kubernetes_namespace: process.env.KUBERNETES_NAMESPACE || null,
-    config_directory: FINAL_CONFIG_DIR,
+    config_directory: "disabled (using kubernetes discovery)",
     services: {
       instance_manager: instanceManager ? "initialized" : "not_initialized",
       quality_monitor: qualityMonitor ? "initialized" : "not_initialized"
@@ -183,47 +189,19 @@ app.get("/ready", async (req, res) => {
       allHealthy = false;
     }
     
-    // Check config directory accessibility
-    try {
-      const configExists = fs.existsSync(FINAL_CONFIG_DIR);
-      checks.checks.config_directory = {
-        status: configExists ? "healthy" : "unhealthy",
-        message: configExists ? `Config directory accessible at ${FINAL_CONFIG_DIR}` : `Config directory not found at ${FINAL_CONFIG_DIR}`,
-        path: FINAL_CONFIG_DIR
-      };
-      if (!configExists) {
-        allHealthy = false;
-      }
-    } catch (error) {
-      checks.checks.config_directory = {
-        status: "unhealthy",
-        message: `Config directory check failed: ${error.message}`,
-        path: FINAL_CONFIG_DIR
-      };
-      allHealthy = false;
-    }
-    
-    // Check essential config files
-    const essentialConfigs = ["instances.json", "status.json"];
-    checks.checks.config_files = {
+    // Config directory check disabled - using Kubernetes discovery
+    checks.checks.config_directory = {
       status: "healthy",
-      message: "All essential config files accessible",
-      files: {}
+      message: "Config directory check disabled - using Kubernetes discovery",
+      path: "N/A (Kubernetes discovery mode)"
     };
     
-    for (const configFile of essentialConfigs) {
-      const configPath = path.join(FINAL_CONFIG_DIR, configFile);
-      const exists = fs.existsSync(configPath);
-      checks.checks.config_files.files[configFile] = {
-        status: exists ? "accessible" : "missing",
-        path: configPath
-      };
-      if (!exists) {
-        checks.checks.config_files.status = "unhealthy";
-        checks.checks.config_files.message = "Some essential config files are missing";
-        allHealthy = false;
-      }
-    }
+    // Config files check disabled - using Kubernetes discovery
+    checks.checks.config_files = {
+      status: "healthy",
+      message: "Config files check disabled - using Kubernetes discovery",
+      files: {}
+    };
     
     // Check quality monitor
     checks.checks.quality_monitor = {
@@ -309,20 +287,10 @@ app.use(express.static(path.join(__dirname, "../frontend/dist")));
  * @returns {Object} Parsed JSON configuration
  */
 function loadConfig(name) {
-  const file = path.join(FINAL_CONFIG_DIR, `${name}.json`);
-  logger.info("Loading config from file", { file });
+  logger.info("Config loading disabled - using Kubernetes discovery", { configName: name });
   
-  if (!fs.existsSync(file)) {
-    logger.error("Config file not found", { file });
-    throw new Error(`Config file not found: ${file}`);
-  }
-  
-  let data = fs.readFileSync(file, "utf-8");
-  logger.debug("Raw config data loaded", { name, preview: data.substring(0, 200) });
-  
-  // Allow simple // comments in JSON files
-  data = data.replace(/^\s*\/\/.*$/gm, "");
-  return JSON.parse(data);
+  // Return default empty config since we don't use file-based config anymore
+  return {};
 }
 
 // REST endpoint that returns any JSON config file
@@ -656,24 +624,17 @@ app.post("/api/quality/monitor/:action", (req, res) => {
 });
 
 // ---------------- Active Instance State ----------------
-const ACTIVE_FILE = path.join(FINAL_CONFIG_DIR, "active.json");
+// Store active state in memory since we don't use file-based config anymore
+let activeInstances = [];
+
 function readActive() {
-  try {
-    const data = fs.readFileSync(ACTIVE_FILE, "utf-8");
-    const val = JSON.parse(data).active;
-    if (Array.isArray(val)) return val;
-    if (val) return [val];
-    return [];
-  } catch (e) {
-    logger.error("Failed to read active state", { error: e.message });
-    return [];
-  }
+  return activeInstances;
 }
 
 function writeActive(ids) {
   try {
-    const arr = Array.isArray(ids) ? ids.slice(0, 9) : [ids];
-    fs.writeFileSync(ACTIVE_FILE, JSON.stringify({ active: arr }, null, 2));
+    activeInstances = Array.isArray(ids) ? ids.slice(0, 9) : [ids];
+    logger.info("Updated active instances", { activeInstances });
   } catch (e) {
     logger.error("Failed to write active state", { error: e.message });
   }
@@ -992,7 +953,7 @@ logger.info("WebSocket support added");
 // Start HTTP server first
 server.listen(3001, () => {
   logger.info("Backend running on http://localhost:3001");
-  logger.info("Configuration details", { configDir: FINAL_CONFIG_DIR, activeInstances: readActive() });
+  logger.info("Configuration details", { activeInstances: readActive() });
   
   // Start quality monitoring
   logger.info("Starting stream quality monitoring service");
