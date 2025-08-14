@@ -9,6 +9,11 @@
             "date": 1755061721442,
             "name": "/home/runner/work/lego-loco-cluster/lego-loco-cluster/logs/error-2025-08-13.log",
             "hash": "192a7961f1f52d50142f1763c43b3d1ac721c70e83cbcecabb8ff27649d751d7"
+        },
+        {
+            "date": 1755165857274,
+            "name": "/home/runner/work/lego-loco-cluster/lego-loco-cluster/logs/error-2025-08-14.log",
+            "hash": "758bff9dbe10e7fa5fa3ba5f3ce0e960f4ac3872b2b060a7ad6be393a76328a6"
         }
     ],
     "hashType": "sha256"

@@ -1,6 +1,6 @@
 const express = require("express");
 const http = require("http");
-const logger = require("./utils/logger");
+const logger = require("../utils/logger");
 
 const app = express();
 const server = http.createServer(app);

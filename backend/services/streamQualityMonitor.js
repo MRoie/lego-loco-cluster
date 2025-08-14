@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocket } = require('ws');
 const http = require('http');
-const logger = require('../utils/logger');
+const logger = require('../../utils/logger');
 
 /**
  * Stream Quality Monitoring Service

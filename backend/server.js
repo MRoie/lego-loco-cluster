@@ -1,3 +1,23 @@
+/**
+ * Lego Loco Cluster Backend Server
+ * 
+ * Enterprise-grade backend service providing:
+ * - Enhanced health monitoring with Kubernetes probes (/health, /ready)
+ * - Prometheus metrics collection (/metrics) 
+ * - Instance management with auto-discovery (Kubernetes + static config)
+ * - Stream quality monitoring and recovery
+ * - VNC WebSocket proxy for remote access
+ * - Active state synchronization across cluster
+ * 
+ * Health Endpoints:
+ * - GET /health - Liveness probe with detailed system information
+ * - GET /ready - Readiness probe with dependency validation
+ * - GET /metrics - Prometheus metrics for monitoring/alerting
+ * 
+ * @version 1.0.0
+ * @author Lego Loco Cluster Team
+ */
+
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
@@ -6,7 +26,7 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
-const logger = require("./utils/logger");
+const logger = require("../utils/logger");
 const client = require('prom-client');
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
@@ -77,30 +97,6 @@ server.on('connection', (socket) => {
 
 // ========== END PROMETHEUS METRICS CONFIGURATION ==========
 
-// Parse JSON bodies for API endpoints
-app.use(express.json());
-
-// Simple health endpoint for Kubernetes-style checks
-app.get("/health", (req, res) => {
-  logger.info("Health check requested", { 
-    userAgent: req.get('User-Agent'),
-    remoteAddress: req.ip || req.connection.remoteAddress 
-  });
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-// Prometheus metrics endpoint
-app.get("/metrics", async (req, res) => {
-  try {
-    const metrics = await register.metrics();
-    res.set('Content-Type', register.contentType);
-    res.end(metrics);
-  } catch (e) {
-    console.error("Failed to generate metrics:", e.message);
-    res.status(500).end('Error generating metrics');
-  }
-});
-
 // Directory that holds JSON config files
 const CONFIG_DIR = process.env.CONFIG_DIR || path.join(__dirname, "../config");
 
@@ -116,10 +112,202 @@ const instanceManager = new InstanceManager(FINAL_CONFIG_DIR);
 // Initialize stream quality monitor with InstanceManager for Kubernetes-only discovery
 const qualityMonitor = new StreamQualityMonitor(FINAL_CONFIG_DIR, instanceManager);
 
+// Parse JSON bodies for API endpoints
+app.use(express.json());
+
+/**
+ * Enhanced health endpoint providing comprehensive system information
+ * Used by Kubernetes liveness probes and general health monitoring
+ * 
+ * @returns {Object} Detailed health status including system metrics, service states, and configuration info
+ */
+app.get("/health", (req, res) => {
+  logger.info("Health check requested", { 
+    userAgent: req.get('User-Agent'),
+    remoteAddress: req.ip || req.connection.remoteAddress 
+  });
+  
+  const healthData = {
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: process.env.npm_package_version || "0.1.0",
+    node_version: process.version,
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+      external: Math.round(process.memoryUsage().external / 1024 / 1024),
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024)
+    },
+    environment: process.env.NODE_ENV || "development",
+    kubernetes_namespace: process.env.KUBERNETES_NAMESPACE || null,
+    config_directory: FINAL_CONFIG_DIR,
+    services: {
+      instance_manager: instanceManager ? "initialized" : "not_initialized",
+      quality_monitor: qualityMonitor ? "initialized" : "not_initialized"
+    }
+  };
+  
+  res.json(healthData);
+});
+
+/**
+ * Comprehensive readiness endpoint for Kubernetes readiness probes
+ * Validates all critical dependencies before declaring service ready
+ * 
+ * @returns {Object} Detailed readiness status with dependency checks
+ * @status 200 - Service is ready and all dependencies are healthy
+ * @status 503 - Service is not ready, one or more dependencies failed
+ */
+app.get("/ready", async (req, res) => {
+  logger.info("Readiness check requested", { 
+    userAgent: req.get('User-Agent'),
+    remoteAddress: req.ip || req.connection.remoteAddress 
+  });
+  
+  const checks = {
+    timestamp: new Date().toISOString(),
+    overall_status: "unknown",
+    checks: {}
+  };
+  
+  let allHealthy = true;
+  
+  try {
+    // Check instance manager initialization
+    checks.checks.instance_manager = {
+      status: instanceManager && instanceManager.initialized ? "healthy" : "unhealthy",
+      message: instanceManager && instanceManager.initialized ? "Instance manager initialized" : "Instance manager not initialized"
+    };
+    if (!instanceManager || !instanceManager.initialized) {
+      allHealthy = false;
+    }
+    
+    // Check config directory accessibility
+    try {
+      const configExists = fs.existsSync(FINAL_CONFIG_DIR);
+      checks.checks.config_directory = {
+        status: configExists ? "healthy" : "unhealthy",
+        message: configExists ? `Config directory accessible at ${FINAL_CONFIG_DIR}` : `Config directory not found at ${FINAL_CONFIG_DIR}`,
+        path: FINAL_CONFIG_DIR
+      };
+      if (!configExists) {
+        allHealthy = false;
+      }
+    } catch (error) {
+      checks.checks.config_directory = {
+        status: "unhealthy",
+        message: `Config directory check failed: ${error.message}`,
+        path: FINAL_CONFIG_DIR
+      };
+      allHealthy = false;
+    }
+    
+    // Check essential config files
+    const essentialConfigs = ["instances.json", "status.json"];
+    checks.checks.config_files = {
+      status: "healthy",
+      message: "All essential config files accessible",
+      files: {}
+    };
+    
+    for (const configFile of essentialConfigs) {
+      const configPath = path.join(FINAL_CONFIG_DIR, configFile);
+      const exists = fs.existsSync(configPath);
+      checks.checks.config_files.files[configFile] = {
+        status: exists ? "accessible" : "missing",
+        path: configPath
+      };
+      if (!exists) {
+        checks.checks.config_files.status = "unhealthy";
+        checks.checks.config_files.message = "Some essential config files are missing";
+        allHealthy = false;
+      }
+    }
+    
+    // Check quality monitor
+    checks.checks.quality_monitor = {
+      status: qualityMonitor ? "healthy" : "unhealthy",
+      message: qualityMonitor ? "Quality monitor initialized" : "Quality monitor not initialized"
+    };
+    if (!qualityMonitor) {
+      allHealthy = false;
+    }
+    
+    // Check if we can retrieve instances (tests the full dependency chain)
+    try {
+      const instances = await instanceManager.getInstances();
+      checks.checks.instances_api = {
+        status: "healthy",
+        message: `Successfully retrieved ${instances.length} instances`,
+        instance_count: instances.length
+      };
+    } catch (error) {
+      checks.checks.instances_api = {
+        status: "unhealthy",
+        message: `Failed to retrieve instances: ${error.message}`
+      };
+      allHealthy = false;
+    }
+    
+    // Memory check - warn if using more than 512MB
+    const memoryUsage = process.memoryUsage().heapUsed / 1024 / 1024;
+    checks.checks.memory = {
+      status: memoryUsage < 512 ? "healthy" : "warning",
+      message: `Memory usage: ${Math.round(memoryUsage)}MB`,
+      usage_mb: Math.round(memoryUsage),
+      threshold_mb: 512
+    };
+    
+  } catch (error) {
+    logger.error("Readiness check error:", error);
+    allHealthy = false;
+    checks.checks.general_error = {
+      status: "unhealthy",
+      message: `Readiness check failed: ${error.message}`
+    };
+  }
+  
+  checks.overall_status = allHealthy ? "ready" : "not_ready";
+  
+  // Return 503 Service Unavailable if not ready, 200 if ready
+  const statusCode = allHealthy ? 200 : 503;
+  
+  if (!allHealthy) {
+    logger.warn("Service not ready", { checks: checks.checks });
+  }
+  
+  res.status(statusCode).json(checks);
+});
+
+/**
+ * Prometheus metrics endpoint for monitoring and alerting
+ * Exposes HTTP request metrics, connection counts, and Node.js runtime metrics
+ * 
+ * @route GET /metrics
+ * @returns {string} Prometheus format metrics
+ */
+app.get("/metrics", async (req, res) => {
+  try {
+    const metrics = await register.metrics();
+    res.set('Content-Type', register.contentType);
+    res.end(metrics);
+  } catch (e) {
+    logger.error("Failed to generate metrics:", e.message);
+    res.status(500).end('Error generating metrics');
+  }
+});
+
 // Serve frontend static build
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
 
-// Helper to load JSON config files from the config directory
+/**
+ * Helper function to load JSON config files from the config directory
+ * Supports simple // comments in JSON files
+ * 
+ * @param {string} name - Config file name without .json extension
+ * @returns {Object} Parsed JSON configuration
+ */
 function loadConfig(name) {
   const file = path.join(FINAL_CONFIG_DIR, `${name}.json`);
   logger.info("Loading config from file", { file });
@@ -161,7 +349,14 @@ app.get("/api/status", (req, res) => {
   }
 });
 
-// Enhanced instances endpoint with auto-discovery support
+/**
+ * Enhanced instances endpoint with auto-discovery support
+ * Supports both static configuration and Kubernetes-based discovery
+ * 
+ * @route GET /api/instances
+ * @returns {Array} List of all available instances (static + auto-discovered)
+ * @status 503 - Service unavailable if instance discovery fails
+ */
 app.get("/api/instances", async (req, res) => {
   try {
     logger.info("Instances request received", {
@@ -181,7 +376,13 @@ app.get("/api/instances", async (req, res) => {
   }
 });
 
-// New endpoint to get provisioned instances only with auto-discovery
+/**
+ * Get only provisioned (ready-to-use) instances
+ * Filters instances to only include those marked as provisioned and available
+ * 
+ * @route GET /api/instances/provisioned
+ * @returns {Array} List of provisioned instances only
+ */
 app.get("/api/instances/provisioned", async (req, res) => {
   try {
     logger.info("Provisioned instances request received", {
@@ -201,7 +402,13 @@ app.get("/api/instances/provisioned", async (req, res) => {
   }
 });
 
-// New endpoint for Kubernetes discovery information
+/**
+ * Get Kubernetes discovery information and status
+ * Provides insights into auto-discovery capabilities and fallback status
+ * 
+ * @route GET /api/instances/discovery-info
+ * @returns {Object} Discovery status including Kubernetes availability and fallback info
+ */
 app.get("/api/instances/discovery-info", async (req, res) => {
   try {
     logger.debug("Discovery info request received", {
@@ -259,7 +466,13 @@ app.post("/api/instances/refresh", async (req, res) => {
 
 // ========== STREAM QUALITY MONITORING API ==========
 
-// Get quality metrics for all instances
+/**
+ * Get quality metrics for all monitored instances
+ * Returns video/audio quality, latency, and availability metrics
+ * 
+ * @route GET /api/quality/metrics
+ * @returns {Object} Quality metrics for all instances
+ */
 app.get("/api/quality/metrics", (req, res) => {
   try {
     const metrics = qualityMonitor.getAllMetrics();
@@ -270,7 +483,14 @@ app.get("/api/quality/metrics", (req, res) => {
   }
 });
 
-// Get quality metrics for a specific instance
+/**
+ * Get quality metrics for a specific instance
+ * 
+ * @route GET /api/quality/metrics/:instanceId
+ * @param {string} instanceId - Instance identifier
+ * @returns {Object} Quality metrics for the specified instance
+ * @status 404 - Instance not found or not monitored
+ */
 app.get("/api/quality/metrics/:instanceId", (req, res) => {
   try {
     const { instanceId } = req.params;
@@ -287,7 +507,13 @@ app.get("/api/quality/metrics/:instanceId", (req, res) => {
   }
 });
 
-// Get quality summary across all instances
+/**
+ * Get aggregated quality summary across all instances
+ * Provides overall health status and alert conditions
+ * 
+ * @route GET /api/quality/summary
+ * @returns {Object} Aggregated quality summary with overall health status
+ */
 app.get("/api/quality/summary", (req, res) => {
   try {
     const summary = qualityMonitor.getQualitySummary();
@@ -478,7 +704,13 @@ app.post("/api/active", (req, res) => {
 // Generic proxy for VNC and WebRTC traffic
 const proxy = httpProxy.createProxyServer({ ws: true, changeOrigin: true });
 
-// Resolve an instance ID to its upstream target URL
+/**
+ * Resolve an instance ID to its upstream VNC target URL
+ * Uses dynamic instance discovery to support both static and Kubernetes-discovered instances
+ * 
+ * @param {string} id - Instance identifier
+ * @returns {string|null} VNC target URL (host:port format) or null if not found
+ */
 async function getInstanceTarget(id) {
   // Reload instances dynamically using instance manager
   try {
@@ -496,7 +728,15 @@ async function getInstanceTarget(id) {
   }
 }
 
-// VNC WebSocket-to-TCP Bridge
+/**
+ * Create a WebSocket-to-TCP bridge for VNC connections
+ * Handles the protocol translation between WebSocket clients and VNC servers
+ * Includes connection tracking, timeout handling, and proper cleanup
+ * 
+ * @param {WebSocket} ws - WebSocket connection from client
+ * @param {string} targetUrl - VNC server target (host:port format)
+ * @param {string} instanceId - Instance identifier for logging and metrics
+ */
 function createVNCBridge(ws, targetUrl, instanceId) {
   logger.info("Creating VNC bridge", { instanceId, targetUrl });
   
