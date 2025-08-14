@@ -1,3 +1,23 @@
+/**
+ * Lego Loco Cluster Backend Server
+ * 
+ * Enterprise-grade backend service providing:
+ * - Enhanced health monitoring with Kubernetes probes (/health, /ready)
+ * - Prometheus metrics collection (/metrics) 
+ * - Instance management with auto-discovery (Kubernetes + static config)
+ * - Stream quality monitoring and recovery
+ * - VNC WebSocket proxy for remote access
+ * - Active state synchronization across cluster
+ * 
+ * Health Endpoints:
+ * - GET /health - Liveness probe with detailed system information
+ * - GET /ready - Readiness probe with dependency validation
+ * - GET /metrics - Prometheus metrics for monitoring/alerting
+ * 
+ * @version 1.0.0
+ * @author Lego Loco Cluster Team
+ */
+
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
@@ -6,7 +26,7 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
-const logger = require("./utils/logger");
+const logger = require("../utils/logger");
 const client = require('prom-client');
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
@@ -340,7 +360,14 @@ app.get("/api/status", (req, res) => {
   }
 });
 
-// Enhanced instances endpoint with auto-discovery support
+/**
+ * Enhanced instances endpoint with auto-discovery support
+ * Supports both static configuration and Kubernetes-based discovery
+ * 
+ * @route GET /api/instances
+ * @returns {Array} List of all available instances (static + auto-discovered)
+ * @status 503 - Service unavailable if instance discovery fails
+ */
 app.get("/api/instances", async (req, res) => {
   try {
     logger.info("Instances request received", {
@@ -360,7 +387,13 @@ app.get("/api/instances", async (req, res) => {
   }
 });
 
-// New endpoint to get provisioned instances only with auto-discovery
+/**
+ * Get only provisioned (ready-to-use) instances
+ * Filters instances to only include those marked as provisioned and available
+ * 
+ * @route GET /api/instances/provisioned
+ * @returns {Array} List of provisioned instances only
+ */
 app.get("/api/instances/provisioned", async (req, res) => {
   try {
     logger.info("Provisioned instances request received", {
@@ -380,7 +413,13 @@ app.get("/api/instances/provisioned", async (req, res) => {
   }
 });
 
-// New endpoint for Kubernetes discovery information
+/**
+ * Get Kubernetes discovery information and status
+ * Provides insights into auto-discovery capabilities and fallback status
+ * 
+ * @route GET /api/instances/discovery-info
+ * @returns {Object} Discovery status including Kubernetes availability and fallback info
+ */
 app.get("/api/instances/discovery-info", async (req, res) => {
   try {
     logger.debug("Discovery info request received", {
@@ -438,7 +477,13 @@ app.post("/api/instances/refresh", async (req, res) => {
 
 // ========== STREAM QUALITY MONITORING API ==========
 
-// Get quality metrics for all instances
+/**
+ * Get quality metrics for all monitored instances
+ * Returns video/audio quality, latency, and availability metrics
+ * 
+ * @route GET /api/quality/metrics
+ * @returns {Object} Quality metrics for all instances
+ */
 app.get("/api/quality/metrics", (req, res) => {
   try {
     const metrics = qualityMonitor.getAllMetrics();
@@ -449,7 +494,14 @@ app.get("/api/quality/metrics", (req, res) => {
   }
 });
 
-// Get quality metrics for a specific instance
+/**
+ * Get quality metrics for a specific instance
+ * 
+ * @route GET /api/quality/metrics/:instanceId
+ * @param {string} instanceId - Instance identifier
+ * @returns {Object} Quality metrics for the specified instance
+ * @status 404 - Instance not found or not monitored
+ */
 app.get("/api/quality/metrics/:instanceId", (req, res) => {
   try {
     const { instanceId } = req.params;
@@ -466,7 +518,13 @@ app.get("/api/quality/metrics/:instanceId", (req, res) => {
   }
 });
 
-// Get quality summary across all instances
+/**
+ * Get aggregated quality summary across all instances
+ * Provides overall health status and alert conditions
+ * 
+ * @route GET /api/quality/summary
+ * @returns {Object} Aggregated quality summary with overall health status
+ */
 app.get("/api/quality/summary", (req, res) => {
   try {
     const summary = qualityMonitor.getQualitySummary();
@@ -657,7 +715,13 @@ app.post("/api/active", (req, res) => {
 // Generic proxy for VNC and WebRTC traffic
 const proxy = httpProxy.createProxyServer({ ws: true, changeOrigin: true });
 
-// Resolve an instance ID to its upstream target URL
+/**
+ * Resolve an instance ID to its upstream VNC target URL
+ * Uses dynamic instance discovery to support both static and Kubernetes-discovered instances
+ * 
+ * @param {string} id - Instance identifier
+ * @returns {string|null} VNC target URL (host:port format) or null if not found
+ */
 async function getInstanceTarget(id) {
   // Reload instances dynamically using instance manager
   try {
@@ -675,7 +739,15 @@ async function getInstanceTarget(id) {
   }
 }
 
-// VNC WebSocket-to-TCP Bridge
+/**
+ * Create a WebSocket-to-TCP bridge for VNC connections
+ * Handles the protocol translation between WebSocket clients and VNC servers
+ * Includes connection tracking, timeout handling, and proper cleanup
+ * 
+ * @param {WebSocket} ws - WebSocket connection from client
+ * @param {string} targetUrl - VNC server target (host:port format)
+ * @param {string} instanceId - Instance identifier for logging and metrics
+ */
 function createVNCBridge(ws, targetUrl, instanceId) {
   logger.info("Creating VNC bridge", { instanceId, targetUrl });
   

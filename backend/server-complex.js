@@ -6,14 +6,27 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
-const logger = require("./utils/logger");
+const logger = require("../utils/logger");
 
 const app = express();
 const server = http.createServer(app);
 
-// simple health endpoint for Kubernetes-style checks
+/**
+ * Simple health endpoint for basic availability checks
+ * This is a simplified version of the enhanced health check from server.js
+ * Used for testing and minimal setups
+ * 
+ * @deprecated Use server.js for production deployments with full health monitoring
+ */
 app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+  // Basic health response for complex server (without full dependencies)
+  res.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    server_type: "complex",
+    uptime: process.uptime(),
+    memory_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+  });
 });
 
 // Directory that holds JSON config files
