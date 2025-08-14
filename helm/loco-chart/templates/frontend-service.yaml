@@ -3,10 +3,16 @@ kind: Service
 metadata:
   name: {{ include "loco.fullname" . }}-frontend
   namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-frontend
 spec:
   type: NodePort
   selector:
     app: {{ include "loco.fullname" . }}-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: lego-loco-cluster
   ports:
   - name: http
     port: {{ .Values.frontend.servicePort }}

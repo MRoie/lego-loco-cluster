@@ -4,6 +4,10 @@ kind: PersistentVolume
 metadata:
   name: {{ .Values.emulator.diskPVC }}-pv
   namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-storage
 spec:
   capacity:
     storage: {{ .Values.storage.diskSize | default "10Gi" }}

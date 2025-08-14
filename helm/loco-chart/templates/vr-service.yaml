@@ -3,9 +3,15 @@ kind: Service
 metadata:
   name: {{ include "loco.fullname" . }}-vr
   namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: vr
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-vr
 spec:
   selector:
     app: {{ include "loco.fullname" . }}-vr
+    app.kubernetes.io/component: vr
+    app.kubernetes.io/part-of: lego-loco-cluster
   ports:
   - protocol: TCP
     port: {{ .Values.vr.servicePort }}

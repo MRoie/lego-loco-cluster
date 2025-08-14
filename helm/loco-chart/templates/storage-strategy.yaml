@@ -6,6 +6,10 @@ kind: ConfigMap
 metadata:
   name: {{ include "loco.fullname" . }}-storage-init
   namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-storage-config
 data:
   init-storage.sh: |
     #!/bin/sh
@@ -32,6 +36,10 @@ kind: ConfigMap
 metadata:
   name: {{ include "loco.fullname" . }}-hybrid-storage
   namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-storage-config
 data:
   storage-strategy: {{ .Values.storage.strategy.hybrid.primary }}
   fallback-strategy: {{ .Values.storage.strategy.hybrid.fallback }}
