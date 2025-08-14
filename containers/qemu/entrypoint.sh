@@ -280,20 +280,67 @@ log_success "QEMU started successfully (PID: $EMU_PID)"
 log_info "VNC display available on :5901"
 
 # === STEP 6: Video Streaming Setup ===
-log_info "Starting GStreamer video stream..."
+log_info "Starting GStreamer video stream at 1024x768 for Lego Loco compatibility..."
+log_info "Stream configuration: 1024x768@25fps, bitrate=1200kbps (optimized for higher resolution)"
 gst-launch-1.0 -v \
   ximagesrc display-name=:$DISPLAY_NUM use-damage=0 ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoconvert ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoscale ! \
-  video/x-raw,width=640,height=480 ! \
-  x264enc tune=zerolatency bitrate=500 speed-preset=ultrafast ! \
-  rtph264pay ! \
-  udpsink host=127.0.0.1 port=5000 &
+  video/x-raw,width=1024,height=768,framerate=25/1 ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  x264enc tune=zerolatency bitrate=1200 speed-preset=ultrafast key-int-max=25 ! \
+  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+  rtph264pay config-interval=1 ! \
+  udpsink host=127.0.0.1 port=5000 sync=false async=false &
 GSTREAMER_PID=$!
 
 log_success "GStreamer started with PID: $GSTREAMER_PID"
+log_info "Stream details: 1024x768@25fps H.264 stream on UDP port 5000"
 
-# === STEP 7: Health Monitoring Setup ===
+# === STEP 7: Stream Health Monitoring (SRE Principles) ===
+log_info "Implementing SRE monitoring for stream reliability..."
+
+# Stream validation function
+validate_stream_health() {
+  local check_count=0
+  local max_checks=5
+  
+  log_info "Validating stream health..."
+  
+  while [ $check_count -lt $max_checks ]; do
+    if kill -0 $GSTREAMER_PID 2>/dev/null; then
+      log_success "✅ GStreamer process is running (PID: $GSTREAMER_PID)"
+      
+      # Check if UDP port is active
+      if netstat -un | grep -q ":5000 "; then
+        log_success "✅ UDP stream port 5000 is active"
+        return 0
+      else
+        log_info "⏳ Waiting for UDP stream to initialize..."
+      fi
+    else
+      log_error "❌ GStreamer process died (PID: $GSTREAMER_PID)"
+      return 1
+    fi
+    
+    check_count=$((check_count + 1))
+    sleep 2
+  done
+  
+  log_warning "⚠️  Stream validation incomplete after $max_checks checks"
+  return 1
+}
+
+# Run stream validation
+if validate_stream_health; then
+  log_success "🎯 Stream health validation passed - 1024x768 H.264 stream ready"
+else
+  log_warning "⚠️  Stream health validation failed - stream may be unstable"
+fi
+
+# === STEP 8: Health Monitoring Setup ===
 log_info "Starting health monitoring service..."
 if [ -x /usr/local/bin/health-monitor.sh ]; then
   HEALTH_PORT=${HEALTH_PORT:-8080}
@@ -304,7 +351,7 @@ else
   log_error "Health monitor script not found"
 fi
 
-# === STEP 8: Art Resource Watcher ===
+# === STEP 9: Art Resource Watcher ===
 if [ -x /usr/local/bin/watch_art_res.sh ]; then
   log_info "Starting art resource watcher..."
   /usr/local/bin/watch_art_res.sh &
@@ -316,11 +363,11 @@ fi
 log_success "Container setup complete!"
 log_info "Services:"
 log_info "  - VNC: localhost:5901"
-log_info "  - Video stream: UDP port 5000"
+log_info "  - Video stream: UDP port 5000 (1024x768@25fps H.264)"
 log_info "  - Health monitor: HTTP port ${HEALTH_PORT:-8080}"
 log_info "  - QEMU PID: $EMU_PID"
 log_info "  - Xvfb PID: $XVFB_PID"
-log_info "  - GStreamer PID: $GSTREAMER_PID"
+log_info "  - GStreamer PID: $GSTREAMER_PID (1024x768 stream)"
 if [ -n "${HEALTH_PID:-}" ]; then
   log_info "  - Health monitor PID: $HEALTH_PID"
 fi

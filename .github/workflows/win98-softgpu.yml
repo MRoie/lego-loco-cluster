@@ -2,7 +2,7 @@ name: Build Win98 SoftGPU Image
 
 on:
   push:
-    branches: [ build_qemu_softgpu ]
+    branches: [ main ]
     paths:
       - 'containers/qemu-softgpu/**'
       - '.github/workflows/win98-softgpu.yml'
