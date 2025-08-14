@@ -8,10 +8,15 @@ spec:
   selector:
     matchLabels:
       app: {{ include "loco.fullname" . }}-vr
+      app.kubernetes.io/component: vr
+      app.kubernetes.io/part-of: lego-loco-cluster
   template:
     metadata:
       labels:
         app: {{ include "loco.fullname" . }}-vr
+        app.kubernetes.io/component: vr
+        app.kubernetes.io/part-of: lego-loco-cluster
+        app.kubernetes.io/name: lego-loco-vr
     spec:
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:

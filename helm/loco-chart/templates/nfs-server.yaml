@@ -5,6 +5,10 @@ kind: Service
 metadata:
   name: nfs-server
   namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: nfs-server
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-nfs
 spec:
   ports:
     - name: nfs
@@ -15,6 +19,8 @@ spec:
       port: 111
   selector:
     app: nfs-server
+    app.kubernetes.io/component: nfs-server
+    app.kubernetes.io/part-of: lego-loco-cluster
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -26,10 +32,15 @@ spec:
   selector:
     matchLabels:
       app: nfs-server
+      app.kubernetes.io/component: nfs-server
+      app.kubernetes.io/part-of: lego-loco-cluster
   template:
     metadata:
       labels:
         app: nfs-server
+        app.kubernetes.io/component: nfs-server
+        app.kubernetes.io/part-of: lego-loco-cluster
+        app.kubernetes.io/name: lego-loco-nfs
     spec:
       # Init container to create required directories
       initContainers:

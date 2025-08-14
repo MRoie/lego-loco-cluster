@@ -3,6 +3,10 @@ kind: PersistentVolumeClaim
 metadata:
   name: {{ .Values.emulator.diskPVC }}
   namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-storage
 spec:
   accessModes:
     - ReadWriteOnce

@@ -8,10 +8,15 @@ spec:
   selector:
     matchLabels:
       app: {{ include "loco.fullname" . }}-frontend
+      app.kubernetes.io/component: frontend
+      app.kubernetes.io/part-of: lego-loco-cluster
   template:
     metadata:
       labels:
         app: {{ include "loco.fullname" . }}-frontend
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/part-of: lego-loco-cluster
+        app.kubernetes.io/name: lego-loco-frontend
     spec:
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
