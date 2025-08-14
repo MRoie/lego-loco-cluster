@@ -328,8 +328,6 @@ class KubernetesDiscovery {
     try {
       // Dynamic import for ES module
       const k8s = await import('@kubernetes/client-node');
-      const watch = new k8s.Watch(this.kc);
-      
       const watch = new this.k8s.Watch(this.kc);
       
       // Ensure namespace is a valid string with extra validation, default to 'loco'
