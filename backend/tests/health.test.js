@@ -1,3 +1,22 @@
+/**
+ * Lego Loco Cluster - Backend Health Check Test Suite
+ * 
+ * This test suite validates the enhanced health monitoring endpoints for the 
+ * Lego Loco Cluster backend service. The Lego Loco Cluster runs multiple 
+ * Windows 98 emulator instances with Lego Loco game in Docker/Kubernetes 
+ * with WebRTC streaming.
+ * 
+ * Test Coverage:
+ * - /health endpoint: Basic health status and system information
+ * - /ready endpoint: Comprehensive dependency validation 
+ * - /metrics endpoint: Prometheus metrics format validation
+ * - Dependency validation: Config files, instance manager, quality monitor
+ * - Error scenarios: Unhealthy dependencies and failure states
+ * 
+ * The health endpoints support production-grade Kubernetes deployments
+ * with proper separation of liveness vs readiness concerns.
+ */
+
 const request = require('supertest');
 const express = require('express');
 const fs = require('fs');

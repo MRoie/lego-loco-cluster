@@ -280,22 +280,11 @@ app.get("/ready", async (req, res) => {
   res.status(statusCode).json(checks);
 });
 
-// Prometheus metrics endpoint
-app.get("/metrics", async (req, res) => {
-  try {
-    const metrics = await register.metrics();
-    res.set('Content-Type', register.contentType);
-    res.end(metrics);
-  } catch (e) {
-    logger.error("Failed to generate metrics:", e.message);
-    res.status(500).end('Error generating metrics');
-  }
-});
-
 /**
  * Prometheus metrics endpoint for monitoring and alerting
  * Exposes HTTP request metrics, connection counts, and Node.js runtime metrics
  * 
+ * @route GET /metrics
  * @returns {string} Prometheus format metrics
  */
 app.get("/metrics", async (req, res) => {
