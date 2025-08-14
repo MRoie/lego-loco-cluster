@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/runner/work/lego-loco-cluster/lego-loco-cluster/logs/.dfd5fabc33e2283a93c5000f3a350336b3651310-audit.json",
+    "files": [
+        {
+            "date": 1755061721441,
+            "name": "/home/runner/work/lego-loco-cluster/lego-loco-cluster/logs/application-2025-08-13.log",
+            "hash": "afc88510f3dccfcc6130933590d085a178595aedc2e4f61a738df7c86ef8ab78"
+        }
+    ],
+    "hashType": "sha256"
+}

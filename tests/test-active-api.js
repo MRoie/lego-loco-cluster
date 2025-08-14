@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 const http = require('http');
+const { createTestLogger } = require('../utils/logger');
+
+const logger = createTestLogger('test-active-api');
 
 function getActive(cb) {
   http.get('http://localhost:3001/api/active', (res) => {
@@ -20,20 +23,35 @@ function setActive(id, cb) {
 }
 
 getActive((err, orig) => {
-  if (err) return console.error('Failed to get active', err);
-  console.log('Current active:', orig);
+  if (err) {
+    logger.error('Failed to get active instances', { error: err.message });
+    return;
+  }
+  logger.info('Current active instances', { activeInstances: orig });
   const testId = 'instance-1';
   setActive(testId, () => {
     getActive((err2, ids) => {
-      if (err2) return console.error('Failed to read active after set', err2);
-      console.log('Updated active:', ids);
+      if (err2) {
+        logger.error('Failed to read active after set', { testId, error: err2.message });
+        return;
+      }
+      logger.info('Updated active instances', { activeInstances: ids });
       if (!Array.isArray(ids) || ids[0] !== testId) {
-        console.error('❌ Active ID mismatch');
+        logger.error('Active ID mismatch - test failed', { 
+          expected: testId, 
+          actual: ids[0],
+          fullIds: ids 
+        });
         process.exit(1);
       } else {
+        logger.info('Active API test passed successfully');
         // restore original
-        if (orig && orig[0] !== testId) setActive(orig[0], () => process.exit(0));
-        else process.exit(0);
+        if (orig && orig[0] !== testId) {
+          logger.debug('Restoring original active instance', { originalId: orig[0] });
+          setActive(orig[0], () => process.exit(0));
+        } else {
+          process.exit(0);
+        }
       }
     });
   });

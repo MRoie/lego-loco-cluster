@@ -1,7 +1,18 @@
 {
   "name": "lego-loco-cluster-root",
   "private": true,
+  "scripts": {
+    "test:playwright": "playwright test",
+    "test:playwright:ui": "playwright test --ui",
+    "test:vnc-capture": "node scripts/playwright-vnc-capture-test.js"
+  },
   "devDependencies": {
-    "ws": "^8.18.2"
+    "ws": "^8.18.2",
+    "@playwright/test": "^1.47.0",
+    "playwright": "^1.47.0"
+  },
+  "dependencies": {
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
   }
 }

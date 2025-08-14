@@ -3,12 +3,14 @@
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const { createTestLogger } = require('../utils/logger');
 
 // Simple VNC test for cluster connectivity
 class SimpleVNCTester {
     constructor() {
         this.results = [];
         this.screenshotDir = './vnc-screenshots';
+        this.logger = createTestLogger('test-vnc-simple');
         
         // Ensure screenshot directory exists
         if (!fs.existsSync(this.screenshotDir)) {
@@ -16,14 +18,13 @@ class SimpleVNCTester {
         }
     }
 
-    log(message) {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] ${message}`);
+    log(message, context = {}) {
+        this.logger.info(message, context);
     }
 
     async testVNCConnection(instanceName, port) {
         return new Promise((resolve) => {
-            this.log(`Testing VNC connection to ${instanceName} on port ${port}`);
+            this.log(`Testing VNC connection`, { instanceName, port });
             
             const ws = new WebSocket(`ws://localhost:${port}/proxy/vnc/${instanceName}/`);
             let handshakeStep = 0;
@@ -172,22 +173,24 @@ class SimpleVNCTester {
         fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
         
         // Print summary
-        console.log('\n=== VNC Simple Test Report ===');
-        console.log(`Total Tests: ${report.totalTests}`);
-        console.log(`Successful: ${report.successfulTests}`);
-        console.log(`Failed: ${report.failedTests}`);
-        console.log(`Report saved to: ${reportPath}`);
-        console.log('\nDetailed Results:');
+        this.logger.info('VNC Simple Test Report Generated', {
+          totalTests: report.totalTests,
+          successfulTests: report.successfulTests,
+          failedTests: report.failedTests,
+          reportPath
+        });
         
         this.results.forEach(result => {
-            const status = result.success ? '✅ SUCCESS' : '❌ FAILED';
-            console.log(`${status} ${result.instance} (port ${result.port}): ${result.error || 'Connected successfully'}`);
-            if (result.framebufferSize) {
-                console.log(`  Framebuffer: ${result.framebufferSize.width}x${result.framebufferSize.height}`);
-            }
-            if (result.screenshotPath) {
-                console.log(`  Screenshot: ${result.screenshotPath}`);
-            }
+          const logLevel = result.success ? 'info' : 'error';
+          const status = result.success ? 'SUCCESS' : 'FAILED';
+          this.logger[logLevel](`Test result for ${result.instance}`, {
+            instance: result.instance,
+            port: result.port,
+            status,
+            error: result.error || null,
+            framebufferSize: result.framebufferSize || null,
+            screenshotPath: result.screenshotPath || null
+          });
         });
         
         // Generate HTML report

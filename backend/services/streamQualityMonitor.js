@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocket } = require('ws');
 const http = require('http');
+const logger = require('../utils/logger');
 
 /**
  * Stream Quality Monitoring Service
@@ -30,7 +31,7 @@ class StreamQualityMonitor {
   start() {
     if (this.isRunning) return;
     
-    console.log('🔍 Starting Stream Quality Monitor with deep health probing');
+    logger.info("Starting Stream Quality Monitor with deep health probing");
     this.isRunning = true;
     
     // Regular connectivity probes
@@ -54,7 +55,7 @@ class StreamQualityMonitor {
   stop() {
     if (!this.isRunning) return;
     
-    console.log('🛑 Stopping Stream Quality Monitor');
+    logger.info("Stopping Stream Quality Monitor");
     this.isRunning = false;
     
     if (this.probeTimer) {
@@ -85,7 +86,7 @@ class StreamQualityMonitor {
       const instances = await this.loadInstances();
       const probePromises = instances.map(instance => 
         this.deepProbeInstance(instance).catch(err => {
-          console.error(`Deep probe failed for ${instance.id}:`, err.message);
+          logger.error("Deep probe failed for instance", { instanceId: instance.id, error: err.message });
           return null;
         })
       );
@@ -110,7 +111,7 @@ class StreamQualityMonitor {
       });
       
     } catch (error) {
-      console.error('Failed to deep probe instances:', error.message);
+      logger.error("Failed to deep probe instances", { error: error.message });
     }
   }
   async probeAllInstances() {
@@ -118,7 +119,7 @@ class StreamQualityMonitor {
       const instances = await this.loadInstances();
       const probePromises = instances.map(instance => 
         this.probeInstance(instance).catch(err => {
-          console.error(`Probe failed for ${instance.id}:`, err.message);
+          logger.error("Probe failed for instance", { instanceId: instance.id, error: err.message });
           return this.createErrorMetrics(instance.id, err.message);
         })
       );
@@ -133,7 +134,7 @@ class StreamQualityMonitor {
       });
       
     } catch (error) {
-      console.error('Failed to probe instances:', error.message);
+      logger.error("Failed to probe instances", { error: error.message });
     }
   }
 
@@ -213,7 +214,7 @@ class StreamQualityMonitor {
    * Deep probe a single instance for comprehensive QEMU health
    */
   async deepProbeInstance(instance) {
-    console.log(`🔬 Deep probing instance ${instance.id}`);
+    logger.debug("Deep probing instance", { instanceId: instance.id });
     
     const deepMetrics = {
       instanceId: instance.id,
@@ -242,7 +243,7 @@ class StreamQualityMonitor {
         deepMetrics.failureType = failureAnalysis.type;
         deepMetrics.recoveryNeeded = failureAnalysis.recoveryNeeded;
         
-        console.log(`📊 Deep health for ${instance.id}: ${healthData.overall_status}, failure type: ${failureAnalysis.type}`);
+        logger.info("Deep health analysis completed", { instanceId: instance.id, overallStatus: healthData.overall_status, failureType: failureAnalysis.type });
       } else {
         deepMetrics.errors.push('Unable to retrieve QEMU health data');
         deepMetrics.failureType = 'qemu';
@@ -278,19 +279,19 @@ class StreamQualityMonitor {
             const healthData = JSON.parse(data);
             resolve(healthData);
           } catch (error) {
-            console.error(`Failed to parse health data for ${instance.id}:`, error.message);
+            logger.error("Failed to parse health data for instance", { instanceId: instance.id, error: error.message });
             resolve(null);
           }
         });
       });
       
       req.on('error', (error) => {
-        console.error(`Health endpoint request failed for ${instance.id}:`, error.message);
+        logger.error("Health endpoint request failed for instance", { instanceId: instance.id, error: error.message });
         resolve(null);
       });
       
       req.on('timeout', () => {
-        console.error(`Health endpoint timeout for ${instance.id}`);
+        logger.error("Health endpoint timeout for instance", { instanceId: instance.id });
         req.destroy();
         resolve(null);
       });
@@ -387,11 +388,11 @@ class StreamQualityMonitor {
 
     const attempts = this.recoveryAttempts.get(instanceId) || 0;
     if (attempts >= this.maxRecoveryAttempts) {
-      console.warn(`⚠️ Max recovery attempts reached for ${instanceId}`);
+      logger.warn("Max recovery attempts reached for instance", { instanceId });
       return;
     }
 
-    console.log(`🔧 Triggering recovery for ${instanceId}, attempt ${attempts + 1}, failure type: ${metrics.failureType}`);
+    logger.info("Triggering recovery for instance", { instanceId, attempt: attempts + 1, failureType: metrics.failureType });
     
     this.recoveryAttempts.set(instanceId, attempts + 1);
 
@@ -399,13 +400,13 @@ class StreamQualityMonitor {
       const recoverySuccess = await this.executeRecoveryStrategy(instanceId, metrics.failureType);
       
       if (recoverySuccess) {
-        console.log(`✅ Recovery successful for ${instanceId}`);
+        logger.info("Recovery successful for instance", { instanceId });
         this.recoveryAttempts.delete(instanceId);
       } else {
-        console.error(`❌ Recovery failed for ${instanceId}`);
+        logger.error("Recovery failed for instance", { instanceId });
       }
     } catch (error) {
-      console.error(`Recovery error for ${instanceId}:`, error.message);
+      logger.error("Recovery error for instance", { instanceId, error: error.message });
     }
   }
 
@@ -413,7 +414,7 @@ class StreamQualityMonitor {
    * Execute recovery strategy based on failure type
    */
   async executeRecoveryStrategy(instanceId, failureType) {
-    console.log(`🚑 Executing ${failureType} recovery for ${instanceId}`);
+    logger.info("Executing recovery strategy", { failureType, instanceId });
     
     switch (failureType) {
       case 'network':
@@ -433,11 +434,11 @@ class StreamQualityMonitor {
       case 'client':
         // Client-side issues are harder to recover from the backend
         // For now, we'll just mark them for manual intervention
-        console.log(`📝 Client-side issues detected for ${instanceId}, manual intervention may be required`);
+        logger.info("Client-side issues detected, manual intervention may be required", { instanceId });
         return false;
       
       default:
-        console.warn(`Unknown failure type: ${failureType}`);
+        logger.warn("Unknown failure type", { failureType });
         return false;
     }
   }
@@ -452,7 +453,7 @@ class StreamQualityMonitor {
     // 2. Reset bridge/TAP configuration
     // 3. Check host networking
     
-    console.log(`🌐 Attempting network recovery for ${instanceId}`);
+    logger.info("Attempting network recovery for instance", { instanceId });
     
     // Simulate recovery attempt
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -472,7 +473,7 @@ class StreamQualityMonitor {
     // 3. Reset virtual machine state
     // 4. Restart the entire container pod
     
-    console.log(`🖥️  Attempting QEMU recovery for ${instanceId}`);
+    logger.info("Attempting QEMU recovery for instance", { instanceId });
     
     // Simulate recovery attempt
     await new Promise(resolve => setTimeout(resolve, 3000));
@@ -774,7 +775,7 @@ class StreamQualityMonitor {
       try {
         return await this.instanceManager.getInstances();
       } catch (error) {
-        console.error('Failed to load instances from InstanceManager:', error.message);
+        logger.error("Failed to load instances from InstanceManager", { error: error.message });
         return [];
       }
     }
@@ -785,7 +786,7 @@ class StreamQualityMonitor {
       const data = fs.readFileSync(configPath, 'utf-8');
       return JSON.parse(data);
     } catch (error) {
-      console.error('Failed to load instances config:', error.message);
+      logger.error("Failed to load instances config", { error: error.message });
       return [];
     }
   }
