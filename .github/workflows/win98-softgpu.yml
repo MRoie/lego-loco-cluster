@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/win98-softgpu
+  IMAGE_NAME: mroie/lego-loco-cluster/win98-softgpu
 
 jobs:
   build:
