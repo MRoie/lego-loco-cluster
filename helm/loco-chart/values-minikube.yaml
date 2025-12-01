@@ -102,6 +102,11 @@ backend:
   env:
     ALLOW_EMPTY_DISCOVERY: "true"
     NODE_ENV: "development"
+  # Service discovery configuration
+  discoveryMode: "kubernetes-endpoints"  # Options: kubernetes-endpoints, kubernetes-pods
+  serviceDiscovery:
+    serviceName: "loco-loco-emulator"
+    healthCheckInterval: 30000  # ms
   resources:
     limits:
       memory: "1Gi"

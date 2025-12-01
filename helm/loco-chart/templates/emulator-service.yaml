@@ -9,6 +9,7 @@ metadata:
     app.kubernetes.io/name: lego-loco-emulator
 spec:
   clusterIP: None
+  publishNotReadyAddresses: false  # Only include ready pods in endpoints
   selector:
     app: {{ include "loco.fullname" . }}-emulator
     app.kubernetes.io/component: emulator
