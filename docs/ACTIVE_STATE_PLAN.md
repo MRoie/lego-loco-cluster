@@ -40,14 +40,14 @@ and Kubernetes cluster always agree which containers are active.
   at full volume. Up to nine instances are supported with per-tile volume
   controls.
 
-## Future Work
-The tasks below should be completed after the current milestones:
- - Implement the backend focus API and WebSocket notifications. **(done)**
- - Apply front‑end state management to react to focus changes. **(done)**
- - Add command line utilities for cluster operators to change the active instance. See `scripts/set_active.sh`. **(done)**
- - Create regression tests covering focus switching and resource scaling. **(added)**
- - Update Helm values and Docker Compose files with CPU limit examples. **(added)** Helm `values.yaml` now exposes `emulator.resources` so deployments can set CPU requests and limits.
- - Expand documentation to include a walkthrough of the active container system. **(added)**
+## Completed Work
+The following tasks have been completed:
+ - [x] Implement the backend focus API and WebSocket notifications.
+ - [x] Apply front‑end state management to react to focus changes.
+ - [x] Add command line utilities for cluster operators to change the active instance. See `scripts/set_active.sh`.
+ - [x] Create regression tests covering focus switching and resource scaling.
+ - [x] Update Helm values and Docker Compose files with CPU limit examples. Helm `values.yaml` now exposes `emulator.resources` so deployments can set CPU requests and limits.
+ - [x] Expand documentation to include a walkthrough of the active container system.
 
 ## API Usage
 The backend exposes `/api/active` for getting and setting the focused instance. A WebSocket at `/active` broadcasts updates. Use `scripts/set_active.sh` to change focus from the command line.

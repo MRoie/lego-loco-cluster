@@ -49,9 +49,16 @@ Revolutionary instance management:
 - `scripts/` – helper utilities
 - `tests/` – assorted test configs
 - `docs/` – documentation
-- `docs/LOGGING.md` – comprehensive logging system guide
-- `docs/REPOSITORY_SUMMARY.md` – overview of the project
-- `docs/FUTURE_TASKS.md` – remaining high level goals
+
+## Documentation
+
+We have comprehensive documentation to help you understand and contribute to the project:
+
+- **[Architecture Overview](docs/ARCHITECTURE.md)**: Detailed explanation of the system design, components, and data flows.
+- **[Contributors Guide](docs/CONTRIBUTING.md)**: Instructions for setting up the dev environment and contributing code (for both humans and agents).
+- **[Logging Guide](docs/LOGGING.md)**: Comprehensive guide to the logging system.
+- **[Monitoring Guide](docs/MONITORING.md)**: Details on the health monitoring and metrics system.
+- **[Future Tasks](docs/FUTURE_TASKS.md)**: High-level roadmap and remaining goals.
 
 ## Quick Setup
 Install system packages and Node dependencies:

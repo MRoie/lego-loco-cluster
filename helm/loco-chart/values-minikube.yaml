@@ -82,14 +82,13 @@ emulator:
   resources:
     limits:
       cpu: "1"
+      memory: "1.5Gi"
     requests:
       cpu: "0.25"
+      memory: "512Mi"
   
   # Additional environment variables
   env:
-    USE_PREBUILT_SNAPSHOT: "true"
-    SNAPSHOT_REGISTRY: "ghcr.io/mroie/qemu-snapshots"
-    SNAPSHOT_TAG: "win98-base"
     BRIDGE: "loco-br"
     TAP_IF: "tap0"
     DISK: "/images/win98.qcow2"
@@ -100,6 +99,16 @@ backend:
   tag: latest
   imagePullPolicy: Never
   servicePort: 3001
+  env:
+    ALLOW_EMPTY_DISCOVERY: "true"
+    NODE_ENV: "development"
+  resources:
+    limits:
+      memory: "1Gi"
+      cpu: "1"
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
 
 frontend:
   image: compose-frontend

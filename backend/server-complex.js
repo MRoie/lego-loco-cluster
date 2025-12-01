@@ -6,7 +6,7 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
-const logger = require("../utils/logger");
+const logger = require("./utils/logger");
 
 const app = express();
 const server = http.createServer(app);
@@ -20,8 +20,8 @@ const server = http.createServer(app);
  */
 app.get("/health", (req, res) => {
   // Basic health response for complex server (without full dependencies)
-  res.json({ 
-    status: "ok", 
+  res.json({
+    status: "ok",
     timestamp: new Date().toISOString(),
     server_type: "complex",
     uptime: process.uptime(),
@@ -43,15 +43,15 @@ app.use(express.static(path.join(__dirname, "../frontend/dist")));
 function loadConfig(name) {
   const file = path.join(FINAL_CONFIG_DIR, `${name}.json`);
   logger.info(`Loading config from: ${file}`);
-  
+
   if (!fs.existsSync(file)) {
     logger.error(`Config file not found: ${file}`);
     throw new Error(`Config file not found: ${file}`);
   }
-  
+
   let data = fs.readFileSync(file, "utf-8");
   logger.info(`Raw config data for ${name}:`, data.substring(0, 200));
-  
+
   // Allow simple // comments in JSON files
   data = data.replace(/^\s*\/\/.*$/gm, "");
   return JSON.parse(data);
@@ -109,12 +109,12 @@ function getInstanceTarget(id) {
 app.all("/proxy/vnc/:id/*", (req, res) => {
   const instanceId = req.params.id;
   const target = getInstanceTarget(instanceId);
-  
+
   if (!target) {
     logger.error(`VNC proxy: Unknown instance ${instanceId}`);
     return res.status(404).send("Unknown instance");
   }
-  
+
   logger.info(`VNC HTTP proxy: ${instanceId} -> ${target}`);
   proxy.web(req, res, { target }, (err) => {
     logger.error(`VNC proxy error for ${instanceId}:`, err.message);
@@ -125,16 +125,16 @@ app.all("/proxy/vnc/:id/*", (req, res) => {
 // Handle WebSocket upgrades for VNC connections
 server.on("upgrade", (req, socket, head) => {
   logger.info(`WebSocket upgrade request: ${req.url}`);
-  
+
   // Match VNC proxy URLs
   const vncMatch = req.url.match(/^\/proxy\/vnc\/([^\/]+)/);
   if (vncMatch) {
     const instanceId = vncMatch[1];
     const target = getInstanceTarget(instanceId);
-    
+
     if (target) {
       logger.info(`VNC WebSocket proxy: ${instanceId} -> ${target}`);
-      
+
       // Use the dedicated VNC WebSocket server
       vncWss.handleUpgrade(req, socket, head, (ws) => {
         createVNCBridge(ws, target, instanceId);
@@ -145,7 +145,7 @@ server.on("upgrade", (req, socket, head) => {
     }
     return;
   }
-  
+
   // Handle signaling WebSocket upgrades
   if (req.url.startsWith('/signal')) {
     wss.handleUpgrade(req, socket, head, (ws) => {
@@ -153,7 +153,7 @@ server.on("upgrade", (req, socket, head) => {
     });
     return;
   }
-  
+
   // Handle other WebSocket upgrades
   logger.info("Unknown WebSocket upgrade, ignoring");
   socket.destroy();
@@ -162,31 +162,31 @@ server.on("upgrade", (req, socket, head) => {
 // VNC WebSocket-to-TCP Bridge
 function createVNCBridge(ws, targetUrl, instanceId) {
   logger.info(`Creating VNC bridge for ${instanceId} to ${targetUrl}`);
-  
+
   // Parse the target URL to get host and port
   const parsed = url.parse(targetUrl);
   const host = parsed.hostname;
   const port = parseInt(parsed.port) || 5901;
-  
+
   logger.info(`Connecting to VNC server at ${host}:${port}`);
-  
+
   // Create TCP connection to VNC server
   const tcpSocket = net.createConnection(port, host);
-  
+
   tcpSocket.on('connect', () => {
     logger.info(`VNC bridge connected to ${host}:${port}`);
   });
-  
+
   tcpSocket.on('error', (err) => {
     logger.error(`VNC TCP socket error for ${instanceId}:`, err.message);
     ws.close();
   });
-  
+
   tcpSocket.on('close', () => {
     logger.info(`VNC TCP socket closed for ${instanceId}`);
     ws.close();
   });
-  
+
   // Forward data from WebSocket to TCP socket
   ws.on('message', (data) => {
     try {
@@ -197,7 +197,7 @@ function createVNCBridge(ws, targetUrl, instanceId) {
       logger.error(`Error forwarding WebSocket to TCP for ${instanceId}:`, err.message);
     }
   });
-  
+
   // Forward data from TCP socket to WebSocket
   tcpSocket.on('data', (data) => {
     try {
@@ -208,13 +208,13 @@ function createVNCBridge(ws, targetUrl, instanceId) {
       logger.error(`Error forwarding TCP to WebSocket for ${instanceId}:`, err.message);
     }
   });
-  
+
   // Handle WebSocket close
   ws.on('close', () => {
     logger.info(`WebSocket closed for VNC bridge ${instanceId}`);
     tcpSocket.destroy();
   });
-  
+
   // Handle WebSocket errors
   ws.on('error', (err) => {
     logger.error(`WebSocket error for VNC bridge ${instanceId}:`, err.message);

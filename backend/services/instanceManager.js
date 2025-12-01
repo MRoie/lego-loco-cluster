@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const logger = require('../../utils/logger');
+const logger = require('../utils/logger');
 const KubernetesDiscovery = require('./kubernetesDiscovery');
 
 class InstanceManager {
@@ -11,7 +11,7 @@ class InstanceManager {
     this.lastDiscoveryTime = null;
     this.discoveryInterval = 30000; // 30 seconds
     this.initialized = false;
-    
+
     // Initialize async
     this.initializeAsync();
   }
@@ -20,16 +20,16 @@ class InstanceManager {
     // Wait a bit for KubernetesDiscovery to initialize
     let retries = 0;
     const maxRetries = 10;
-    
+
     while (!this.k8sDiscovery.isAvailable() && retries < maxRetries) {
       logger.info("Waiting for Kubernetes discovery to initialize", { attempt: retries + 1, maxRetries });
       await new Promise(resolve => setTimeout(resolve, 1000));
       retries++;
     }
-    
+
     if (!this.k8sDiscovery.isAvailable()) {
       logger.error('Kubernetes discovery not available. Static configuration is disabled. Backend requires Kubernetes environment.');
-      
+
       // Set initialized to true in test/CI environments to allow e2e tests with empty instance list
       if (process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') {
         logger.warn("Test/CI environment detected - initializing with empty instances for e2e testing");
@@ -51,7 +51,7 @@ class InstanceManager {
     } catch (error) {
       logger.error("Kubernetes connectivity test failed", { error: error.message });
       logger.error("Static configuration is disabled. Backend requires active Kubernetes cluster.");
-      
+
       // Set initialized to true in test/CI environments to allow e2e tests with empty instance list
       if (process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') {
         logger.warn("Test/CI environment detected - initializing with empty instances for e2e testing");
@@ -82,29 +82,29 @@ class InstanceManager {
     }
 
     const now = Date.now();
-    
+
     // Use cached instances if recent
-    if (this.cachedInstances && this.lastDiscoveryTime && 
-        (now - this.lastDiscoveryTime) < this.discoveryInterval) {
+    if (this.cachedInstances && this.lastDiscoveryTime &&
+      (now - this.lastDiscoveryTime) < this.discoveryInterval) {
       return this.cachedInstances;
     }
-    
+
     try {
       const discoveredInstances = await this.k8sDiscovery.discoverEmulatorInstances();
-      
+
       this.cachedInstances = discoveredInstances;
       this.lastDiscoveryTime = now;
-      
+
       if (discoveredInstances.length === 0) {
         logger.warn("No emulator instances discovered from Kubernetes cluster. Ensure pods are running with proper labels: app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster");
       } else {
         logger.info("Auto-discovered instances from Kubernetes", { count: discoveredInstances.length });
       }
-      
+
       return discoveredInstances;
     } catch (error) {
       logger.error("Kubernetes discovery failed", { error: error.message });
-      
+
       // In CI/test environments, return empty array instead of throwing
       if (process.env.NODE_ENV === 'test' || process.env.CI || process.env.ALLOW_EMPTY_DISCOVERY === 'true') {
         logger.warn("CI/test environment: returning empty instances list due to discovery failure");
@@ -112,7 +112,7 @@ class InstanceManager {
         this.lastDiscoveryTime = now;
         return [];
       }
-      
+
       throw new Error(`Kubernetes discovery failed: ${error.message}. Static configuration is disabled.`);
     }
   }
@@ -136,7 +136,7 @@ class InstanceManager {
 
     try {
       const services = await this.k8sDiscovery.getServicesInfo();
-      
+
       return {
         namespace: this.k8sDiscovery.getNamespace(),
         services: services,
@@ -169,12 +169,12 @@ class InstanceManager {
 
   startBackgroundDiscovery() {
     logger.info("Starting background instance discovery...");
-    
+
     // Initial discovery - only if properly initialized
     if (this.initialized) {
       this.getInstances().catch(error => logger.error("Initial background discovery failed", { error: error.message }));
     }
-    
+
     // Set up periodic discovery
     this.discoveryTimer = setInterval(async () => {
       try {
@@ -198,7 +198,7 @@ class InstanceManager {
       clearInterval(this.discoveryTimer);
       this.discoveryTimer = null;
     }
-    
+
     if (this.watchHandle) {
       try {
         this.watchHandle.abort();

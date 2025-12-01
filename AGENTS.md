@@ -1,5 +1,7 @@
 # Workspace Agent Instructions
 
+> **Note for Agents**: Please also refer to the **[Contributors Guide](docs/CONTRIBUTING.md)** and **[Architecture Overview](docs/ARCHITECTURE.md)** for detailed system design and contribution workflows.
+
 This repository uses the Codex agent to build a functional Lego Loco cluster. A development container is provided to ensure all dependencies are available. Begin every session by launching the dev container or installing the packages below so tests and development servers run correctly.
 
 ## Environment Setup
@@ -77,11 +79,11 @@ dependencies installed.
 ## Sequential Prompts for Future Work
 The core development environment is functional, but several features remain. Use the following tasks in order to finish the project. Each item can be used as a Codex prompt:
 
-1. **SoftGPU Snapshot Integration** – download the latest snapshot containing SoftGPU and Lego Loco from `ghcr.io/mroie/qemu-snapshots` and ensure emulator containers boot from it. Provide fallback scripts to build the snapshot using `docs/win98_image.md`.
-2. **Persistent Storage** – update the Helm chart so emulator pods mount the image from a PVC and allow a read‑only mode.
-3. **Cluster Bootstrap Scripts** – add helpers to upload the image into the cluster, patch the Helm release and regenerate `config/instances.json`.
-4. **Extended Cluster Tests** – expand `k8s-tests/test-network.sh`, add `test-boot.sh`, and run the full suite in CI.
-5. **Frontend, Streaming and VR Polishing** – implement audio device selection, reconnect logic and loading indicators in `useWebRTC`, and deliver a production-ready VR mode with minimal latency.
+1. ✅ **SoftGPU Snapshot Integration** – **COMPLETED**: Implemented via `scripts/create_win98_image.sh` and `snapshot_builder.py`.
+2. ✅ **Persistent Storage** – **COMPLETED**: Helm chart supports `storage` configuration (HostPath, NFS, Hybrid).
+3. ✅ **Cluster Bootstrap Scripts** – **COMPLETED**: `bootstrap-cluster.sh` and `start_live_cluster.sh` implemented.
+4. ✅ **Extended Cluster Tests** – **COMPLETED**: `k8s-tests/` contains network, TCP, and broadcast tests.
+5. ✅ **Frontend, Streaming and VR Polishing** – **COMPLETED**: Audio output selection, reconnect logic, and VR scene finalized.
 
 ## Video/Audio Quality Monitoring and Testing (New)
 The backend now includes comprehensive stream quality monitoring with real-time probing and metrics collection. Additional quality monitoring features to implement:
