@@ -26,7 +26,7 @@ const { WebSocketServer } = require("ws");
 const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
-const logger = require("../utils/logger");
+const logger = require("./utils/logger");
 const client = require('prom-client');
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
@@ -63,16 +63,16 @@ register.registerMetric(activeConnections);
 // Middleware to track HTTP request duration
 app.use((req, res, next) => {
   const start = Date.now();
-  
+
   res.on('finish', () => {
     const duration = (Date.now() - start) / 1000;
     const route = req.route ? req.route.path : req.path;
-    
+
     httpRequestDuration
       .labels(req.method, route, res.statusCode.toString())
       .observe(duration);
   });
-  
+
   next();
 });
 
@@ -81,7 +81,7 @@ let activeHttpConnections = 0;
 server.on('connection', (socket) => {
   activeHttpConnections++;
   activeConnections.labels('http').set(activeHttpConnections);
-  
+
   let connectionClosed = false;
   const cleanupConnection = () => {
     if (!connectionClosed) {
@@ -90,7 +90,7 @@ server.on('connection', (socket) => {
       activeConnections.labels('http').set(activeHttpConnections);
     }
   };
-  
+
   socket.on('close', cleanupConnection);
   socket.on('error', cleanupConnection);
 });
@@ -122,11 +122,11 @@ app.use(express.json());
  * @returns {Object} Detailed health status including system metrics, service states, and configuration info
  */
 app.get("/health", (req, res) => {
-  logger.info("Health check requested", { 
+  logger.info("Health check requested", {
     userAgent: req.get('User-Agent'),
-    remoteAddress: req.ip || req.connection.remoteAddress 
+    remoteAddress: req.ip || req.connection.remoteAddress
   });
-  
+
   const healthData = {
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -147,7 +147,7 @@ app.get("/health", (req, res) => {
       quality_monitor: qualityMonitor ? "initialized" : "not_initialized"
     }
   };
-  
+
   res.json(healthData);
 });
 
@@ -160,19 +160,19 @@ app.get("/health", (req, res) => {
  * @status 503 - Service is not ready, one or more dependencies failed
  */
 app.get("/ready", async (req, res) => {
-  logger.info("Readiness check requested", { 
+  logger.info("Readiness check requested", {
     userAgent: req.get('User-Agent'),
-    remoteAddress: req.ip || req.connection.remoteAddress 
+    remoteAddress: req.ip || req.connection.remoteAddress
   });
-  
+
   const checks = {
     timestamp: new Date().toISOString(),
     overall_status: "unknown",
     checks: {}
   };
-  
+
   let allHealthy = true;
-  
+
   try {
     // Check instance manager initialization
     checks.checks.instance_manager = {
@@ -182,7 +182,7 @@ app.get("/ready", async (req, res) => {
     if (!instanceManager || !instanceManager.initialized) {
       allHealthy = false;
     }
-    
+
     // Check config directory accessibility
     try {
       const configExists = fs.existsSync(FINAL_CONFIG_DIR);
@@ -202,7 +202,7 @@ app.get("/ready", async (req, res) => {
       };
       allHealthy = false;
     }
-    
+
     // Check essential config files
     const essentialConfigs = ["instances.json", "status.json"];
     checks.checks.config_files = {
@@ -210,7 +210,7 @@ app.get("/ready", async (req, res) => {
       message: "All essential config files accessible",
       files: {}
     };
-    
+
     for (const configFile of essentialConfigs) {
       const configPath = path.join(FINAL_CONFIG_DIR, configFile);
       const exists = fs.existsSync(configPath);
@@ -224,7 +224,7 @@ app.get("/ready", async (req, res) => {
         allHealthy = false;
       }
     }
-    
+
     // Check quality monitor
     checks.checks.quality_monitor = {
       status: qualityMonitor ? "healthy" : "unhealthy",
@@ -233,7 +233,7 @@ app.get("/ready", async (req, res) => {
     if (!qualityMonitor) {
       allHealthy = false;
     }
-    
+
     // Check if we can retrieve instances (tests the full dependency chain)
     try {
       const instances = await instanceManager.getInstances();
@@ -249,7 +249,7 @@ app.get("/ready", async (req, res) => {
       };
       allHealthy = false;
     }
-    
+
     // Memory check - warn if using more than 512MB
     const memoryUsage = process.memoryUsage().heapUsed / 1024 / 1024;
     checks.checks.memory = {
@@ -258,7 +258,7 @@ app.get("/ready", async (req, res) => {
       usage_mb: Math.round(memoryUsage),
       threshold_mb: 512
     };
-    
+
   } catch (error) {
     logger.error("Readiness check error:", error);
     allHealthy = false;
@@ -267,16 +267,16 @@ app.get("/ready", async (req, res) => {
       message: `Readiness check failed: ${error.message}`
     };
   }
-  
+
   checks.overall_status = allHealthy ? "ready" : "not_ready";
-  
+
   // Return 503 Service Unavailable if not ready, 200 if ready
   const statusCode = allHealthy ? 200 : 503;
-  
+
   if (!allHealthy) {
     logger.warn("Service not ready", { checks: checks.checks });
   }
-  
+
   res.status(statusCode).json(checks);
 });
 
@@ -311,15 +311,15 @@ app.use(express.static(path.join(__dirname, "../frontend/dist")));
 function loadConfig(name) {
   const file = path.join(FINAL_CONFIG_DIR, `${name}.json`);
   logger.info("Loading config from file", { file });
-  
+
   if (!fs.existsSync(file)) {
     logger.error("Config file not found", { file });
     throw new Error(`Config file not found: ${file}`);
   }
-  
+
   let data = fs.readFileSync(file, "utf-8");
   logger.debug("Raw config data loaded", { name, preview: data.substring(0, 200) });
-  
+
   // Allow simple // comments in JSON files
   data = data.replace(/^\s*\/\/.*$/gm, "");
   return JSON.parse(data);
@@ -367,10 +367,10 @@ app.get("/api/instances", async (req, res) => {
     logger.debug("Instances response prepared", { instanceCount: instances.length });
     res.json(instances);
   } catch (e) {
-    logger.error("Instances config error", { 
-      error: e.message, 
+    logger.error("Instances config error", {
+      error: e.message,
       stack: e.stack,
-      requestUrl: req.url 
+      requestUrl: req.url
     });
     res.status(503).json([]);
   }
@@ -393,10 +393,10 @@ app.get("/api/instances/provisioned", async (req, res) => {
     logger.debug("Provisioned instances response prepared", { instanceCount: provisionedInstances.length });
     res.json(provisionedInstances);
   } catch (e) {
-    logger.error("Provisioned instances error", { 
-      error: e.message, 
+    logger.error("Provisioned instances error", {
+      error: e.message,
       stack: e.stack,
-      requestUrl: req.url 
+      requestUrl: req.url
     });
     res.status(503).json([]);
   }
@@ -417,24 +417,24 @@ app.get("/api/instances/discovery-info", async (req, res) => {
     });
     const k8sInfo = await instanceManager.getKubernetesInfo();
     const isUsingK8sDiscovery = instanceManager.isUsingKubernetesDiscovery();
-    
+
     const response = {
       kubernetesDiscovery: k8sInfo,
       usingAutoDiscovery: isUsingK8sDiscovery,
       fallbackToStatic: !isUsingK8sDiscovery
     };
-    
+
     logger.debug("Discovery info response prepared", {
       usingAutoDiscovery: isUsingK8sDiscovery,
       kubernetesAvailable: !!k8sInfo
     });
-    
+
     res.json(response);
   } catch (e) {
-    logger.error("Discovery info error", { 
-      error: e.message, 
+    logger.error("Discovery info error", {
+      error: e.message,
       stack: e.stack,
-      requestUrl: req.url 
+      requestUrl: req.url
     });
     res.status(500).json({ error: "Failed to get discovery info" });
   }
@@ -455,10 +455,10 @@ app.post("/api/instances/refresh", async (req, res) => {
       instances: instances
     });
   } catch (e) {
-    logger.error("Discovery refresh error", { 
-      error: e.message, 
+    logger.error("Discovery refresh error", {
+      error: e.message,
       stack: e.stack,
-      requestUrl: req.url 
+      requestUrl: req.url
     });
     res.status(500).json({ error: "Failed to refresh discovery" });
   }
@@ -495,11 +495,11 @@ app.get("/api/quality/metrics/:instanceId", (req, res) => {
   try {
     const { instanceId } = req.params;
     const metrics = qualityMonitor.getInstanceMetrics(instanceId);
-    
+
     if (!metrics) {
       return res.status(404).json({ error: "Instance not found or not monitored" });
     }
-    
+
     res.json(metrics);
   } catch (e) {
     logger.error("Failed to get quality metrics for instance", { instanceId: req.params.instanceId, error: e.message });
@@ -529,7 +529,7 @@ app.get("/api/quality/deep-health", (req, res) => {
   try {
     const metrics = qualityMonitor.getAllMetrics();
     const deepHealthData = {};
-    
+
     for (const [instanceId, data] of Object.entries(metrics)) {
       if (data.deepHealth) {
         deepHealthData[instanceId] = {
@@ -543,7 +543,7 @@ app.get("/api/quality/deep-health", (req, res) => {
         };
       }
     }
-    
+
     res.json(deepHealthData);
   } catch (e) {
     logger.error("Failed to get deep health data", { error: e.message });
@@ -556,11 +556,11 @@ app.get("/api/quality/deep-health/:instanceId", (req, res) => {
   try {
     const instanceId = req.params.instanceId;
     const metrics = qualityMonitor.getInstanceMetrics(instanceId);
-    
+
     if (!metrics) {
       return res.status(404).json({ error: "Instance not found" });
     }
-    
+
     const deepHealthData = {
       instanceId,
       timestamp: metrics.timestamp,
@@ -570,7 +570,7 @@ app.get("/api/quality/deep-health/:instanceId", (req, res) => {
       recoveryNeeded: metrics.recoveryNeeded || false,
       errors: metrics.errors || []
     };
-    
+
     res.json(deepHealthData);
   } catch (e) {
     logger.error("Failed to get deep health data for instance", { instanceId: req.params.instanceId, error: e.message });
@@ -583,17 +583,17 @@ app.post("/api/quality/recover/:instanceId", (req, res) => {
   try {
     const instanceId = req.params.instanceId;
     const { forceRecovery = false } = req.body;
-    
+
     logger.info("Manual recovery triggered", { instanceId, forceRecovery });
-    
+
     // Get current metrics to determine failure type
     const metrics = qualityMonitor.getInstanceMetrics(instanceId);
     if (!metrics) {
       return res.status(404).json({ error: "Instance not found" });
     }
-    
+
     const failureType = metrics.failureType || 'mixed';
-    
+
     // Trigger recovery asynchronously
     qualityMonitor.executeRecoveryStrategy(instanceId, failureType)
       .then((success) => {
@@ -602,11 +602,11 @@ app.post("/api/quality/recover/:instanceId", (req, res) => {
       .catch((error) => {
         logger.error("Recovery error", { instanceId, error: error.message });
       });
-    
-    res.json({ 
-      message: `Recovery initiated for ${instanceId}`, 
+
+    res.json({
+      message: `Recovery initiated for ${instanceId}`,
       failureType,
-      forceRecovery 
+      forceRecovery
     });
   } catch (e) {
     logger.error("Failed to trigger recovery", { instanceId: req.params.instanceId, error: e.message });
@@ -618,7 +618,7 @@ app.post("/api/quality/recover/:instanceId", (req, res) => {
 app.get("/api/quality/recovery-status", (req, res) => {
   try {
     const recoveryStatus = {};
-    
+
     // Get recovery attempts for all instances
     for (const [instanceId, attempts] of qualityMonitor.recoveryAttempts || []) {
       recoveryStatus[instanceId] = {
@@ -627,7 +627,7 @@ app.get("/api/quality/recovery-status", (req, res) => {
         canRecover: attempts < qualityMonitor.maxRecoveryAttempts
       };
     }
-    
+
     res.json(recoveryStatus);
   } catch (e) {
     logger.error("Failed to get recovery status", { error: e.message });
@@ -639,7 +639,7 @@ app.get("/api/quality/recovery-status", (req, res) => {
 app.post("/api/quality/monitor/:action", (req, res) => {
   try {
     const { action } = req.params;
-    
+
     if (action === 'start') {
       qualityMonitor.start();
       res.json({ status: 'started', message: 'Quality monitoring started' });
@@ -718,7 +718,7 @@ async function getInstanceTarget(id) {
     if (!inst) {
       throw new Error(`Instance ${id} not found`);
     }
-    
+
     logger.debug("Found instance target", { instanceId: id, vncUrl: inst.vncUrl });
     // Use vncUrl for direct VNC connection instead of streamUrl (which is for noVNC web interface)
     return inst.vncUrl;
@@ -739,7 +739,7 @@ async function getInstanceTarget(id) {
  */
 function createVNCBridge(ws, targetUrl, instanceId) {
   logger.info("Creating VNC bridge", { instanceId, targetUrl });
-  
+
   // Parse the target URL to get host and port
   // targetUrl format is "localhost:5901" or "host:port"
   let host, port;
@@ -754,113 +754,113 @@ function createVNCBridge(ws, targetUrl, instanceId) {
     host = parts[0] || 'localhost';
     port = parseInt(parts[1]) || 5901;
   }
-  
+
   logger.info("Connecting to VNC server", { instanceId, host, port });
-  
+
   // Connection state tracking
   let vncConnectionEstablished = false;
   let connectionClosed = false;
-  
+
   // Connection cleanup function
   const cleanupConnection = (reason = 'unknown') => {
     if (!connectionClosed) {
       connectionClosed = true;
       console.log(`VNC connection cleanup for ${instanceId} (reason: ${reason})`);
-      
+
       // Only decrement if connection was actually established
       if (vncConnectionEstablished) {
         activeVncConnections--;
         console.log(`VNC connections count decremented to ${activeVncConnections} for ${instanceId}`);
       }
-      
+
       // Update metrics
       activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
-      
+
       // Clean up TCP socket
       if (tcpSocket && !tcpSocket.destroyed) {
         tcpSocket.destroy();
       }
-      
+
       // Clean up WebSocket
       if (ws.readyState === ws.OPEN) {
         ws.close();
       }
     }
   };
-  
+
   // Create TCP connection to VNC server
   const tcpSocket = net.createConnection(port, host);
-  
+
   // TCP connection timeout (10 seconds)
   const connectionTimeout = setTimeout(() => {
     console.error(`VNC TCP connection timeout for ${instanceId} after 10 seconds`);
     cleanupConnection('tcp_timeout');
   }, 10000);
-  
+
   tcpSocket.on('connect', () => {
     logger.info("VNC bridge connected successfully", { instanceId, host, port });
   });
-  
+
   tcpSocket.on('error', (err) => {
-    logger.error("VNC TCP socket error", { 
-      instanceId, 
-      error: err.message, 
+    logger.error("VNC TCP socket error", {
+      instanceId,
+      error: err.message,
       code: err.code,
-      host, 
+      host,
       port,
-      stack: err.stack 
+      stack: err.stack
     });
     if (ws.readyState === ws.OPEN) {
       ws.close(1000, 'TCP connection error');
     }
   });
-  
+
   tcpSocket.on('close', () => {
     logger.info("VNC TCP socket closed", { instanceId, host, port });
     if (ws.readyState === ws.OPEN) {
       ws.close(1000, 'TCP connection closed');
     }
   });
-  
+
   // Forward data from WebSocket to TCP socket
   ws.on('message', (data) => {
     if (connectionClosed || !vncConnectionEstablished || tcpSocket.destroyed) {
       console.warn(`Ignoring WebSocket message for ${instanceId} - connection not ready`);
       return;
     }
-    
+
     try {
       // Convert WebSocket message to Buffer if needed
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
       if (logger.level === 'debug') {
-        logger.debug("VNC data forwarding WS->TCP", { 
-          instanceId, 
-          bytes: buffer.length, 
+        logger.debug("VNC data forwarding WS->TCP", {
+          instanceId,
+          bytes: buffer.length,
           preview: buffer.slice(0, 32).toString('hex')
         });
       }
       tcpSocket.write(buffer);
     } catch (err) {
-      logger.error("Error forwarding WebSocket to TCP", { 
-        instanceId, 
+      logger.error("Error forwarding WebSocket to TCP", {
+        instanceId,
         error: err.message,
-        stack: err.stack 
+        stack: err.stack
       });
     }
   });
-  
+
   // Forward data from TCP socket to WebSocket
   tcpSocket.on('data', (data) => {
     if (connectionClosed || ws.readyState !== ws.OPEN) {
       console.warn(`Ignoring TCP data for ${instanceId} - WebSocket not ready`);
       return;
     }
-    
+
     try {
       if (logger.level === 'debug') {
-        logger.debug("VNC data forwarding TCP->WS", { 
-          instanceId, 
-          bytes: data.length, 
+        logger.debug("VNC data forwarding TCP->WS", {
+          instanceId,
+          bytes: data.length,
           preview: data.slice(0, 32).toString('hex')
         });
       }
@@ -868,35 +868,35 @@ function createVNCBridge(ws, targetUrl, instanceId) {
         ws.send(data);
       }
     } catch (err) {
-      logger.error("Error forwarding TCP to WebSocket", { 
-        instanceId, 
+      logger.error("Error forwarding TCP to WebSocket", {
+        instanceId,
         error: err.message,
-        stack: err.stack 
+        stack: err.stack
       });
     }
   });
-  
+
   // Handle WebSocket close
   ws.on('close', (code, reason) => {
-    logger.info("WebSocket closed for VNC bridge", { 
-      instanceId, 
-      code, 
-      reason: reason?.toString() 
+    logger.info("WebSocket closed for VNC bridge", {
+      instanceId,
+      code,
+      reason: reason?.toString()
     });
     tcpSocket.destroy();
   });
-  
+
   // Handle WebSocket errors
   ws.on('error', (err) => {
-    logger.error("WebSocket error for VNC bridge", { 
-      instanceId, 
+    logger.error("WebSocket error for VNC bridge", {
+      instanceId,
       error: err.message,
       code: err.code,
-      stack: err.stack 
+      stack: err.stack
     });
     tcpSocket.destroy();
   });
-  
+
   // Set TCP socket timeout
   tcpSocket.setTimeout(30000); // 30 second idle timeout
 }
@@ -917,7 +917,7 @@ activeWss.on("connection", (ws) => {
   activeClients.add(ws);
   activeWsConnections++;
   activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
-  
+
   let connectionClosed = false;
   const cleanupConnection = () => {
     if (!connectionClosed) {
@@ -927,7 +927,7 @@ activeWss.on("connection", (ws) => {
       activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
     }
   };
-  
+
   ws.send(JSON.stringify({ active: readActive() }));
   ws.on("message", (msg) => {
     try {
@@ -948,16 +948,16 @@ activeWss.on("connection", (ws) => {
 // Handle WebSocket upgrades for VNC connections
 server.on("upgrade", (req, socket, head) => {
   logger.debug("WebSocket upgrade request", { url: req.url });
-  
+
   // Match VNC proxy URLs
   const vncMatch = req.url.match(/^\/proxy\/vnc\/([^\/]+)/);
   if (vncMatch) {
     const instanceId = vncMatch[1];
-    
+
     getInstanceTarget(instanceId).then(target => {
       if (target) {
         logger.info("VNC WebSocket proxy established", { instanceId, target });
-        
+
         // Use the VNC WebSocket server
         vncWss.handleUpgrade(req, socket, head, (ws) => {
           createVNCBridge(ws, target, instanceId);
@@ -970,10 +970,10 @@ server.on("upgrade", (req, socket, head) => {
       logger.error("VNC WebSocket proxy error", { instanceId, error: error.message });
       socket.destroy();
     });
-    
+
     return;
   }
-  
+
   // Active focus WebSocket
   if (req.url === "/active") {
     activeWss.handleUpgrade(req, socket, head, (ws) => {
@@ -993,11 +993,11 @@ logger.info("WebSocket support added");
 server.listen(3001, () => {
   logger.info("Backend running on http://localhost:3001");
   logger.info("Configuration details", { configDir: FINAL_CONFIG_DIR, activeInstances: readActive() });
-  
+
   // Start quality monitoring
   logger.info("Starting stream quality monitoring service");
   qualityMonitor.start();
-  
+
   // Test config loading (only in non-test environments)
   if (process.env.NODE_ENV !== 'test' && !process.env.CI) {
     try {

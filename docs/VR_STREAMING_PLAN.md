@@ -37,18 +37,18 @@ graph LR
 ## Task Matrix
 The following table maps upcoming tasks to repository deliverables.
 
-| ID | Task Title | Key Deliverables |
-|----|------------|-----------------|
-|T-01|Build base Win98 SoftGPU image|`qcow2` image + packer script|
-|T-02|Containerize VM runner|Dockerfile + `start.sh` sidecar|
-|T-03|Helm chart (9 replicas)|`charts/loco-vm` with STUNner sub-chart|
-|T-04|WebXR front-end|`frontend/webxr/` app|
-|T-05|Input proxy service|`cmd/input-proxy` binary|
-|T-06|Sunshine host PoC|`Dockerfile.sunshine` + docs|
-|T-07|Parsec host PoC|Updated qcow2, docs|
-|T-08|Codec benchmark harness|`bench.py` and results.csv|
-|T-09|Playwright WebXR E2E|`tests/e2e_vr.spec.ts`|
-|T-10|Observability stack|`monitoring/` kustomize configs|
+| ID | Task Title | Key Deliverables | Status |
+|----|------------|-----------------|--------|
+|T-01|Build base Win98 SoftGPU image|`qcow2` image + packer script|✅ DONE|
+|T-02|Containerize VM runner|Dockerfile + `start.sh` sidecar|✅ DONE|
+|T-03|Helm chart (9 replicas)|`charts/loco-vm` with STUNner sub-chart|✅ DONE|
+|T-04|WebXR front-end|`frontend/webxr/` app|✅ DONE|
+|T-05|Input proxy service|`cmd/input-proxy` binary|PENDING|
+|T-06|Sunshine host PoC|`Dockerfile.sunshine` + docs|PENDING|
+|T-07|Parsec host PoC|Updated qcow2, docs|PENDING|
+|T-08|Codec benchmark harness|`bench.py` and results.csv|✅ DONE|
+|T-09|Playwright WebXR E2E|`tests/e2e_vr.spec.ts`|✅ DONE|
+|T-10|Observability stack|`monitoring/` kustomize configs|✅ DONE|
 
 Refer to `docs/FUTURE_TASKS.md` for a condensed list of next actions.
 

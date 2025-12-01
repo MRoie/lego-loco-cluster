@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocket } = require('ws');
 const http = require('http');
-const logger = require('../../utils/logger');
+const logger = require('../utils/logger');
 
 /**
  * Stream Quality Monitoring Service
@@ -30,20 +30,20 @@ class StreamQualityMonitor {
    */
   start() {
     if (this.isRunning) return;
-    
+
     logger.info("Starting Stream Quality Monitor with deep health probing");
     this.isRunning = true;
-    
+
     // Regular connectivity probes
     this.probeTimer = setInterval(() => {
       this.probeAllInstances();
     }, this.probeInterval);
-    
+
     // Deep health probes for QEMU subsystems
     this.deepProbeTimer = setInterval(() => {
       this.deepProbeAllInstances();
     }, this.deepProbeInterval);
-    
+
     // Initial probes
     this.probeAllInstances();
     this.initialTimer = setTimeout(() => this.deepProbeAllInstances(), 2000);
@@ -54,25 +54,25 @@ class StreamQualityMonitor {
    */
   stop() {
     if (!this.isRunning) return;
-    
+
     logger.info("Stopping Stream Quality Monitor");
     this.isRunning = false;
-    
+
     if (this.probeTimer) {
       clearInterval(this.probeTimer);
       this.probeTimer = null;
     }
-    
+
     if (this.deepProbeTimer) {
       clearInterval(this.deepProbeTimer);
       this.deepProbeTimer = null;
     }
-    
+
     if (this.initialTimer) {
       clearTimeout(this.initialTimer);
       this.initialTimer = null;
     }
-    
+
     // Clear metrics to help with cleanup
     this.metrics.clear();
     this.recoveryAttempts.clear();
@@ -84,15 +84,15 @@ class StreamQualityMonitor {
   async deepProbeAllInstances() {
     try {
       const instances = await this.loadInstances();
-      const probePromises = instances.map(instance => 
+      const probePromises = instances.map(instance =>
         this.deepProbeInstance(instance).catch(err => {
           logger.error("Deep probe failed for instance", { instanceId: instance.id, error: err.message });
           return null;
         })
       );
-      
+
       const results = await Promise.all(probePromises);
-      
+
       // Merge deep probe results with existing metrics
       results.forEach((deepMetrics, index) => {
         if (deepMetrics && deepMetrics.instanceId) {
@@ -102,14 +102,14 @@ class StreamQualityMonitor {
             ...deepMetrics,
             timestamp: new Date().toISOString()
           };
-          
+
           this.metrics.set(deepMetrics.instanceId, mergedMetrics);
-          
+
           // Check for failures and trigger recovery if needed
           this.checkForFailuresAndRecover(deepMetrics.instanceId, mergedMetrics);
         }
       });
-      
+
     } catch (error) {
       logger.error("Failed to deep probe instances", { error: error.message });
     }
@@ -117,22 +117,22 @@ class StreamQualityMonitor {
   async probeAllInstances() {
     try {
       const instances = await this.loadInstances();
-      const probePromises = instances.map(instance => 
+      const probePromises = instances.map(instance =>
         this.probeInstance(instance).catch(err => {
           logger.error("Probe failed for instance", { instanceId: instance.id, error: err.message });
           return this.createErrorMetrics(instance.id, err.message);
         })
       );
-      
+
       const results = await Promise.all(probePromises);
-      
+
       // Update metrics map
       results.forEach(metrics => {
         if (metrics && metrics.instanceId) {
           this.metrics.set(metrics.instanceId, metrics);
         }
       });
-      
+
     } catch (error) {
       logger.error("Failed to probe instances", { error: error.message });
     }
@@ -168,14 +168,14 @@ class StreamQualityMonitor {
     try {
       const vncAvailable = await this.probeVNCPort(instance.vncUrl);
       metrics.availability.vnc = vncAvailable;
-      
+
       if (!vncAvailable) {
         metrics.errors.push(`VNC connection failed: ${instance.vncUrl} not reachable`);
       }
-      
+
       if (vncAvailable) {
         metrics.quality.connectionLatency = Date.now() - startTime;
-        
+
         // Test actual VNC functionality if available
         const vncTests = await this.testVNCFunctionality(instance);
         metrics.availability.audio = vncTests.audioDetected;
@@ -183,7 +183,7 @@ class StreamQualityMonitor {
         metrics.quality.audioLevel = vncTests.audioLevel;
         metrics.quality.controlsResponsive = vncTests.controlsResponsive;
         metrics.quality.videoFrameRate = vncTests.frameRate;
-        
+
         if (vncTests.errors.length > 0) {
           metrics.errors.push(...vncTests.errors);
         }
@@ -215,7 +215,7 @@ class StreamQualityMonitor {
    */
   async deepProbeInstance(instance) {
     logger.debug("Deep probing instance", { instanceId: instance.id });
-    
+
     const deepMetrics = {
       instanceId: instance.id,
       timestamp: new Date().toISOString(),
@@ -234,22 +234,22 @@ class StreamQualityMonitor {
     try {
       // Get QEMU container health endpoint
       const healthData = await this.queryQEMUHealthEndpoint(instance);
-      
+
       if (healthData) {
         deepMetrics.deepHealth = healthData;
-        
+
         // Analyze the health data to determine failure types
         const failureAnalysis = this.analyzeFailureType(healthData);
         deepMetrics.failureType = failureAnalysis.type;
         deepMetrics.recoveryNeeded = failureAnalysis.recoveryNeeded;
-        
+
         logger.info("Deep health analysis completed", { instanceId: instance.id, overallStatus: healthData.overall_status, failureType: failureAnalysis.type });
       } else {
         deepMetrics.errors.push('Unable to retrieve QEMU health data');
         deepMetrics.failureType = 'qemu';
         deepMetrics.recoveryNeeded = true;
       }
-      
+
     } catch (error) {
       deepMetrics.errors.push(`Deep probe failed: ${error.message}`);
       deepMetrics.failureType = 'network';
@@ -266,14 +266,14 @@ class StreamQualityMonitor {
     return new Promise((resolve) => {
       // Use healthUrl from configuration if available, otherwise construct it
       const healthUrl = instance.healthUrl || `http://${instance.id}:8080`;
-      
+
       const req = http.get(healthUrl, { timeout: 5000 }, (res) => {
         let data = '';
-        
+
         res.on('data', (chunk) => {
           data += chunk;
         });
-        
+
         res.on('end', () => {
           try {
             const healthData = JSON.parse(data);
@@ -284,12 +284,12 @@ class StreamQualityMonitor {
           }
         });
       });
-      
+
       req.on('error', (error) => {
         logger.error("Health endpoint request failed for instance", { instanceId: instance.id, error: error.message });
         resolve(null);
       });
-      
+
       req.on('timeout', () => {
         logger.error("Health endpoint timeout for instance", { instanceId: instance.id });
         req.destroy();
@@ -340,7 +340,7 @@ class StreamQualityMonitor {
         if (analysis.type === 'none') analysis.type = 'network';
         analysis.recoveryNeeded = true;
       }
-      
+
       if (healthData.network.tx_errors > 10 || healthData.network.rx_errors > 10) {
         analysis.issues.push('network_errors');
         if (analysis.type === 'none') analysis.type = 'network';
@@ -352,7 +352,7 @@ class StreamQualityMonitor {
     if (healthData.performance) {
       const cpuUsage = parseFloat(healthData.performance.cpu_usage) || 0;
       const memoryUsage = parseFloat(healthData.performance.memory_usage) || 0;
-      
+
       if (cpuUsage > 90 || memoryUsage > 90) {
         analysis.issues.push('performance_degradation');
         if (analysis.type === 'none') analysis.type = 'qemu';
@@ -393,12 +393,12 @@ class StreamQualityMonitor {
     }
 
     logger.info("Triggering recovery for instance", { instanceId, attempt: attempts + 1, failureType: metrics.failureType });
-    
+
     this.recoveryAttempts.set(instanceId, attempts + 1);
 
     try {
       const recoverySuccess = await this.executeRecoveryStrategy(instanceId, metrics.failureType);
-      
+
       if (recoverySuccess) {
         logger.info("Recovery successful for instance", { instanceId });
         this.recoveryAttempts.delete(instanceId);
@@ -415,14 +415,14 @@ class StreamQualityMonitor {
    */
   async executeRecoveryStrategy(instanceId, failureType) {
     logger.info("Executing recovery strategy", { failureType, instanceId });
-    
+
     switch (failureType) {
       case 'network':
         return await this.recoverNetworkIssues(instanceId);
-      
+
       case 'qemu':
         return await this.recoverQEMUIssues(instanceId);
-      
+
       case 'mixed':
         // Try network recovery first, then QEMU recovery
         const networkRecovered = await this.recoverNetworkIssues(instanceId);
@@ -430,13 +430,13 @@ class StreamQualityMonitor {
           return await this.recoverQEMUIssues(instanceId);
         }
         return true;
-      
+
       case 'client':
         // Client-side issues are harder to recover from the backend
         // For now, we'll just mark them for manual intervention
         logger.info("Client-side issues detected, manual intervention may be required", { instanceId });
         return false;
-      
+
       default:
         logger.warn("Unknown failure type", { failureType });
         return false;
@@ -452,12 +452,12 @@ class StreamQualityMonitor {
     // 1. Restart network interfaces in the container
     // 2. Reset bridge/TAP configuration
     // 3. Check host networking
-    
+
     logger.info("Attempting network recovery for instance", { instanceId });
-    
+
     // Simulate recovery attempt
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     // Return success/failure based on some logic
     return Math.random() > 0.3; // 70% success rate simulation
   }
@@ -472,12 +472,12 @@ class StreamQualityMonitor {
     // 2. Restart audio/video subsystems
     // 3. Reset virtual machine state
     // 4. Restart the entire container pod
-    
+
     logger.info("Attempting QEMU recovery for instance", { instanceId });
-    
+
     // Simulate recovery attempt
     await new Promise(resolve => setTimeout(resolve, 3000));
-    
+
     // Return success/failure based on some logic
     return Math.random() > 0.4; // 60% success rate simulation
   }
@@ -534,15 +534,15 @@ class StreamQualityMonitor {
       // Create WebSocket connection to VNC proxy
       const protocol = 'ws';
       const wsUrl = `${protocol}://localhost:3001/proxy/vnc/${instance.id}/`;
-      
+
       // Test with a short timeout since this is for monitoring
       const testResults = await this.performVNCTests(wsUrl);
-      
+
       results.audioDetected = testResults.audioDetected;
       results.audioLevel = testResults.audioLevel;
       results.controlsResponsive = testResults.controlsResponsive;
       results.frameRate = testResults.frameRate;
-      
+
     } catch (error) {
       results.errors.push(`VNC functionality test failed: ${error.message}`);
     }
@@ -576,23 +576,23 @@ class StreamQualityMonitor {
 
         testSocket.on('open', () => {
           connected = true;
-          
+
           // Simulate basic VNC handshake to test responsiveness
           // Send a simple VNC protocol version string
           const vncVersion = Buffer.from('RFB 003.008\n');
           testSocket.send(vncVersion);
-          
+
           // If we get this far, controls are likely responsive
           results.controlsResponsive = true;
-          
+
           // Estimate frame rate based on connection speed (fallback)
           results.frameRate = 15; // Conservative estimate for working VNC
-          
+
           // For audio detection, we'll check if audio streams are enabled
           // This is a placeholder - real implementation would require audio analysis
           results.audioDetected = true;
           results.audioLevel = 0.5; // Moderate level assumption
-          
+
           testSocket.close();
           clearTimeout(timeoutId);
           resolve(results);
@@ -630,7 +630,7 @@ class StreamQualityMonitor {
    */
   estimateQualityMetrics(metrics) {
     const latency = metrics.quality.connectionLatency;
-    
+
     if (!metrics.availability.vnc) {
       metrics.quality.videoFrameRate = 0;
       metrics.quality.audioQuality = 'error'; // VNC unavailable means error, not unavailable
@@ -730,7 +730,7 @@ class StreamQualityMonitor {
   getQualitySummary() {
     const instances = Array.from(this.metrics.values());
     const total = instances.length;
-    
+
     if (total === 0) {
       return {
         total: 0,
@@ -745,9 +745,9 @@ class StreamQualityMonitor {
     const latencies = instances
       .map(m => m.quality.connectionLatency)
       .filter(l => l !== null);
-    
-    const averageLatency = latencies.length > 0 
-      ? latencies.reduce((a, b) => a + b, 0) / latencies.length 
+
+    const averageLatency = latencies.length > 0
+      ? latencies.reduce((a, b) => a + b, 0) / latencies.length
       : null;
 
     // Quality distribution
@@ -779,7 +779,7 @@ class StreamQualityMonitor {
         return [];
       }
     }
-    
+
     // Fallback to static config (legacy mode)
     try {
       const configPath = path.resolve(__dirname, this.configDir, 'instances.json');

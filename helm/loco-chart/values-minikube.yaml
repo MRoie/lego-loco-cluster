@@ -87,9 +87,6 @@ emulator:
   
   # Additional environment variables
   env:
-    USE_PREBUILT_SNAPSHOT: "true"
-    SNAPSHOT_REGISTRY: "ghcr.io/mroie/qemu-snapshots"
-    SNAPSHOT_TAG: "win98-base"
     BRIDGE: "loco-br"
     TAP_IF: "tap0"
     DISK: "/images/win98.qcow2"
