@@ -140,9 +140,10 @@ class KubernetesDiscovery {
       console.log(`🔧 API call parameters:`, { pods: listPodsParams, statefulSets: listStatefulSetsParams });
 
       // Execute both API calls in parallel for efficiency
+      // The newer Kubernetes client expects an object with namespace and other options
       const [podsResponse, statefulSetsResponse] = await Promise.all([
-        this.k8sApi.listNamespacedPod(listPodsParams),
-        this.k8sAppsApi.listNamespacedStatefulSet(listStatefulSetsParams)
+        this.k8sApi.listNamespacedPod({ namespace, labelSelector }),
+        this.k8sAppsApi.listNamespacedStatefulSet({ namespace, labelSelector })
       ]);
 
       if (!podsResponse || !podsResponse.body) {
@@ -161,6 +162,12 @@ class KubernetesDiscovery {
 
       const instances = [];
       logger.debug("Processing discovered pods", { podCount: pods.length });
+
+      // Create a map of StatefulSets by name for quick lookup
+      const statefulSetMap = new Map();
+      for (const sts of statefulSets) {
+        statefulSetMap.set(sts.metadata.name, sts);
+      }
 
       for (const pod of pods) {
         if (pod.status.phase === 'Running' && pod.status.podIP) {

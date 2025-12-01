@@ -34,6 +34,17 @@ const InstanceManager = require("./services/instanceManager");
 const app = express();
 const server = http.createServer(app);
 
+// Global error handlers
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+  if (logger) logger.error('Uncaught Exception', { error: err.message, stack: err.stack });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION:', reason);
+  if (logger) logger.error('Unhandled Rejection', { reason });
+});
+
 // ========== PROMETHEUS METRICS CONFIGURATION ==========
 
 // Create a Registry to register metrics

@@ -8,17 +8,17 @@ FROM ubuntu:22.04
 # ---- Install emulator and media tools ----
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        qemu-system-x86 qemu-system-gui qemu-utils pulseaudio \
-        gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
-        gstreamer1.0-plugins-ugly gstreamer1.0-libav \
-        x11-utils xdotool iproute2 xvfb net-tools \
-        curl wget skopeo git inotify-tools nfs-common rsync \
-        netcat-openbsd procps alsa-utils && \
+    qemu-system-x86 qemu-system-gui qemu-utils pulseaudio \
+    gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+    x11-utils xdotool iproute2 xvfb net-tools \
+    curl wget skopeo git inotify-tools nfs-common rsync \
+    netcat-openbsd procps alsa-utils && \
     rm -rf /var/lib/apt/lists/*
 
 # ---- Create images directory and copy win98 image at build time ----
 RUN mkdir -p /images /opt/builtin-images
-COPY --from=win98-extractor /vm/win98_softgpu.qcow2 /opt/builtin-images/win98.qcow2.builtin
+COPY --from=win98-extractor /opt/builtin-images/win98.qcow2.builtin /opt/builtin-images/win98.qcow2.builtin
 
 # ---- Copy entrypoint and scripts ----
 COPY entrypoint.sh /entrypoint.sh
