@@ -144,6 +144,21 @@ class InstanceManager {
     return instances.find(instance => instance.id === instanceId);
   }
 
+  getDiscoveryStatus() {
+    const instances = this.cachedInstances || [];
+    return {
+      mode: this.discoveryMode,
+      serviceName: this.serviceName,
+      lastUpdate: this.lastDiscoveryTime ? new Date(this.lastDiscoveryTime).toISOString() : null,
+      stats: {
+        total: instances.length,
+        ready: instances.filter(i => i.status === 'ready').length,
+        notReady: instances.filter(i => i.status !== 'ready').length
+      },
+      instances: instances
+    };
+  }
+
   async getKubernetesInfo() {
     if (!this.k8sDiscovery.isAvailable()) {
       return {
@@ -195,7 +210,9 @@ class InstanceManager {
     // Set up periodic discovery
     this.discoveryTimer = setInterval(async () => {
       try {
-        await this.discovery.discoverInstances();
+        const instances = await this.discovery.discoverInstances();
+        this.cachedInstances = instances;
+        this.lastDiscoveryTime = Date.now();
       } catch (error) {
         logger.error("Background discovery error", { error: error.message });
       }

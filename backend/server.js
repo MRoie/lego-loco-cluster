@@ -388,6 +388,30 @@ app.get("/api/instances", async (req, res) => {
 });
 
 /**
+ * Get live discovery status and instances
+ * Primary endpoint for frontend polling in Phase 2
+ * 
+ * @route GET /api/instances/live
+ * @returns {Object} Detailed discovery metadata and instances
+ */
+app.get("/api/instances/live", (req, res) => {
+  try {
+    const status = instanceManager.getDiscoveryStatus();
+    res.json(status);
+  } catch (e) {
+    logger.error("Live instances error", {
+      error: e.message,
+      stack: e.stack
+    });
+    res.status(503).json({
+      mode: 'error',
+      error: e.message,
+      instances: []
+    });
+  }
+});
+
+/**
  * Get only provisioned (ready-to-use) instances
  * Filters instances to only include those marked as provisioned and available
  * 
