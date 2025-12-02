@@ -65,10 +65,10 @@ registryConfig:
     server: ""
 
 emulator:
-  image: compose-emulator-0
+  replicas: 1
+  image: qemu-softgpu
   tag: latest
-  imagePullPolicy: Never  # Use local images
-
+  imagePullPolicy: Never  # Use local images in Minikube
   servicePort: 5901
   diskPVC: win98-disk
   diskReadOnly: false

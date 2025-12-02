@@ -39,20 +39,59 @@ class EndpointsDiscovery {
                 serviceName: this.serviceName
             });
 
-            const endpoints = await this.k8sApi.readNamespacedEndpoints({
+            // Use object parameters for newer Kubernetes client
+            // Property must be 'name' not 'serviceName' 
+            const response = await this.k8sApi.readNamespacedEndpoints({
                 name: this.serviceName,
                 namespace: this.namespace
             });
 
-            if (!endpoints || !endpoints.body) {
-                logger.warn('No endpoints response from Kubernetes API');
+
+            logger.info('Endpoints API response received', {
+                service: this.serviceName,
+                namespace: this.namespace,
+                responseType: typeof response,
+                responseConstructor: response?.constructor?.name,
+                responseKeys: response ? Object.keys(response) : [],
+                isBodyInResponse: response && 'body' in response,
+                isSubsetsInResponse: response && 'subsets' in response,
+                responseSubsets: response?.subsets ? 'YES' : 'NO',
+                bodySubsets: response?.body?.subsets ? 'YES' : 'NO'
+            });
+
+            // Log first few characters of stringified response for debugging
+            try {
+                const responseStr = JSON.stringify(response);
+                logger.debug('Raw response preview', {
+                    preview: responseStr.substring(0, 500)
+                });
+            } catch (e) {
+                logger.warn('Could not stringify response', { error: e.message });
+            }
+
+            // Handle different response structures (client version compatibility)
+            const body = response.body || response;
+
+            if (body && body.subsets) {
+                logger.debug('Endpoints subsets details', {
+                    subsets: JSON.stringify(body.subsets)
+                });
+            } else {
+                logger.warn('No subsets found in Endpoints response', {
+                    hasBody: !!body,
+                    bodyKeys: body ? Object.keys(body) : [],
+                    bodyType: typeof body
+                });
+            }
+
+            if (!body || !body.subsets) {
                 return [];
             }
 
-            const instances = this.parseEndpoints(endpoints.body);
+            const instances = this.parseEndpoints(body);
 
             // Update cache
-            this.cachedEndpoints = endpoints.body;
+            this.cachedEndpoints = body;
             this.lastUpdate = new Date();
 
             logger.info('Discovered instances via Endpoints API', {
