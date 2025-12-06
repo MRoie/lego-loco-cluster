@@ -61,7 +61,7 @@ registryConfig:
     server: ""
 
 emulator:
-  image: compose-emulator-0
+  image: qemu-loco
   tag: latest
   imagePullPolicy: Never  # Use local images
 
@@ -90,16 +90,30 @@ emulator:
     USE_PREBUILT_SNAPSHOT: "false"
 
 backend:
-  image: compose-backend
-  tag: latest
+  image: lego-loco-backend
+  tag: dns-fix-v1
   imagePullPolicy: Never
   servicePort: 3001
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
 
 frontend:
-  image: compose-frontend
+  image: lego-loco-frontend
   tag: latest
   imagePullPolicy: Never
   servicePort: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
   env:
     BACKEND_HOST: "loco-loco-backend"
     BACKEND_PORT: "3001"
@@ -116,10 +130,17 @@ artRes:
 
 vr:
   enabled: true
-  image: compose-vr-frontend
+  image: lego-loco-frontend
   tag: latest
   imagePullPolicy: Never
   servicePort: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
   buildArgs:
     VITE_DEFAULT_VR: "true"
     

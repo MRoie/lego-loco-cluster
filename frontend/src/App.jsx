@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import VRScene from "./VRScene";
 import InstanceCard from "./components/InstanceCard";
 import DiscoveryStatus from "./components/DiscoveryStatus";
+import { fetchLiveInstances } from "./api/discovery";
 
 
 // Main dashboard component showing the 3×3 grid of instances
@@ -11,6 +12,7 @@ export default function App() {
   const { activeIds, setActiveIds } = useActive();
   const [instances, setInstances] = useState([]);
   const [provisionedInstances, setProvisionedInstances] = useState([]);
+  const [discoveryStatus, setDiscoveryStatus] = useState(null);
   const [hotkeys, setHotkeys] = useState({});
   const [active, setActive] = useState(0);
   const [zoom, setZoom] = useState(1);
@@ -27,50 +29,48 @@ export default function App() {
   // Fetch instance list and hotkey mapping from the backend
   useEffect(() => {
     const loadInstances = () => {
-      // Load all instances
-      fetch("/api/instances")
-        .then((r) => r.json())
-        .then(setInstances)
-        .catch((e) => console.error("Failed to fetch instances", e));
-      
-      // Load only provisioned instances
-      fetch("/api/instances/provisioned")
-        .then((r) => r.json())
-        .then(setProvisionedInstances)
-        .catch((e) => console.error("Failed to fetch provisioned instances", e));
+      // Load live instances with metadata
+      fetchLiveInstances()
+        .then((data) => {
+          setInstances(data.instances || []);
+          setDiscoveryStatus(data);
+
+          // Also update provisioned list (filter client-side or fetch separate if needed)
+          // For now, we'll assume provisioned are those with status='ready' or explicit flag
+          const provisioned = (data.instances || []).filter(i => i.provisioned || i.status === 'ready');
+          setProvisionedInstances(provisioned);
+        })
+        .catch((e) => console.error("Failed to fetch live instances", e));
     };
 
     // Initial load
     loadInstances();
-    
+
     fetch("/api/config/hotkeys")
       .then((r) => r.json())
       .then(setHotkeys)
       .catch((e) => console.error("Failed to fetch hotkeys", e));
-    
+
     const interval = setInterval(() => {
       fetch("/api/status")
         .then((r) => r.json())
         .then(setStatus)
-        .catch(() => {});
-      
-      // Refresh provisioned instances periodically
-      fetch("/api/instances/provisioned")
-        .then((r) => r.json())
-        .then(setProvisionedInstances)
-        .catch(() => {});
+        .catch(() => { });
+
+      // Refresh instances periodically
+      loadInstances();
     }, 5000);
-    
-    fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => {});
-    
+
+    fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => { });
+
     // Listen for discovery refresh events
     const handleDiscoveryRefresh = () => {
       console.log('Discovery refreshed, reloading instances');
       loadInstances();
     };
-    
+
     window.addEventListener('discoveryRefreshed', handleDiscoveryRefresh);
-    
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('discoveryRefreshed', handleDiscoveryRefresh);
@@ -94,9 +94,9 @@ export default function App() {
       const key = e.key.length === 1 ? e.key : e.key;
       parts.push(key);
       const combo = parts.join("+");
-      
+
       const currentInstances = showOnlyProvisioned ? provisionedInstances : instances;
-      
+
       if (hotkeys.focus && hotkeys.focus[combo]) {
         const id = hotkeys.focus[combo];
         const idx = currentInstances.findIndex((i) => i.id === id);
@@ -134,7 +134,7 @@ export default function App() {
 
   // Get the instances to display based on filter
   const displayInstances = showOnlyProvisioned ? provisionedInstances : instances;
-  
+
   // Create a 3x3 grid array with mixed states for demonstration
   const createDemoInstances = () => {
     // If no real instances, show demo states
@@ -151,7 +151,7 @@ export default function App() {
         null  // Empty slot
       ];
     }
-    
+
     // Use real instances if available
     const gridInstances = Array(9).fill(null);
     displayInstances.slice(0, 9).forEach((instance, index) => {
@@ -159,7 +159,7 @@ export default function App() {
     });
     return gridInstances;
   };
-  
+
   const gridInstances = createDemoInstances();
 
   return (
@@ -170,7 +170,7 @@ export default function App() {
           <div className="absolute top-0 right-0 z-10 p-4">
             <div className="flex items-center space-x-4">
               {/* Discovery Status */}
-              <DiscoveryStatus />
+              <DiscoveryStatus status={discoveryStatus} />
               {/* VR Button */}
               <button
                 onClick={() => setVrMode(true)}
@@ -178,14 +178,14 @@ export default function App() {
                 title="Enter VR Mode"
               >
                 {/* VR Headset Icon */}
-                <svg 
-                  width="24" 
-                  height="24" 
-                  viewBox="0 0 24 24" 
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
                   fill="currentColor"
                   className="w-6 h-6"
                 >
-                  <path d="M20 8v8a3 3 0 01-3 3h-2.5l-1.5-2H8l-1.5 2H4a3 3 0 01-3-3V8a3 3 0 013-3h13a3 3 0 013 3zM6.5 13.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm11 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/>
+                  <path d="M20 8v8a3 3 0 01-3 3h-2.5l-1.5-2H8l-1.5 2H4a3 3 0 01-3-3V8a3 3 0 013-3h13a3 3 0 013 3zM6.5 13.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm11 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
                 </svg>
               </button>
             </div>
@@ -195,8 +195,8 @@ export default function App() {
           <div className="lego-grid-container">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 lg:gap-10 max-w-7xl mx-auto w-full">
               {gridInstances.map((instance, index) => (
-                <motion.div 
-                  key={index} 
+                <motion.div
+                  key={index}
                   className="aspect-video"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -214,14 +214,14 @@ export default function App() {
                   ) : (
                     <motion.div
                       className="w-full h-full lego-empty-slot flex items-center justify-center text-gray-600 lego-shimmer cursor-pointer"
-                      whileHover={{ 
+                      whileHover={{
                         scale: 1.02,
-                        y: -2 
+                        y: -2
                       }}
                       whileTap={{ scale: 0.98 }}
                     >
                       <div className="text-center">
-                        <motion.div 
+                        <motion.div
                           className="w-16 h-16 border-3 border-gray-400 rounded-lg mx-auto mb-3 flex items-center justify-center bg-white/50"
                           whileHover={{ borderColor: '#0055BF' }}
                         >
@@ -242,7 +242,7 @@ export default function App() {
 
         </>
       )}
-      
+
       <AnimatePresence>
         {vrMode && (
           <motion.div

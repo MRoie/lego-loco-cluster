@@ -2,7 +2,35 @@
 
 > **Note for Agents**: Please also refer to the **[Contributors Guide](docs/CONTRIBUTING.md)** and **[Architecture Overview](docs/ARCHITECTURE.md)** for detailed system design and contribution workflows.
 
-This repository uses the Codex agent to build a functional Lego Loco cluster. A development container is provided to ensure all dependencies are available. Begin every session by launching the dev container or installing the packages below so tests and development servers run correctly.
+This repository uses the Codex agent to build a functional Lego Loco cluster. A# Development Guidelines
+
+## 🚀 Deployment & Verification Workflow (CRITICAL)
+**There is NO HOT-RELOAD available in this environment.** Any code or Dockerfile change requires the following strict process:
+
+1.  **Rebuild**: Build the image with a **NEW** unique tag (e.g., timestamp or version). Do NOT reuse `latest`.
+    ```bash
+    docker build -f <Dockerfile> -t <image>:<new-tag> .
+    ```
+2.  **Load**: Load the image into the cluster (Minikube/Kind).
+    ```bash
+    minikube image load <image>:<new-tag>
+    ```
+3.  **Verify Image**: Confirm the image is present in the cluster.
+    ```bash
+    minikube image ls | grep <image>:<new-tag>
+    ```
+4.  **Upgrade**: Upgrade the Helm chart to use the new tag.
+    ```bash
+    helm upgrade --install <release> ./helm/<chart> -n <ns> --set <service>.tag=<new-tag>
+    ```
+5.  **Verify Deployment**: Wait for pods to be ready and healthy.
+    ```bash
+    kubectl rollout status deployment/<deployment-name> -n <ns>
+    ```
+6.  **Test**: Rerun verification tests only AFTER the deployment is confirmed ready.
+
+---
+r is provided to ensure all dependencies are available. Begin every session by launching the dev container or installing the packages below so tests and development servers run correctly.
 
 ## Environment Setup
 Use the `.devcontainer` configuration with VS Code or `devcontainer up` for a ready‑made environment based on `mcr.microsoft.com/devcontainers/base:ubuntu-22.04`. It includes Node.js 22, Docker‑in‑Docker and the Kubernetes tools `kubectl` v1.33.2, `kind` v0.23.0, `helm` v3.14.3 and `talosctl` v1.3.7.

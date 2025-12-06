@@ -1,44 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { refreshDiscovery } from '../api/discovery';
 
-export default function DiscoveryStatus() {
-  const [discoveryInfo, setDiscoveryInfo] = useState(null);
+export default function DiscoveryStatus({ status }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  useEffect(() => {
-    const fetchDiscoveryInfo = () => {
-      fetch('/api/instances/discovery-info')
-        .then(r => r.json())
-        .then(setDiscoveryInfo)
-        .catch(console.error);
-    };
-
-    fetchDiscoveryInfo();
-    
-    // Refresh discovery info every 30 seconds
-    const interval = setInterval(fetchDiscoveryInfo, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      const response = await fetch('/api/instances/refresh', {
-        method: 'POST'
-      });
-      const result = await response.json();
+      const result = await refreshDiscovery();
       console.log('Discovery refresh result:', result);
-      
+
       // Emit event to trigger instance reload in main app
       window.dispatchEvent(new CustomEvent('discoveryRefreshed', { detail: result }));
-      
-      // Refresh discovery info after manual refresh
-      setTimeout(() => {
-        fetch('/api/instances/discovery-info')
-          .then(r => r.json())
-          .then(setDiscoveryInfo)
-          .catch(console.error);
-      }, 1000);
-      
+
     } catch (error) {
       console.error('Failed to refresh discovery:', error);
     } finally {
@@ -46,7 +20,7 @@ export default function DiscoveryStatus() {
     }
   };
 
-  if (!discoveryInfo) {
+  if (!status) {
     return (
       <div className="text-xs text-gray-400">
         Loading discovery info...
@@ -54,50 +28,62 @@ export default function DiscoveryStatus() {
     );
   }
 
-  const { usingAutoDiscovery, kubernetesDiscovery, fallbackToStatic } = discoveryInfo;
+  const { mode, stats, lastUpdate, serviceName } = status;
+  const isAuto = mode && mode.includes('kubernetes');
+  const isEndpoints = mode === 'kubernetes-endpoints';
 
   return (
-    <div className="flex items-center space-x-3 text-xs">
-      <div className="flex items-center space-x-2">
-        <div className={`w-2 h-2 rounded-full ${
-          usingAutoDiscovery ? 'bg-green-400' : 'bg-yellow-400'
-        }`} />
-        <span className="text-gray-300">
-          {usingAutoDiscovery ? 'Auto-Discovery' : 'Static Config'}
+    <div className="flex items-center space-x-3 text-xs bg-black/30 p-2 rounded-lg backdrop-blur-sm border border-white/10">
+      <div className="flex items-center space-x-2" title={`Mode: ${mode}\nService: ${serviceName || 'N/A'}`}>
+        <div className={`w-2 h-2 rounded-full ${isAuto ? 'bg-green-400' : 'bg-yellow-400'
+          } ${isRefreshing ? 'animate-pulse' : ''}`} />
+        <span className="text-gray-300 font-medium">
+          {isEndpoints ? 'Endpoints Discovery' : (isAuto ? 'Pod Discovery' : 'Static Config')}
         </span>
       </div>
-      
-      {kubernetesDiscovery && (
-        <div className="text-gray-400">
-          K8s: {kubernetesDiscovery.namespace}
-          {kubernetesDiscovery.cachedInstancesCount !== undefined && (
-            <span> ({kubernetesDiscovery.cachedInstancesCount} pods)</span>
+
+      {stats && (
+        <div className="text-gray-400 border-l border-gray-600 pl-3 flex space-x-2">
+          <span title="Ready Instances" className={stats.ready > 0 ? "text-green-400" : "text-gray-500"}>
+            {stats.ready} Ready
+          </span>
+          <span className="text-gray-600">/</span>
+          <span title="Total Instances">
+            {stats.total} Total
+          </span>
+          {stats.degraded > 0 && (
+            <span className="text-orange-400 ml-1" title="Degraded Instances">
+              ({stats.degraded} Degraded)
+            </span>
+          )}
+          {stats.notReady > 0 && (
+            <span className="text-yellow-400 ml-1" title="Booting/Not Ready">
+              ({stats.notReady} Booting)
+            </span>
           )}
         </div>
       )}
-      
-      {fallbackToStatic && (
-        <div className="text-yellow-400">
-          Fallback Mode
-        </div>
-      )}
-      
-      <button
-        onClick={handleRefresh}
-        disabled={isRefreshing}
-        className={`px-2 py-1 rounded transition-colors ${
-          isRefreshing 
-            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700 text-white'
-        }`}
-        title="Refresh instance discovery"
-      >
-        {isRefreshing ? (
-          <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-        ) : (
-          '🔄'
-        )}
-      </button>
+
+      <div className="border-l border-gray-600 pl-2">
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className={`p-1 rounded transition-colors ${isRefreshing
+            ? 'text-gray-500 cursor-not-allowed'
+            : 'text-blue-400 hover:text-blue-300 hover:bg-white/10'
+            }`}
+          title={`Last update: ${lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : 'Never'}\nClick to refresh`}
+        >
+          <svg
+            className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }

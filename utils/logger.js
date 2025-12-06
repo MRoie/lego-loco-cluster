@@ -15,20 +15,20 @@ const consoleFormat = winston.format.combine(
   winston.format.colorize(),
   winston.format.printf(({ timestamp, level, message, service, ...meta }) => {
     let logMessage = `${timestamp} [${level}]`;
-    
+
     // Add service name if present
     if (service) {
       logMessage += ` [${service}]`;
     }
-    
+
     logMessage += `: ${message}`;
-    
+
     // Add metadata if present
     const metaKeys = Object.keys(meta);
     if (metaKeys.length > 0) {
       logMessage += ` ${JSON.stringify(meta)}`;
     }
-    
+
     return logMessage;
   })
 );
@@ -76,13 +76,11 @@ function createLogger(serviceName = 'lego-loco-app') {
     ]
   });
 
-  // Add console transport for non-production environments
-  if (process.env.NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
-      format: consoleFormat,
-      level: logLevel
-    }));
-  }
+  // Always add console transport for Kubernetes/Container environments
+  logger.add(new winston.transports.Console({
+    format: consoleFormat,
+    level: logLevel
+  }));
 
   return logger;
 }

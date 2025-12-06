@@ -65,10 +65,10 @@ registryConfig:
     server: ""
 
 emulator:
-  image: compose-emulator-0
+  replicas: 1
+  image: qemu-softgpu
   tag: latest
-  imagePullPolicy: Never  # Use local images
-
+  imagePullPolicy: Never  # Use local images in Minikube
   servicePort: 5901
   diskPVC: win98-disk
   diskReadOnly: false
@@ -102,6 +102,11 @@ backend:
   env:
     ALLOW_EMPTY_DISCOVERY: "true"
     NODE_ENV: "development"
+  # Service discovery configuration
+  discoveryMode: "kubernetes-endpoints"  # Options: kubernetes-endpoints, kubernetes-pods
+  serviceDiscovery:
+    serviceName: "loco-loco-emulator"
+    healthCheckInterval: 30000  # ms
   resources:
     limits:
       memory: "1Gi"

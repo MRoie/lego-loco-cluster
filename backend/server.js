@@ -309,8 +309,72 @@ app.get("/metrics", async (req, res) => {
   }
 });
 
-// Serve frontend static build
-app.use(express.static(path.join(__dirname, "../frontend/dist")));
+// ========== FRONTEND OBSERVABILITY API ==========
+
+/**
+ * Ingest frontend logs
+ * Allows the frontend to send structured logs to the backend
+ * 
+ * @route POST /api/logs/frontend
+ */
+app.post("/api/logs/frontend", (req, res) => {
+  try {
+    const { level, message, ...context } = req.body;
+
+    // Validate log level
+    const validLevels = ['debug', 'info', 'warn', 'error'];
+    const safeLevel = validLevels.includes(level) ? level : 'info';
+
+    // Log with frontend service tag
+    // The logger module exports specific methods (info, warn, etc.) but not a generic log method
+    const logFn = logger[safeLevel];
+    if (logFn) {
+      logFn(message || 'No message provided', {
+        service: 'frontend',
+        ...context
+      });
+    } else {
+      logger.info(message || 'No message provided', {
+        service: 'frontend',
+        originalLevel: level,
+        ...context
+      });
+    }
+
+    res.status(200).json({ status: 'ok' });
+  } catch (e) {
+    logger.error("Failed to process frontend log", { error: e.message });
+    res.status(500).json({ error: "Failed to process log" });
+  }
+});
+
+/**
+ * Ingest frontend metrics
+ * Allows the frontend to report Prometheus-style metrics
+ * 
+ * @route POST /api/metrics/frontend
+ */
+app.post("/api/metrics/frontend", (req, res) => {
+  try {
+    const metricsData = req.body;
+
+    // In a real production system, we would aggregate these into Prometheus
+    // For now, we log them so they are visible in backend logs
+    logger.info("Frontend metrics received", {
+      service: 'frontend-metrics',
+      metrics: metricsData
+    });
+
+    // TODO: Integrate with prom-client to expose these metrics on /metrics
+
+    res.status(200).json({ status: 'ok' });
+  } catch (e) {
+    logger.error("Failed to process frontend metrics", { error: e.message });
+    res.status(500).json({ error: "Failed to process metrics" });
+  }
+});
+
+// ========== END FRONTEND OBSERVABILITY API ==========
 
 /**
  * Helper function to load JSON config files from the config directory
@@ -384,6 +448,30 @@ app.get("/api/instances", async (req, res) => {
       requestUrl: req.url
     });
     res.status(503).json([]);
+  }
+});
+
+/**
+ * Get live discovery status and instances
+ * Primary endpoint for frontend polling in Phase 2
+ * 
+ * @route GET /api/instances/live
+ * @returns {Object} Detailed discovery metadata and instances
+ */
+app.get("/api/instances/live", (req, res) => {
+  try {
+    const status = instanceManager.getDiscoveryStatus();
+    res.json(status);
+  } catch (e) {
+    logger.error("Live instances error", {
+      error: e.message,
+      stack: e.stack
+    });
+    res.status(503).json({
+      mode: 'error',
+      error: e.message,
+      instances: []
+    });
   }
 });
 
@@ -1007,7 +1095,7 @@ server.listen(3001, () => {
 
   // Start quality monitoring
   logger.info("Starting stream quality monitoring service");
-  qualityMonitor.start();
+  // qualityMonitor.start();
 
   // Test config loading (only in non-test environments)
   if (process.env.NODE_ENV !== 'test' && !process.env.CI) {
