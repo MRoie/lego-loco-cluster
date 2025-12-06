@@ -197,7 +197,7 @@ class EndpointsDiscovery {
         const healthPort = this.mapPorts(ports).health || 8080;
 
         instance.streamUrl = `http://localhost:${6080 + instanceNumber}/vnc${instanceNumber}`;
-        instance.vncUrl = `${podName}:${vncPort}`;
+        instance.vncUrl = `${instance.addresses.dnsName}:${vncPort}`;
         instance.healthUrl = `http://${address.ip}:${healthPort}`;
 
         return instance;

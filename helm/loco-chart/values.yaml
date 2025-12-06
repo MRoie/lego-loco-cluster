@@ -123,6 +123,13 @@ backend:
   image: loco-backend
   tag: latest
   servicePort: 3001
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
 
 frontend:
   image: loco-frontend
@@ -135,7 +142,7 @@ git:
 
 artRes:
   nfs:
-    server: nfs-server
+    server: 10.108.19.150
     path: /exports/art
 
 vr:

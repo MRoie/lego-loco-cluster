@@ -30,6 +30,8 @@ spec:
         imagePullPolicy: {{ .Values.frontend.imagePullPolicy | default "IfNotPresent" }}
         ports:
         - containerPort: {{ .Values.frontend.servicePort }}
+        resources:
+          {{- toYaml .Values.frontend.resources | nindent 10 }}
         startupProbe:
           httpGet:
             path: /health

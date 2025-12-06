@@ -14,6 +14,7 @@ RUN npm install
 
 # Copy utils from root
 COPY utils /app/utils
+RUN ls -la /app && ls -la /app/utils
 
 # Copy application code from backend directory  
 COPY backend/. .
@@ -35,6 +36,7 @@ RUN npm install --only=production
 
 # Copy utils from root
 COPY utils /app/utils
+RUN ls -la /app && ls -la /app/utils
 
 # Copy application code from backend directory
 COPY backend/. .

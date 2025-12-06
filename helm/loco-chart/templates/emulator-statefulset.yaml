@@ -181,12 +181,20 @@ spec:
         - name: art-res-nfs
           mountPath: /nfs
         {{- end }}
+        - name: emulator-scripts
+          mountPath: /usr/local/bin/health-monitor.sh
+          subPath: health-monitor.sh
         
         resources:
           {{- if .Values.emulator.resources }}
           {{- toYaml .Values.emulator.resources | nindent 10 }}
           {{- end }}
+
       volumes:
+      - name: emulator-scripts
+        configMap:
+          name: {{ include "loco.fullname" . }}-emulator-scripts
+          defaultMode: 0755
       - name: disk
         {{- if .Values.emulator.diskPVC }}
         persistentVolumeClaim:
