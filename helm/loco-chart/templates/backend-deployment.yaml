@@ -30,7 +30,7 @@ spec:
       containers:
       - name: backend
         image: {{ include "loco.image" (dict "root" . "image" .Values.backend.image "tag" .Values.backend.tag) }}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: {{ .Values.backend.imagePullPolicy | default "IfNotPresent" }}
         env:
         - name: KUBERNETES_NAMESPACE
           valueFrom:
