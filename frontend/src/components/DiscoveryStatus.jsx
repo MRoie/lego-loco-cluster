@@ -51,8 +51,13 @@ export default function DiscoveryStatus({ status }) {
           <span title="Total Instances">
             {stats.total} Total
           </span>
+          {stats.degraded > 0 && (
+            <span className="text-orange-400 ml-1" title="Degraded Instances">
+              ({stats.degraded} Degraded)
+            </span>
+          )}
           {stats.notReady > 0 && (
-            <span className="text-yellow-400 ml-1">
+            <span className="text-yellow-400 ml-1" title="Booting/Not Ready">
               ({stats.notReady} Booting)
             </span>
           )}
@@ -64,8 +69,8 @@ export default function DiscoveryStatus({ status }) {
           onClick={handleRefresh}
           disabled={isRefreshing}
           className={`p-1 rounded transition-colors ${isRefreshing
-              ? 'text-gray-500 cursor-not-allowed'
-              : 'text-blue-400 hover:text-blue-300 hover:bg-white/10'
+            ? 'text-gray-500 cursor-not-allowed'
+            : 'text-blue-400 hover:text-blue-300 hover:bg-white/10'
             }`}
           title={`Last update: ${lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : 'Never'}\nClick to refresh`}
         >

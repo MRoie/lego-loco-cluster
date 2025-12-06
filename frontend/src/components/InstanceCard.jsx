@@ -23,6 +23,8 @@ export default function InstanceCard({ instance, isActive, onClick }) {
         return 'lego-status-running';
       case 'booting':
         return 'lego-status-booting';
+      case 'degraded':
+        return 'bg-orange-500'; // Custom class for degraded
       case 'error':
         return 'lego-status-error';
       default:
@@ -39,6 +41,8 @@ export default function InstanceCard({ instance, isActive, onClick }) {
         return 'Running';
       case 'booting':
         return 'Booting...';
+      case 'degraded':
+        return 'Degraded';
       case 'error':
         return 'Error';
       default:
@@ -57,7 +61,7 @@ export default function InstanceCard({ instance, isActive, onClick }) {
         iconBg: 'bg-red-200 border-red-400'
       };
     }
-    
+
     switch (instance.status) {
       case 'booting':
         return {
@@ -68,6 +72,15 @@ export default function InstanceCard({ instance, isActive, onClick }) {
           textClass: 'text-yellow-800',
           iconBg: 'bg-yellow-200 border-yellow-400',
           animated: true
+        };
+      case 'degraded':
+        return {
+          icon: '⚠️',
+          title: 'Degraded',
+          subtitle: instance.health?.details || 'Service check failed',
+          bgClass: 'bg-orange-100',
+          textClass: 'text-orange-800',
+          iconBg: 'bg-orange-200 border-orange-400'
         };
       case 'error':
         return {
@@ -97,8 +110,8 @@ export default function InstanceCard({ instance, isActive, onClick }) {
       onClick={onClick}
       className={`
         relative transition-all duration-300 cursor-pointer overflow-hidden
-        ${isActive 
-          ? 'lego-card ring-4 ring-blue-400 ring-offset-2 ring-offset-green-500' 
+        ${isActive
+          ? 'lego-card ring-4 ring-blue-400 ring-offset-2 ring-offset-green-500'
           : 'lego-card'
         }
         ${!instance.provisioned ? 'opacity-90' : ''}
@@ -117,14 +130,17 @@ export default function InstanceCard({ instance, isActive, onClick }) {
               </span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className={`w-5 h-5 rounded ${getStatusColor(instance.status)} border-3 border-black/30 shadow-sm`} />
+              <div
+                className={`w-5 h-5 rounded ${getStatusColor(instance.status)} border-3 border-black/30 shadow-sm`}
+                title={instance.health?.details || getStatusText(instance.status, instance.provisioned)}
+              />
               {/* Quality Indicator - compact display */}
               {instance.provisioned && (
                 <QualityIndicator instanceId={instance.id} compact={true} />
               )}
             </div>
           </div>
-          
+
           {/* Control buttons row like LEGO character card buttons */}
           <div className="flex justify-between items-center">
             <AudioSinkSelector mediaRef={videoRef} />
@@ -158,12 +174,12 @@ export default function InstanceCard({ instance, isActive, onClick }) {
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Simulated LEGO elements */}
                     <div className="absolute top-1/4 left-1/4 w-8 h-8 bg-red-500 rounded-sm border-2 border-red-700"></div>
                     <div className="absolute top-1/2 right-1/3 w-6 h-6 bg-yellow-400 rounded-sm border-2 border-yellow-600"></div>
                     <div className="absolute bottom-1/3 left-1/2 w-10 h-4 bg-blue-500 rounded-sm border-2 border-blue-700"></div>
-                    
+
                     {/* Simulated locomotive */}
                     <div className="absolute bottom-1/4 left-1/3 flex items-center space-x-1">
                       <div className="w-3 h-2 bg-black rounded-sm"></div>
@@ -172,10 +188,10 @@ export default function InstanceCard({ instance, isActive, onClick }) {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Active stream indicator */}
                 <div className="absolute top-2 right-2 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
-                
+
                 {/* Stream overlay text */}
                 <div className="absolute bottom-2 left-2 text-white text-xs font-bold bg-black/50 px-2 py-1 rounded">
                   ▶ LIVE STREAM
@@ -184,10 +200,10 @@ export default function InstanceCard({ instance, isActive, onClick }) {
             ) : (
               <ReactVNCViewer instanceId={instance.id} />
             )}
-            
+
             <video ref={videoRef} className="hidden" />
             {loading && (
-              <motion.div 
+              <motion.div
                 className="absolute inset-0 flex items-center justify-center text-sm text-white bg-black/80"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -205,7 +221,7 @@ export default function InstanceCard({ instance, isActive, onClick }) {
           </>
         ) : (
           <div className={`w-full h-full flex flex-col items-center justify-center ${placeholder.bgClass}`}>
-            <motion.div 
+            <motion.div
               className={`w-16 h-16 border-3 ${placeholder.iconBg} rounded-lg mb-3 flex items-center justify-center`}
               animate={placeholder.animated ? { scale: [1, 1.1, 1] } : {}}
               transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
@@ -214,7 +230,7 @@ export default function InstanceCard({ instance, isActive, onClick }) {
             </motion.div>
             <p className={`text-sm font-bold mb-1 lego-text ${placeholder.textClass}`}>{placeholder.title}</p>
             <p className={`text-xs lego-text text-center px-4 ${placeholder.textClass} opacity-80`}>{placeholder.subtitle}</p>
-            
+
             {instance.status === 'booting' && (
               <div className="w-32 h-2 lego-progress mt-3">
                 <motion.div
@@ -240,7 +256,7 @@ export default function InstanceCard({ instance, isActive, onClick }) {
           }}
         />
       )}
-      
+
       {/* LEGO-style glow effect for active card */}
       {isActive && (
         <motion.div

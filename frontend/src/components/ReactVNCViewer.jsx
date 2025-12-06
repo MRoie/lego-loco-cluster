@@ -1,56 +1,79 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { VncScreen } from 'react-vnc';
+import { useVNCConnection, ConnectionState } from '../hooks/useVNCConnection';
+import { createLogger } from '../utils/logger';
+import { metrics } from '../utils/metrics';
+import VNCDebugPanel from './VNCDebugPanel';
+
+const logger = createLogger('ReactVNCViewer');
 
 /**
  * React-VNC based VNC viewer component
  * Uses the react-vnc library for robust VNC protocol implementation
- * Enhanced with audio and controls testing
+ * Enhanced with audio, controls testing, and enterprise-grade observability
  */
 export default function ReactVNCViewer({ instanceId }) {
-  const [connected, setConnected] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState(null);
+  // Use robust connection hook
+  const { state, connect, disconnect, updateState } = useVNCConnection(instanceId, {
+    autoConnect: true,
+    retryAttempts: 5,
+    onConnectionChange: (newState) => {
+      logger.info('Connection state changed', { instanceId, newState });
+      metrics.incrementCounter('vnc_state_change', { instance: instanceId, state: newState });
+    },
+    onError: (error) => {
+      // Error logging handled by hook, but we can add component-specific logic here
+    }
+  });
+
+  const { connectionState, vncUrl, instance, error } = state;
+
+  // Local state for features not managed by connection hook
   const [hasControl, setHasControl] = useState(false);
   const [audioDetected, setAudioDetected] = useState(false);
   const [controlsResponsive, setControlsResponsive] = useState(false);
+
   const vncRef = useRef(null);
-  
+
   // Control release tracking
   const keySequenceRef = useRef([]);
   const lastKeyTimeRef = useRef(0);
-  
+
   // Audio and controls testing
   const lastControlTestRef = useRef(0);
   const audioContextRef = useRef(null);
 
   // Debug logging for hasControl state changes
   useEffect(() => {
-    console.log(`🎮 ReactVNC hasControl state changed to: ${hasControl} for instance ${instanceId}`);
+    logger.debug(`Control state changed`, { instanceId, hasControl });
+    metrics.setGauge('vnc_has_control', hasControl ? 1 : 0, { instance: instanceId });
   }, [hasControl, instanceId]);
 
   // Test audio detection
   useEffect(() => {
-    if (connected && hasControl) {
+    if (connectionState === ConnectionState.CONNECTED && hasControl) {
       testAudioCapabilities();
     }
-  }, [connected, hasControl]);
+  }, [connectionState, hasControl]);
 
   // Test controls responsiveness periodically
   useEffect(() => {
-    if (connected && hasControl) {
+    if (connectionState === ConnectionState.CONNECTED && hasControl) {
       const testInterval = setInterval(() => {
         testControlsResponsiveness();
       }, 10000); // Test every 10 seconds
 
       return () => clearInterval(testInterval);
     }
-  }, [connected, hasControl]);
+  }, [connectionState, hasControl]);
 
-  console.log('ReactVNCViewer component mounted for instance:', instanceId);
-
-  // Create WebSocket connection URL
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const vncUrl = `${protocol}//${window.location.host}/proxy/vnc/${instanceId}/`;
+  useEffect(() => {
+    logger.info('Component mounted', { instanceId });
+    metrics.incrementCounter('vnc_viewer_mount', { instance: instanceId });
+    return () => {
+      logger.info('Component unmounted', { instanceId });
+    };
+  }, [instanceId]);
 
   // Audio detection test
   const testAudioCapabilities = async () => {
@@ -60,25 +83,27 @@ export default function ReactVNCViewer({ instanceId }) {
         if (!audioContextRef.current) {
           audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         }
-        
+
         // Test if we can create audio nodes (indicates audio support)
         const oscillator = audioContextRef.current.createOscillator();
         const gainNode = audioContextRef.current.createGain();
         oscillator.connect(gainNode);
-        
+
         setAudioDetected(true);
-        console.log('🔊 Audio capabilities detected for instance:', instanceId);
-        
+        logger.info('Audio capabilities detected', { instanceId });
+        metrics.setGauge('vnc_audio_detected', 1, { instance: instanceId });
+
         // Dispatch event for quality monitoring
         window.dispatchEvent(new CustomEvent('vncAudioDetected', {
           detail: { instanceId, detected: true }
         }));
       } else {
         setAudioDetected(false);
-        console.log('🔇 No audio capabilities detected for instance:', instanceId);
+        logger.warn('No audio capabilities detected', { instanceId });
+        metrics.setGauge('vnc_audio_detected', 0, { instance: instanceId });
       }
     } catch (error) {
-      console.warn('Audio detection failed:', error);
+      logger.warn('Audio detection failed', { instanceId, error: error.message });
       setAudioDetected(false);
     }
   };
@@ -86,7 +111,7 @@ export default function ReactVNCViewer({ instanceId }) {
   // Controls responsiveness test
   const testControlsResponsiveness = () => {
     const now = Date.now();
-    
+
     // Don't test too frequently
     if (now - lastControlTestRef.current < 5000) return;
     lastControlTestRef.current = now;
@@ -102,69 +127,72 @@ export default function ReactVNCViewer({ instanceId }) {
           bubbles: true,
           cancelable: true
         });
-        
+
         const eventDispatched = canvas.dispatchEvent(testEvent);
         setControlsResponsive(eventDispatched);
-        
-        console.log(`🎮 Controls responsiveness test for ${instanceId}: ${eventDispatched ? 'PASS' : 'FAIL'}`);
-        
+
+        logger.debug('Controls responsiveness test', { instanceId, result: eventDispatched ? 'PASS' : 'FAIL' });
+        metrics.incrementCounter('vnc_controls_test', { instance: instanceId, result: eventDispatched ? 'pass' : 'fail' });
+
         // Dispatch event for quality monitoring
         window.dispatchEvent(new CustomEvent('vncControlsTest', {
           detail: { instanceId, responsive: eventDispatched }
         }));
       } else {
         setControlsResponsive(false);
-        console.log(`🎮 Controls test failed - no canvas found for ${instanceId}`);
+        logger.debug('Controls test failed - no canvas found', { instanceId });
       }
     } catch (error) {
-      console.warn('Controls responsiveness test failed:', error);
+      logger.warn('Controls responsiveness test failed', { instanceId, error: error.message });
       setControlsResponsive(false);
     }
   };
 
   // VNC event handlers
-  const handleConnect = () => {
-    console.log('ReactVNC connected to', instanceId);
-    setConnected(true);
-    setConnecting(false);
+  const handleConnect = useCallback(() => {
+    logger.info('VNC connected successfully', { instanceId });
+    updateState({ connectionState: ConnectionState.CONNECTED });
     setHasControl(true);
-    setError(null);
-    
+
+    metrics.incrementCounter('vnc_connection_success', { instance: instanceId });
+
     // Test capabilities after connection
     setTimeout(() => {
       testAudioCapabilities();
       testControlsResponsiveness();
     }, 1000);
-  };
+  }, [instanceId, updateState]);
 
-  const handleDisconnect = () => {
-    console.log('ReactVNC disconnected from', instanceId);
-    setConnected(false);
-    setConnecting(false);
+  const handleDisconnect = useCallback(() => {
+    logger.info('VNC disconnected', { instanceId });
+    updateState({ connectionState: ConnectionState.DISCONNECTED });
     setHasControl(false);
     setAudioDetected(false);
     setControlsResponsive(false);
-    
+
+    metrics.incrementCounter('vnc_disconnect', { instance: instanceId });
+
     // Clean up audio context
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
-  };
+  }, [instanceId, updateState]);
 
-  const handleError = (error) => {
-    console.error('ReactVNC error:', error);
-    setError(`Connection failed: ${error.message || error}`);
-    setConnecting(false);
-    setConnected(false);
-  };
+  const handleError = useCallback((error) => {
+    logger.error('VNC error occurred', { instanceId, error: error.message || error });
+    // Note: We don't set FAILED state here immediately because react-vnc might retry internally
+    // or it might be a transient error. But we log it.
+    // If it's a fatal error, the hook's retry logic should handle reconnection if needed.
+    metrics.incrementCounter('vnc_error', { instance: instanceId });
+  }, [instanceId]);
 
   // VR Controller Support - Listen for VR events
   useEffect(() => {
     // VR trigger button handler (for regaining control)
     const handleVRTrigger = (event) => {
-      if (event.detail.instanceId === instanceId && !hasControl && connected) {
-        console.log('🎮 VR trigger detected for control regain');
+      if (event.detail.instanceId === instanceId && !hasControl && connectionState === ConnectionState.CONNECTED) {
+        logger.debug('VR trigger detected for control regain', { instanceId });
         regainControl();
       }
     };
@@ -172,24 +200,23 @@ export default function ReactVNCViewer({ instanceId }) {
     // VR release gesture handler (for releasing control)
     const handleVRRelease = (event) => {
       if (event.detail.instanceId === instanceId && hasControl) {
-        console.log('🎮 VR release gesture detected');
+        logger.debug('VR release gesture detected', { instanceId });
         releaseControl();
       }
     };
 
     // VR input events (pointer/keyboard from VR controllers)
     const handleVRPointer = (event) => {
-      if (event.detail.instanceId === instanceId && hasControl && connected && vncRef.current) {
+      if (event.detail.instanceId === instanceId && hasControl && connectionState === ConnectionState.CONNECTED && vncRef.current) {
         const { x, y, button, pressed } = event.detail;
-        console.log(`🎮 VR pointer: (${x}, ${y}) button=${button} pressed=${pressed}`);
-        
+
         // React-VNC handles pointer events through the component, so we dispatch a synthetic event
         const canvas = vncRef.current.querySelector('canvas');
         if (canvas && x >= 0 && y >= 0) {
           const rect = canvas.getBoundingClientRect();
           const clientX = rect.left + (x / canvas.width) * rect.width;
           const clientY = rect.top + (y / canvas.height) * rect.height;
-          
+
           const eventType = pressed ? 'mousedown' : 'mouseup';
           const mouseEvent = new MouseEvent(eventType, {
             clientX,
@@ -204,10 +231,9 @@ export default function ReactVNCViewer({ instanceId }) {
     };
 
     const handleVRKeyboard = (event) => {
-      if (event.detail.instanceId === instanceId && hasControl && connected && vncRef.current) {
+      if (event.detail.instanceId === instanceId && hasControl && connectionState === ConnectionState.CONNECTED && vncRef.current) {
         const { key, pressed } = event.detail;
-        console.log(`🎮 VR keyboard: key=${key} pressed=${pressed}`);
-        
+
         // React-VNC handles keyboard events through the component
         const canvas = vncRef.current.querySelector('canvas');
         if (canvas) {
@@ -236,16 +262,16 @@ export default function ReactVNCViewer({ instanceId }) {
       window.removeEventListener('vrPointerEvent', handleVRPointer);
       window.removeEventListener('vrKeyboardEvent', handleVRKeyboard);
     };
-  }, [instanceId, hasControl, connected]);
+  }, [instanceId, hasControl, connectionState]);
 
   // Keyboard event handler for control release sequences
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (!connected || !hasControl) return;
-      
+      if (connectionState !== ConnectionState.CONNECTED || !hasControl) return;
+
       // Check for control release sequence
       if (checkControlReleaseSequence(event)) {
-        console.log('🔓 Control release sequence detected!');
+        logger.info('Control release sequence detected', { instanceId });
         releaseControl();
         event.preventDefault();
         event.stopPropagation();
@@ -255,49 +281,45 @@ export default function ReactVNCViewer({ instanceId }) {
 
     // Add keyboard event listener to document
     document.addEventListener('keydown', handleKeyDown);
-    
+
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [connected, hasControl]);
+  }, [connectionState, hasControl]);
 
   // Control release mechanism - compatible with VR controllers
   const checkControlReleaseSequence = (event) => {
     const now = Date.now();
     const resetTimeout = 3000; // 3 seconds to complete sequence
-    
+
     // Reset sequence if too much time has passed
     if (now - lastKeyTimeRef.current > resetTimeout) {
       keySequenceRef.current = [];
     }
-    
+
     lastKeyTimeRef.current = now;
-    
+
     // Control release sequences
     const releaseSequences = [
-      // Primary sequence: Ctrl+Alt+R
       ['Control', 'Alt', 'KeyR'],
-      // Alternative: Ctrl+Shift+Escape
       ['Control', 'Shift', 'Escape'],
-      // VR-friendly: F10 three times quickly
       ['F10', 'F10', 'F10'],
-      // Gaming-friendly: Ctrl+Alt+Q
       ['Control', 'Alt', 'KeyQ']
     ];
-    
+
     // Add current key to sequence
     keySequenceRef.current.push(event.code);
-    
+
     // Keep only last 5 keys
     if (keySequenceRef.current.length > 5) {
       keySequenceRef.current = keySequenceRef.current.slice(-5);
     }
-    
+
     // Check if any release sequence is matched
     for (const sequence of releaseSequences) {
       if (keySequenceRef.current.length >= sequence.length) {
         const lastKeys = keySequenceRef.current.slice(-sequence.length);
-        
+
         // Special handling for F10 triple-tap
         if (sequence.every(key => key === 'F10')) {
           const f10Times = keySequenceRef.current.filter(key => key === 'F10');
@@ -312,65 +334,57 @@ export default function ReactVNCViewer({ instanceId }) {
         }
       }
     }
-    
+
     return false;
   };
 
   // Release control of this instance
   const releaseControl = () => {
-    console.log('🔓 Releasing control of ReactVNC instance:', instanceId);
+    logger.info('Releasing control', { instanceId });
     setHasControl(false);
     keySequenceRef.current = [];
-    
+
     // Dispatch custom event for VR and other controllers
     const releaseEvent = new CustomEvent('vncControlReleased', {
-      detail: { 
-        instanceId, 
+      detail: {
+        instanceId,
         timestamp: Date.now(),
         reason: 'keyboard_combo'
       }
     });
     window.dispatchEvent(releaseEvent);
-    
-    console.log('🎮 Control release event dispatched for VR/external controllers');
   };
 
   // Regain control of this instance
   const regainControl = () => {
-    console.log(`🔒 regainControl called: connected=${connected}, currentControl=${hasControl}`);
-    
-    if (!connected) {
-      console.log('Cannot regain control: VNC not connected');
+    if (connectionState !== ConnectionState.CONNECTED) {
+      logger.debug('Cannot regain control: VNC not connected', { instanceId });
       return;
     }
-    
-    console.log('🔒 Regaining control of ReactVNC instance:', instanceId);
+
+    logger.info('Regaining control', { instanceId });
     setHasControl(true);
     keySequenceRef.current = [];
-    
+
     // Dispatch custom event for VR and other controllers
     const regainEvent = new CustomEvent('vncControlRegained', {
-      detail: { 
-        instanceId, 
+      detail: {
+        instanceId,
         timestamp: Date.now(),
         method: 'click'
       }
     });
     window.dispatchEvent(regainEvent);
-    
-    console.log('🎮 Control regain event dispatched for VR/external controllers');
   };
 
   const handleReconnect = () => {
-    console.log('Reconnecting to VNC...');
-    setError(null);
-    setConnecting(true);
-    setConnected(false);
-    setHasControl(false);
+    logger.info('Manual reconnection requested', { instanceId });
+    metrics.incrementCounter('vnc_manual_reconnect', { instance: instanceId });
+    connect();
   };
 
   const handleContainerClick = () => {
-    if (!hasControl && connected) {
+    if (!hasControl && connectionState === ConnectionState.CONNECTED) {
       regainControl();
     }
   };
@@ -383,22 +397,38 @@ export default function ReactVNCViewer({ instanceId }) {
     );
   }
 
+  // Determine if we should show loading/connecting state
+  const isConnecting =
+    connectionState === ConnectionState.CONNECTING ||
+    connectionState === ConnectionState.FETCHING_METADATA ||
+    connectionState === ConnectionState.AUTHENTICATING ||
+    connectionState === ConnectionState.RECONNECTING;
+
+  // Determine if we are in a failed state
+  const isFailed = connectionState === ConnectionState.FAILED;
+
   return (
     <div className="vnc-container relative bg-black border border-gray-300 overflow-hidden">
       {/* Connection status overlay */}
-      {(connecting || error) && (
+      {(isConnecting || isFailed) && (
         <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-10">
           <div className="text-center text-white">
-            {connecting && (
+            {isConnecting && (
               <>
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-                <p>Connecting to VNC...</p>
+                <p>
+                  {connectionState === ConnectionState.RECONNECTING ? 'Reconnecting...' : 'Connecting to VNC...'}
+                </p>
+                {state.retryCount > 0 && (
+                  <p className="text-xs text-gray-400 mt-1">Attempt {state.retryCount}</p>
+                )}
               </>
             )}
-            {error && (
+            {isFailed && (
               <>
-                <p className="text-red-400 mb-2">{error}</p>
-                <button 
+                <p className="text-red-400 mb-2">Connection Failed</p>
+                <p className="text-xs text-gray-400 mb-4 max-w-xs mx-auto">{error?.message || 'Unknown error'}</p>
+                <button
                   onClick={handleReconnect}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
@@ -411,68 +441,63 @@ export default function ReactVNCViewer({ instanceId }) {
       )}
 
       {/* Control and Status indicators */}
-      {connected && (
+      {connectionState === ConnectionState.CONNECTED && (
         <div className="absolute top-2 right-2 z-20 space-y-1">
           {/* Control Status */}
-          <div className={`px-2 py-1 rounded text-xs font-medium ${
-            hasControl 
-              ? 'bg-green-500 text-white' 
+          <div className={`px-2 py-1 rounded text-xs font-medium ${hasControl
+              ? 'bg-green-500 text-white'
               : 'bg-yellow-500 text-black cursor-pointer hover:bg-yellow-400'
-          }`}>
+            }`}>
             {hasControl ? '🎮 You have control' : '👆 Click to take control'}
           </div>
-          
+
           {/* Audio Status */}
-          <div className={`px-2 py-1 rounded text-xs font-medium ${
-            audioDetected 
-              ? 'bg-blue-500 text-white' 
+          <div className={`px-2 py-1 rounded text-xs font-medium ${audioDetected
+              ? 'bg-blue-500 text-white'
               : 'bg-gray-500 text-white'
-          }`}>
+            }`}>
             🔊 {audioDetected ? 'Audio Ready' : 'No Audio'}
           </div>
-          
+
           {/* Controls Status */}
-          <div className={`px-2 py-1 rounded text-xs font-medium ${
-            controlsResponsive 
-              ? 'bg-green-500 text-white' 
+          <div className={`px-2 py-1 rounded text-xs font-medium ${controlsResponsive
+              ? 'bg-green-500 text-white'
               : 'bg-orange-500 text-white'
-          }`}>
+            }`}>
             🎯 {controlsResponsive ? 'Controls OK' : 'Controls Test'}
           </div>
         </div>
       )}
 
       {/* VNC Component */}
-      <div 
+      <div
         ref={vncRef}
         onClick={handleContainerClick}
         className="w-full h-full min-h-96"
         style={{ opacity: hasControl ? 1 : 0.7 }}
       >
-        <VncScreen
-          url={vncUrl}
-          style={{
-            width: '100%',
-            height: '100%',
-          }}
-          onConnect={handleConnect}
-          onDisconnect={handleDisconnect}
-          onError={handleError}
-          scaleViewport={true}
-          resizeSession={false}
-          showDotCursor={true}
-          background="#000000"
-          qualityLevel={6}
-          compressionLevel={2}
-        />
+        {vncUrl && (
+          <VncScreen
+            url={vncUrl}
+            style={{
+              width: '100%',
+              height: '100%',
+            }}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            onError={handleError}
+            scaleViewport={true}
+            resizeSession={false}
+            showDotCursor={true}
+            background="#000000"
+            qualityLevel={6}
+            compressionLevel={2}
+          />
+        )}
       </div>
 
-      {/* Debug info */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="absolute bottom-2 left-2 text-xs text-gray-300 bg-black bg-opacity-50 p-1 rounded">
-          Instance: {instanceId} | Connected: {connected ? '✓' : '✗'} | Control: {hasControl ? '✓' : '✗'} | Audio: {audioDetected ? '✓' : '✗'} | Controls: {controlsResponsive ? '✓' : '✗'}
-        </div>
-      )}
+      {/* Debug Panel */}
+      <VNCDebugPanel instanceId={instanceId} state={state} />
     </div>
   );
 }

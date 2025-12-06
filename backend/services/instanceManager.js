@@ -3,6 +3,7 @@ const path = require('path');
 const logger = require('../utils/logger');
 const KubernetesDiscovery = require('./kubernetesDiscovery');
 const EndpointsDiscovery = require('./endpointsDiscovery');
+const ProbingService = require('./probingService');
 
 class InstanceManager {
   constructor(configDir = '/app/config') {
@@ -97,6 +98,57 @@ class InstanceManager {
     }
   }
 
+  async _discoverAndProbe() {
+    logger.debug("Starting discovery and probe cycle...");
+    // 1. Discover from Source
+    const discoveredInstances = await this.discovery.discoverInstances();
+
+    // 2. Active Probing
+    const probedInstances = await Promise.all(discoveredInstances.map(async (inst) => {
+      try {
+        const probeResult = await ProbingService.probeInstance(inst);
+
+        // Merge probe status
+        inst.probe = probeResult;
+
+        // Initialize health if missing
+        if (!inst.health) inst.health = {};
+
+        // Update overall health based on probe
+        console.log(`[DEBUG] Probe result for ${inst.id}:`, JSON.stringify(inst.probe));
+
+        if (inst.probe.reachable && inst.probe.services.vnc.status === 'ok') {
+          // If probe is good, trust it
+          inst.status = 'ready';
+          inst.health.ready = true;
+          inst.health.details = 'Active probe successful';
+        } else {
+          console.log(`[DEBUG] Probe failed for ${inst.id}`, inst.probe.services.vnc.status);
+          logger.info(`Probe failed for ${inst.id}`, {
+            vnc: inst.probe.services.vnc.status,
+            health: inst.probe.services.health.status,
+            oldStatus: inst.status
+          });
+
+          // If probe failed
+          if (inst.status === 'ready') {
+            // Downgrade if K8s thought it was ready
+            inst.status = 'degraded';
+          }
+          inst.health.ready = false;
+          inst.health.details = probeResult.services.vnc.error || 'Probe failed';
+        }
+
+        return inst;
+      } catch (err) {
+        logger.error(`Probe failed for ${inst.id}:`, err);
+        return inst;
+      }
+    }));
+
+    return probedInstances;
+  }
+
   async getInstances() {
     // Check if initialized first
     if (!this.initialized) {
@@ -109,7 +161,7 @@ class InstanceManager {
       return this.cachedInstances;
     }
 
-    // ENFORCE Kubernetes-only discovery - NO static fallback
+    // ENFORCE Kubernetes-only discovery
     if (!this.kubernetesDiscovery.isAvailable() || !this.discovery) {
       throw new Error('Kubernetes discovery is not available. Static configuration fallback has been disabled. Please ensure the backend is running in a Kubernetes environment with proper RBAC permissions.');
     }
@@ -126,15 +178,14 @@ class InstanceManager {
       return this.cachedInstances;
     }
 
-    // Discover fresh instances using the configured discovery service
+    // Discover fresh instances with probing
     try {
-      const instances = await this.discovery.discoverInstances();
+      const instances = await this._discoverAndProbe();
       this.cachedInstances = instances;
       this.lastDiscoveryTime = now;
       return instances;
     } catch (error) {
       logger.error('Failed to discover instances', { error: error.message });
-      // Return cached instances if available, otherwise empty array
       return this.cachedInstances || [];
     }
   }
@@ -153,7 +204,8 @@ class InstanceManager {
       stats: {
         total: instances.length,
         ready: instances.filter(i => i.status === 'ready').length,
-        notReady: instances.filter(i => i.status !== 'ready').length
+        degraded: instances.filter(i => i.status === 'degraded').length,
+        notReady: instances.filter(i => i.status !== 'ready' && i.status !== 'degraded').length
       },
       instances: instances
     };
@@ -210,7 +262,7 @@ class InstanceManager {
     // Set up periodic discovery
     this.discoveryTimer = setInterval(async () => {
       try {
-        const instances = await this.discovery.discoverInstances();
+        const instances = await this._discoverAndProbe();
         this.cachedInstances = instances;
         this.lastDiscoveryTime = Date.now();
       } catch (error) {
@@ -223,16 +275,14 @@ class InstanceManager {
       this.watchHandle = this.discovery.watchEndpoints((type, endpoint) => {
         logger.debug("Endpoints changed", { type, service: this.serviceName });
         // Invalidate cache to force refresh on next request
-        this.cachedInstances = null;
-        this.lastDiscoveryTime = null;
+        this.invalidateCache();
       });
     } else if (this.kubernetesDiscovery.watchEmulatorInstances) {
       // Fallback to pod watch for legacy mode
       this.watchHandle = this.kubernetesDiscovery.watchEmulatorInstances((type, pod) => {
         logger.debug("Instance discovered", { type, podName: pod.metadata.name });
         // Invalidate cache to force refresh on next request
-        this.cachedInstances = null;
-        this.lastDiscoveryTime = null;
+        this.invalidateCache();
       });
     }
   }
