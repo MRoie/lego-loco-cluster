@@ -53,6 +53,15 @@ imagePullSecrets: []
 rbac:
   create: true  # Create service account and RBAC for backend auto-discovery
 
+# Ingress configuration for centralized routing
+ingress:
+  enabled: true  # Enable Ingress for production deployments
+  className: nginx  # Use nginx ingress controller
+  annotations:
+    # Enable WebSocket support
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
 # Registry configurations for different environments
 registryConfig:
   # GitHub Container Registry
