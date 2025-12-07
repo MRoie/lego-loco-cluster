@@ -97,7 +97,24 @@ export function useVNCConnection(instanceId, options = {}) {
                 }
 
                 // Step 2: Build URL
-                const vncUrl = buildVNCUrl(instanceId);
+                const traceId = crypto.randomUUID();
+                const vncUrl = `${buildVNCUrl(instanceId)}?traceId=${traceId}`;
+
+                // Log start of connection with trace ID
+                const logPayload = {
+                    level: 'info',
+                    message: 'Starting VNC connection',
+                    traceId,
+                    instanceId,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Fire and forget log to backend
+                fetch('/api/logs/frontend', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(logPayload)
+                }).catch(err => console.error('Failed to ship log', err));
 
                 // Step 3: Run OSI Verification (if enabled)
                 // We do this before marking as connecting to catch issues early
@@ -105,9 +122,9 @@ export function useVNCConnection(instanceId, options = {}) {
                 let diagnostics = null;
                 try {
                     diagnostics = await verifyAllLayers(instanceId, vncUrl);
-                    logger.info('Connection diagnostics', { diagnostics });
+                    logger.info('Connection diagnostics', { diagnostics, traceId });
                 } catch (diagErr) {
-                    logger.warn('Diagnostics failed', { error: diagErr.message });
+                    logger.warn('Diagnostics failed', { error: diagErr.message, traceId });
                 }
 
                 // Step 4: Update state to trigger connection in UI component
@@ -115,7 +132,8 @@ export function useVNCConnection(instanceId, options = {}) {
                     instance,
                     vncUrl,
                     diagnostics,
-                    connectionState: ConnectionState.CONNECTING
+                    connectionState: ConnectionState.CONNECTING,
+                    traceId // Store traceId in state for exposure
                 });
 
                 if (instance.status !== 'ready') {
@@ -126,7 +144,8 @@ export function useVNCConnection(instanceId, options = {}) {
                 logger.info('VNC metadata fetched and URL prepared', {
                     instanceId,
                     vncUrl,
-                    discoveryStatus: instance.status
+                    discoveryStatus: instance.status,
+                    traceId
                 });
 
                 return true;

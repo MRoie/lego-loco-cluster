@@ -1,19 +1,20 @@
 replicas: 1
 namespace: loco
 
-imageRepo: "ghcr.io/mroie"
+# Use local images by default (minikube setup)
+imageRepo: ""
 
-# Storage configuration
+# Storage configuration for minikube with hostPath
 storage:
-  class: "standard"  # Default storage class for PVCs
+  class: "standard"  # minikube default storage class
   nfsSize: "10Gi"
   diskSize: "10Gi"
   
   # Storage strategy configuration
   strategy:
-    # Option 1: HostPath Direct Mounts
+    # Option 1: HostPath Direct Mounts (ENABLED by default for minikube)
     hostPath:
-      enabled: false  # Disabled by default, enable for local development
+      enabled: true  # Changed from false to true
       path: "/tmp/loco-art-shared"
       createOnStartup: true
       permissions: "777"
@@ -21,12 +22,12 @@ storage:
     # Option 8: Hybrid Storage with Multiple Backends
     hybrid:
       enabled: false  # Disabled by default
-      primary: "nfs"  # Default to NFS for production
+      primary: "hostPath"  # Changed from "nfs"
       fallback: "emptyDir"
       
       # NFS configuration
       nfs:
-        enabled: true
+        enabled: false  # Changed from true
         server: "nfs-server"
         path: "/exports/art"
       
@@ -77,26 +78,29 @@ registryConfig:
     server: ""  # e.g., "your-company.jfrog.io"
 
 emulator:
+  # Emulator replicas and instance configuration
+  replicas: 1
+  
+  # Image configuration
   image: qemu-loco
   tag: latest
-  imagePullPolicy: IfNotPresent
-
+  imagePullPolicy: Never  # Use local images for minikube
+  serviceType: ClusterIP
   servicePort: 5901
   diskPVC: win98-disk
   diskReadOnly: false
 
-  # Snapshot configuration
+  # Snapshot configuration - disabled since disk image is built-in
   usePrebuiltSnapshot: false
   snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
   snapshotTag: "win98-base"
 
-  # Health monitoring configuration
-  healthPort: 8080
-  probes:
+  # Health checks configuration
+  healthChecks:
     startup:
       enabled: true
-      path: /
-      failureThreshold: 30
+      path: /health
+      initialDelaySeconds: 30
       periodSeconds: 10
       timeoutSeconds: 5
     liveness:
@@ -122,15 +126,17 @@ emulator:
       cpu: "0.25"
   
   # Additional environment variables
-  env: {}
-    # USE_PREBUILT_SNAPSHOT: "true"
-    # SNAPSHOT_REGISTRY: "ghcr.io/mroie/qemu-snapshots"
-    # SNAPSHOT_TAG: "win98-base"
-    # DISK_SIZE: "2G"
+  env:
+    BRIDGE: "loco-br"
+    TAP_IF: "tap0"
+    DISK: "/images/win98.qcow2"
+    DISPLAY_NUM: "99"
+    USE_PREBUILT_SNAPSHOT: "false"
 
 backend:
-  image: loco-backend
-  tag: latest
+  image: lego-loco-backend
+  tag: dns-fix-v1
+  imagePullPolicy: Never  # Use local images
   servicePort: 3001
   resources:
     requests:
@@ -141,9 +147,21 @@ backend:
       cpu: "500m"
 
 frontend:
-  image: loco-frontend
+  image: lego-loco-frontend
   tag: latest
+  imagePullPolicy: Never  # Use local images
   servicePort: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  env:
+    BACKEND_HOST: "loco-loco-backend"
+    BACKEND_PORT: "3001"
+    FRONTEND_PORT: "3000"
 
 git:
   userName: "Loco Watcher"
@@ -151,21 +169,49 @@ git:
 
 artRes:
   nfs:
-    server: 10.108.19.150
+    server: nfs-server.loco.svc.cluster.local
     path: /exports/art
 
 vr:
   enabled: true
-  image: loco-frontend
+  image: lego-loco-frontend
   tag: latest
+  imagePullPolicy: Never  # Use local images
   servicePort: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
   buildArgs:
     VITE_DEFAULT_VR: "true"
+
+# VNC implementation configuration
+vnc:
+  implementation: "novnc"  # Options: "novnc" or "react-vnc"
+  fallbackEnabled: true    # Enable automatic fallback to react-vnc if NoVNC fails
+  maxRetries: 3           # Number of retries before falling back
+
+# RBAC configuration for Kubernetes service discovery
+rbac:
+  create: true  # Create service account and RBAC for backend auto-discovery
+
+# Ingress configuration for centralized routing
+ingress:
+  enabled: true  # Enable Ingress
+  className: nginx  # Use nginx ingress controller
+  annotations:
+    # Enable WebSocket support
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     
 stunner:
-  enabled: true
+  enabled: false  # Disabled for minikube
 
+# NFS server disabled for minikube (using hostPath instead)
 nfs:
-  enabled: true
+  enabled: false
   size: 10Gi
   image: itsthenetwork/nfs-server-alpine:latest

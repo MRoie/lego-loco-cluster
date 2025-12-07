@@ -68,12 +68,25 @@ export default function ReactVNCViewer({ instanceId }) {
   }, [connectionState, hasControl]);
 
   useEffect(() => {
+    console.log('[ReactVNCViewer] Component mounted', { instanceId });
     logger.info('Component mounted', { instanceId });
     metrics.incrementCounter('vnc_viewer_mount', { instance: instanceId });
     return () => {
+      console.log('[ReactVNCViewer] Component unmounted', { instanceId });
       logger.info('Component unmounted', { instanceId });
     };
   }, [instanceId]);
+
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log('[ReactVNCViewer] State changed', {
+      instanceId,
+      connectionState,
+      vncUrl,
+      hasError: !!error,
+      hasInstance: !!instance
+    });
+  }, [instanceId, connectionState, vncUrl, error, instance]);
 
   // Audio detection test
   const testAudioCapabilities = async () => {
@@ -150,6 +163,7 @@ export default function ReactVNCViewer({ instanceId }) {
 
   // VNC event handlers
   const handleConnect = useCallback(() => {
+    console.log('[ReactVNCViewer] ✅ VNC CONNECTED!', { instanceId });
     logger.info('VNC connected successfully', { instanceId });
     updateState({ connectionState: ConnectionState.CONNECTED });
     setHasControl(true);
@@ -164,6 +178,7 @@ export default function ReactVNCViewer({ instanceId }) {
   }, [instanceId, updateState]);
 
   const handleDisconnect = useCallback(() => {
+    console.log('[ReactVNCViewer] ❌ VNC DISCONNECTED', { instanceId });
     logger.info('VNC disconnected', { instanceId });
     updateState({ connectionState: ConnectionState.DISCONNECTED });
     setHasControl(false);
@@ -180,6 +195,7 @@ export default function ReactVNCViewer({ instanceId }) {
   }, [instanceId, updateState]);
 
   const handleError = useCallback((error) => {
+    console.error('[ReactVNCViewer] ⚠️ VNC ERROR', { instanceId, error: error.message || error, fullError: error });
     logger.error('VNC error occurred', { instanceId, error: error.message || error });
     // Note: We don't set FAILED state here immediately because react-vnc might retry internally
     // or it might be a transient error. But we log it.
@@ -189,6 +205,7 @@ export default function ReactVNCViewer({ instanceId }) {
 
   // Credential handler - VNC server might require authentication
   const handleCredentialsRequired = useCallback(() => {
+    console.log('[ReactVNCViewer] 🔐 VNC CREDENTIALS REQUIRED', { instanceId });
     logger.info('VNC credentials required', { instanceId });
     // For now, we don't have credentials configured
     // If needed in the future, we can prompt the user or use stored credentials
@@ -207,6 +224,7 @@ export default function ReactVNCViewer({ instanceId }) {
 
   // Desktop name handler - indicates successful connection
   const handleDesktopName = useCallback((name) => {
+    console.log('[ReactVNCViewer] 🖥️  VNC DESKTOP NAME RECEIVED', { instanceId, desktopName: name?.detail });
     logger.info('VNC desktop name received', { instanceId, desktopName: name?.detail });
     metrics.incrementCounter('vnc_desktop_name', { instance: instanceId });
   }, [instanceId]);
@@ -223,6 +241,7 @@ export default function ReactVNCViewer({ instanceId }) {
 
   // Capabilities handler
   const handleCapabilities = useCallback((capabilities) => {
+    console.log('[ReactVNCViewer] 🎯 VNC CAPABILITIES RECEIVED', { instanceId, capabilities: capabilities?.detail });
     logger.info('VNC capabilities received', { instanceId, capabilities: capabilities?.detail });
   }, [instanceId]);
 
@@ -509,6 +528,7 @@ export default function ReactVNCViewer({ instanceId }) {
       )}
 
       {/* VNC Component */}
+      {console.log('[ReactVNCViewer] Rendering VncScreen', { vncUrl, hasVncUrl: !!vncUrl, connectionState })}
       <div
         ref={vncRef}
         onClick={handleContainerClick}

@@ -755,6 +755,26 @@ app.get("/api/quality/recovery-status", (req, res) => {
   }
 });
 
+/**
+ * VNC configuration endpoint
+ * Serves VNC implementation preferences from ConfigMap
+ */
+app.get('/api/config/vnc', (req, res) => {
+  try {
+    logger.info('VNC config requested', { userAgent: req.get('user-agent') });
+    const vncConfig = loadConfig('vnc');
+    res.json(vncConfig);
+  } catch (e) {
+    logger.error('Failed to load VNC config', { error: e.message });
+    // Return default config if file not found
+    res.json({
+      implementation: 'novnc',
+      fallbackEnabled: true,
+      maxRetries: 3
+    });
+  }
+});
+
 // Start/stop quality monitoring
 app.post("/api/quality/monitor/:action", (req, res) => {
   try {
