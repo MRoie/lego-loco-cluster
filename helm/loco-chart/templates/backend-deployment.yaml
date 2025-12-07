@@ -74,6 +74,9 @@ spec:
         - name: webrtc-config
           mountPath: /app/config/webrtc.json
           subPath: webrtc.json
+        - name: vnc-config
+          mountPath: /app/config/vnc.json
+          subPath: vnc.json
       volumes:
       - name: instances-config
         configMap:
@@ -84,3 +87,6 @@ spec:
       - name: webrtc-config
         configMap:
           name: {{ include "loco.fullname" . }}-webrtc-config
+      - name: vnc-config
+        configMap:
+          name: {{ include "loco.fullname" . }}-vnc-config

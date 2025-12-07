@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import ReactVNCViewer from './ReactVNCViewer';
+import VNCViewerSwitcher from './VNCViewerSwitcher';
 import useWebRTC from '../hooks/useWebRTC';
 import AudioSinkSelector from './AudioSinkSelector';
 import QualityIndicator from './QualityIndicator';
@@ -198,7 +198,7 @@ export default function InstanceCard({ instance, isActive, onClick }) {
                 </div>
               </div>
             ) : (
-              <ReactVNCViewer instanceId={instance.id} />
+              <VNCViewerSwitcher instanceId={instance.id} />
             )}
 
             <video ref={videoRef} className="hidden" />
