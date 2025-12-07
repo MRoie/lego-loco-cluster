@@ -836,8 +836,19 @@ async function getInstanceTarget(id) {
  * @param {string} targetUrl - VNC server target (host:port format)
  * @param {string} instanceId - Instance identifier for logging and metrics
  */
-function createVNCBridge(ws, targetUrl, instanceId) {
-  logger.info("Creating VNC bridge", { instanceId, targetUrl });
+/**
+ * Create a WebSocket-to-TCP bridge for VNC connections
+ * Handles the protocol translation between WebSocket clients and VNC servers
+ * Includes connection tracking, timeout handling, and proper cleanup
+ * 
+ * @param {WebSocket} ws - WebSocket connection from client
+ * @param {string} targetUrl - VNC server target (host:port format)
+ * @param {string} instanceId - Instance identifier for logging and metrics
+ * @param {string} traceId - Distributed trace identifier
+ */
+function createVNCBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
+  const logCtx = { instanceId, traceId };
+  logger.info("Creating VNC bridge", { ...logCtx, targetUrl });
 
   // Parse the target URL to get host and port
   // targetUrl format is "localhost:5901" or "host:port"
@@ -854,22 +865,22 @@ function createVNCBridge(ws, targetUrl, instanceId) {
     port = parseInt(parts[1]) || 5901;
   }
 
-  logger.info("Connecting to VNC server", { instanceId, host, port });
+  logger.info("Connecting to VNC server", { ...logCtx, host, port });
 
   // Connection state tracking
   let vncConnectionEstablished = false;
   let connectionClosed = false;
+  let firstPacketReceived = false;
 
   // Connection cleanup function
   const cleanupConnection = (reason = 'unknown') => {
     if (!connectionClosed) {
       connectionClosed = true;
-      console.log(`VNC connection cleanup for ${instanceId} (reason: ${reason})`);
+      logger.info(`VNC connection cleanup`, { ...logCtx, reason });
 
       // Only decrement if connection was actually established
       if (vncConnectionEstablished) {
         activeVncConnections--;
-        console.log(`VNC connections count decremented to ${activeVncConnections} for ${instanceId}`);
       }
 
       // Update metrics
@@ -892,22 +903,24 @@ function createVNCBridge(ws, targetUrl, instanceId) {
 
   // TCP connection timeout (10 seconds)
   const connectionTimeout = setTimeout(() => {
-    console.error(`VNC TCP connection timeout for ${instanceId} after 10 seconds`);
+    logger.error(`VNC TCP connection timeout`, { ...logCtx, timeoutMs: 10000 });
     cleanupConnection('tcp_timeout');
   }, 10000);
 
   tcpSocket.on('connect', () => {
-    logger.info("VNC bridge connected successfully", { instanceId, host, port });
+    clearTimeout(connectionTimeout);
+    vncConnectionEstablished = true;
+    activeVncConnections++;
+    logger.info("VNC TCP connected", { ...logCtx, host, port });
   });
 
   tcpSocket.on('error', (err) => {
     logger.error("VNC TCP socket error", {
-      instanceId,
+      ...logCtx,
       error: err.message,
       code: err.code,
       host,
-      port,
-      stack: err.stack
+      port
     });
     if (ws.readyState === ws.OPEN) {
       ws.close(1000, 'TCP connection error');
@@ -915,7 +928,7 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   });
 
   tcpSocket.on('close', () => {
-    logger.info("VNC TCP socket closed", { instanceId, host, port });
+    logger.info("VNC TCP socket closed", logCtx);
     if (ws.readyState === ws.OPEN) {
       ws.close(1000, 'TCP connection closed');
     }
@@ -924,61 +937,57 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   // Forward data from WebSocket to TCP socket
   ws.on('message', (data) => {
     if (connectionClosed || !vncConnectionEstablished || tcpSocket.destroyed) {
-      console.warn(`Ignoring WebSocket message for ${instanceId} - connection not ready`);
       return;
     }
 
     try {
       // Convert WebSocket message to Buffer if needed
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
-      if (logger.level === 'debug') {
-        logger.debug("VNC data forwarding WS->TCP", {
-          instanceId,
-          bytes: buffer.length,
-          preview: buffer.slice(0, 32).toString('hex')
-        });
-      }
+      // logger.debug("WS->TCP", { ...logCtx, bytes: buffer.length });
       tcpSocket.write(buffer);
     } catch (err) {
       logger.error("Error forwarding WebSocket to TCP", {
-        instanceId,
-        error: err.message,
-        stack: err.stack
+        ...logCtx,
+        error: err.message
       });
     }
   });
 
   // Forward data from TCP socket to WebSocket
+  // + RFB Sniffer
   tcpSocket.on('data', (data) => {
     if (connectionClosed || ws.readyState !== ws.OPEN) {
-      console.warn(`Ignoring TCP data for ${instanceId} - WebSocket not ready`);
       return;
     }
 
     try {
-      if (logger.level === 'debug') {
-        logger.debug("VNC data forwarding TCP->WS", {
-          instanceId,
-          bytes: data.length,
-          preview: data.slice(0, 32).toString('hex')
+      if (!firstPacketReceived) {
+        firstPacketReceived = true;
+        const potentialProtocol = data.slice(0, 12).toString('utf-8');
+        logger.info("VNC First Packet Sniff (RFB Handshake)", {
+          ...logCtx,
+          length: data.length,
+          hexHead: data.slice(0, 12).toString('hex'),
+          asciiHead: potentialProtocol,
+          isValidRFB: potentialProtocol.startsWith('RFB ')
         });
       }
+
       if (ws.readyState === ws.OPEN) {
         ws.send(data);
       }
     } catch (err) {
       logger.error("Error forwarding TCP to WebSocket", {
-        instanceId,
-        error: err.message,
-        stack: err.stack
+        ...logCtx,
+        error: err.message
       });
     }
   });
 
   // Handle WebSocket close
   ws.on('close', (code, reason) => {
-    logger.info("WebSocket closed for VNC bridge", {
-      instanceId,
+    logger.info("WebSocket closed", {
+      ...logCtx,
       code,
       reason: reason?.toString()
     });
@@ -987,11 +996,10 @@ function createVNCBridge(ws, targetUrl, instanceId) {
 
   // Handle WebSocket errors
   ws.on('error', (err) => {
-    logger.error("WebSocket error for VNC bridge", {
-      instanceId,
+    logger.error("WebSocket error", {
+      ...logCtx,
       error: err.message,
-      code: err.code,
-      stack: err.stack
+      code: err.code
     });
     tcpSocket.destroy();
   });
@@ -1011,6 +1019,64 @@ vncWss.on("error", (err) => {
 const activeWss = new WebSocketServer({ noServer: true });
 let activeWsConnections = 0;
 let activeVncConnections = 0;
+
+// WebSocket server for WebRTC signaling
+const signalWss = new WebSocketServer({ noServer: true });
+signalWss.on("error", (err) => {
+  logger.error("Signal WebSocket server error", { error: err.message });
+});
+
+// Active peer connections keyed by ID for WebRTC signaling
+const peers = new Map();
+
+// Handle incoming signal websocket connections for SDP exchange
+signalWss.on("connection", (ws, req) => {
+  logger.info("Signal WebSocket client connected", { url: req.url });
+
+  let id = null;
+
+  ws.on("error", (err) => {
+    logger.error("Signal WebSocket client error", { error: err.message });
+  });
+
+  ws.on("message", (msg) => {
+    let data;
+    try {
+      data = JSON.parse(msg);
+    } catch (e) {
+      logger.error("Invalid JSON in signal message", { error: e.message });
+      return;
+    }
+
+    // Handle registration
+    if (data.type === "register") {
+      id = data.id || Math.random().toString(36).slice(2);
+      peers.set(id, ws);
+      ws.send(JSON.stringify({ type: "registered", id }));
+      logger.info("Signal WebSocket client registered", { id });
+      return;
+    }
+
+    // Handle signaling between peers
+    if (data.type === "signal" && data.target && peers.has(data.target)) {
+      logger.debug("Relaying signal message", { from: id, to: data.target });
+      peers.get(data.target).send(
+        JSON.stringify({
+          type: "signal",
+          from: id,
+          data: data.data,
+        })
+      );
+    }
+  });
+
+  ws.on("close", () => {
+    if (id) {
+      peers.delete(id);
+      logger.info("Signal WebSocket client disconnected", { id });
+    }
+  });
+});
 
 activeWss.on("connection", (ws) => {
   activeClients.add(ws);
@@ -1049,17 +1115,22 @@ server.on("upgrade", (req, socket, head) => {
   logger.debug("WebSocket upgrade request", { url: req.url });
 
   // Match VNC proxy URLs
-  const vncMatch = req.url.match(/^\/proxy\/vnc\/([^\/]+)/);
+  // /proxy/vnc/:instanceId?traceId=...
+  const vncMatch = req.url.match(/^\/proxy\/vnc\/([^\/\?]+)/);
   if (vncMatch) {
     const instanceId = vncMatch[1];
+    const query = url.parse(req.url, true).query;
+    const traceId = query.traceId || `gen-${Date.now()}`;
+
+    logger.info("VNC Upgrade Request", { instanceId, traceId, url: req.url });
 
     getInstanceTarget(instanceId).then(target => {
       if (target) {
-        logger.info("VNC WebSocket proxy established", { instanceId, target });
+        logger.info("VNC WebSocket proxy established", { instanceId, target, traceId });
 
         // Use the VNC WebSocket server
         vncWss.handleUpgrade(req, socket, head, (ws) => {
-          createVNCBridge(ws, target, instanceId);
+          createVNCBridge(ws, target, instanceId, traceId);
         });
       } else {
         logger.error("VNC WebSocket proxy: Unknown instance", { instanceId });
@@ -1077,6 +1148,14 @@ server.on("upgrade", (req, socket, head) => {
   if (req.url === "/active") {
     activeWss.handleUpgrade(req, socket, head, (ws) => {
       activeWss.emit("connection", ws, req);
+    });
+    return;
+  }
+
+  // WebRTC signaling WebSocket
+  if (req.url.startsWith('/signal')) {
+    signalWss.handleUpgrade(req, socket, head, (ws) => {
+      signalWss.emit('connection', ws, req);
     });
     return;
   }
