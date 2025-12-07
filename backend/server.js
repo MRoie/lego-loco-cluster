@@ -67,9 +67,30 @@ const activeConnections = new client.Gauge({
   labelNames: ['type']
 });
 
+const vncBytesTransferred = new client.Counter({
+  name: 'vnc_bytes_transferred_total',
+  help: 'Total bytes transferred through VNC WebSocket proxy',
+  labelNames: ['instance_id', 'direction']
+});
+
+const vncFramebufferUpdates = new client.Counter({
+  name: 'vnc_framebuffer_updates_total',
+  help: 'Total number of VNC framebuffer update messages detected',
+  labelNames: ['instance_id']
+});
+
+const vncMessages = new client.Counter({
+  name: 'vnc_messages_total',
+  help: 'Total number of VNC protocol messages by type',
+  labelNames: ['instance_id', 'message_type']
+});
+
 // Register custom metrics
 register.registerMetric(httpRequestDuration);
 register.registerMetric(activeConnections);
+register.registerMetric(vncBytesTransferred);
+register.registerMetric(vncFramebufferUpdates);
+register.registerMetric(vncMessages);
 
 // Middleware to track HTTP request duration
 app.use((req, res, next) => {
@@ -943,6 +964,10 @@ function createVNCBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
     try {
       // Convert WebSocket message to Buffer if needed
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+
+      // Track bytes sent from client to VNC server
+      vncBytesTransferred.labels(instanceId, 'client_to_server').inc(buffer.length);
+
       // logger.debug("WS->TCP", { ...logCtx, bytes: buffer.length });
       tcpSocket.write(buffer);
     } catch (err) {
@@ -954,7 +979,7 @@ function createVNCBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
   });
 
   // Forward data from TCP socket to WebSocket
-  // + RFB Sniffer
+  // + RFB Sniffer with framebuffer detection
   tcpSocket.on('data', (data) => {
     if (connectionClosed || ws.readyState !== ws.OPEN) {
       return;
@@ -971,6 +996,35 @@ function createVNCBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
           asciiHead: potentialProtocol,
           isValidRFB: potentialProtocol.startsWith('RFB ')
         });
+      }
+
+      // Track bytes sent from VNC server to client
+      vncBytesTransferred.labels(instanceId, 'server_to_client').inc(data.length);
+
+      // Detect VNC message types (after handshake)
+      if (firstPacketReceived && data.length > 0) {
+        const messageType = data[0];
+
+        // VNC Server to Client message types
+        switch (messageType) {
+          case 0: // FramebufferUpdate
+            vncFramebufferUpdates.labels(instanceId).inc();
+            vncMessages.labels(instanceId, 'framebuffer_update').inc();
+            logger.debug("VNC FramebufferUpdate detected", { ...logCtx, bytes: data.length });
+            break;
+          case 1: // SetColorMapEntries
+            vncMessages.labels(instanceId, 'set_colormap').inc();
+            break;
+          case 2: // Bell
+            vncMessages.labels(instanceId, 'bell').inc();
+            break;
+          case 3: // ServerCutText
+            vncMessages.labels(instanceId, 'server_cut_text').inc();
+            break;
+          default:
+            // Unknown or client-to-server message in stream
+            break;
+        }
       }
 
       if (ws.readyState === ws.OPEN) {

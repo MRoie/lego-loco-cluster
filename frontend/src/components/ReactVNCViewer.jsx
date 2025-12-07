@@ -187,6 +187,45 @@ export default function ReactVNCViewer({ instanceId }) {
     metrics.incrementCounter('vnc_error', { instance: instanceId });
   }, [instanceId]);
 
+  // Credential handler - VNC server might require authentication
+  const handleCredentialsRequired = useCallback(() => {
+    logger.info('VNC credentials required', { instanceId });
+    // For now, we don't have credentials configured
+    // If needed in the future, we can prompt the user or use stored credentials
+    metrics.incrementCounter('vnc_credentials_required', { instance: instanceId });
+  }, [instanceId]);
+
+  // Security failure handler
+  const handleSecurityFailure = useCallback((error) => {
+    logger.error('VNC security failure', { instanceId, error });
+    updateState({
+      connectionState: ConnectionState.FAILED,
+      error: `Security failure: ${error?.detail || 'Authentication failed'}`
+    });
+    metrics.incrementCounter('vnc_security_failure', { instance: instanceId });
+  }, [instanceId, updateState]);
+
+  // Desktop name handler - indicates successful connection
+  const handleDesktopName = useCallback((name) => {
+    logger.info('VNC desktop name received', { instanceId, desktopName: name?.detail });
+    metrics.incrementCounter('vnc_desktop_name', { instance: instanceId });
+  }, [instanceId]);
+
+  // Clipboard handler
+  const handleClipboard = useCallback((event) => {
+    logger.debug('VNC clipboard event', { instanceId });
+  }, [instanceId]);
+
+  // Bell handler
+  const handleBell = useCallback(() => {
+    logger.debug('VNC bell event', { instanceId });
+  }, [instanceId]);
+
+  // Capabilities handler
+  const handleCapabilities = useCallback((capabilities) => {
+    logger.info('VNC capabilities received', { instanceId, capabilities: capabilities?.detail });
+  }, [instanceId]);
+
   // VR Controller Support - Listen for VR events
   useEffect(() => {
     // VR trigger button handler (for regaining control)
@@ -445,24 +484,24 @@ export default function ReactVNCViewer({ instanceId }) {
         <div className="absolute top-2 right-2 z-20 space-y-1">
           {/* Control Status */}
           <div className={`px-2 py-1 rounded text-xs font-medium ${hasControl
-              ? 'bg-green-500 text-white'
-              : 'bg-yellow-500 text-black cursor-pointer hover:bg-yellow-400'
+            ? 'bg-green-500 text-white'
+            : 'bg-yellow-500 text-black cursor-pointer hover:bg-yellow-400'
             }`}>
             {hasControl ? '🎮 You have control' : '👆 Click to take control'}
           </div>
 
           {/* Audio Status */}
           <div className={`px-2 py-1 rounded text-xs font-medium ${audioDetected
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-500 text-white'
+            ? 'bg-blue-500 text-white'
+            : 'bg-gray-500 text-white'
             }`}>
             🔊 {audioDetected ? 'Audio Ready' : 'No Audio'}
           </div>
 
           {/* Controls Status */}
           <div className={`px-2 py-1 rounded text-xs font-medium ${controlsResponsive
-              ? 'bg-green-500 text-white'
-              : 'bg-orange-500 text-white'
+            ? 'bg-green-500 text-white'
+            : 'bg-orange-500 text-white'
             }`}>
             🎯 {controlsResponsive ? 'Controls OK' : 'Controls Test'}
           </div>
@@ -483,15 +522,29 @@ export default function ReactVNCViewer({ instanceId }) {
               width: '100%',
               height: '100%',
             }}
+            // Connection handlers
             onConnect={handleConnect}
             onDisconnect={handleDisconnect}
             onError={handleError}
+            onCredentialsRequired={handleCredentialsRequired}
+            onSecurityFailure={handleSecurityFailure}
+            onDesktopName={handleDesktopName}
+            onClipboard={handleClipboard}
+            onBell={handleBell}
+            onCapabilities={handleCapabilities}
+            // Display options
             scaleViewport={true}
             resizeSession={false}
             showDotCursor={true}
             background="#000000"
+            focusOnClick={true}
+            // Quality settings
             qualityLevel={6}
             compressionLevel={2}
+            // Connection behavior
+            autoConnect={true}
+            retryDuration={3000}
+            debug={true}
           />
         )}
       </div>
