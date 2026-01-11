@@ -151,7 +151,7 @@ export default function NoVNCViewer({ instanceId }) {
       });
 
       // Configure noVNC options
-      rfb.scaleViewport = false;
+      rfb.scaleViewport = true;
       rfb.resizeSession = false;
       rfb.showDotCursor = true;
       rfb.background = '#000000';

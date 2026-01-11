@@ -115,8 +115,13 @@ spec:
         - name: SNAPSHOT_REGISTRY
           value: {{ .Values.emulator.snapshotRegistry | quote }}
         - name: SNAPSHOT_TAG
+        - name: SNAPSHOT_TAG
           value: {{ .Values.emulator.snapshotTag | quote }}
         {{- end }}
+        - name: VIDEO_DEST_HOST
+          value: "{{ include "loco.fullname" . }}-backend"
+        - name: VIDEO_DEST_PORT
+          value: "5000"
         - name: ART_RES_ROOT
           value: "/nfs"
         - name: GIT_USER_NAME

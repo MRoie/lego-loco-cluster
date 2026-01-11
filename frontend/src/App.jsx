@@ -193,11 +193,11 @@ export default function App() {
 
           {/* 3x3 Grid Container */}
           <div className="lego-grid-container">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 lg:gap-10 max-w-7xl mx-auto w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 md:gap-8 lg:gap-10 max-w-7xl mx-auto w-full">
               {gridInstances.map((instance, index) => (
                 <motion.div
                   key={index}
-                  className="aspect-video"
+                  className=""
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1, duration: 0.5 }}

@@ -27,6 +27,7 @@ const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
 const logger = require("./utils/logger");
+const udpToWebrtc = require('./services/udpToWebrtc');
 const client = require('prom-client');
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
@@ -1144,16 +1145,17 @@ signalWss.on("error", (err) => {
 const peers = new Map();
 
 // Handle incoming signal websocket connections for SDP exchange
-signalWss.on("connection", (ws, req) => {
+signalWss.on("connection", async (ws, req) => {
   logger.info("Signal WebSocket client connected", { url: req.url });
 
   let id = null;
+  let pc = null;
 
   ws.on("error", (err) => {
     logger.error("Signal WebSocket client error", { error: err.message });
   });
 
-  ws.on("message", (msg) => {
+  ws.on("message", async (msg) => {
     let data;
     try {
       data = JSON.parse(msg);
@@ -1165,30 +1167,64 @@ signalWss.on("connection", (ws, req) => {
     // Handle registration
     if (data.type === "register") {
       id = data.id || Math.random().toString(36).slice(2);
-      peers.set(id, ws);
       ws.send(JSON.stringify({ type: "registered", id }));
       logger.info("Signal WebSocket client registered", { id });
+
+      // Initialize PeerConnection
+      try {
+        const iceServers = []; // Fetch from config if needed
+        pc = await udpToWebrtc.createConnection(iceServers);
+
+        // Handle ICE candidates from Backend -> Frontend
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            ws.send(JSON.stringify({
+              type: "signal",
+              data: { candidate: e.candidate.toJSON() }
+            }));
+          }
+        };
+
+        logger.info("Initialized WebRTC PeerConnection for client", { id });
+      } catch (err) {
+        logger.error("Failed to create PeerConnection", { error: err.message });
+      }
       return;
     }
 
-    // Handle signaling between peers
-    if (data.type === "signal" && data.target && peers.has(data.target)) {
-      logger.debug("Relaying signal message", { from: id, to: data.target });
-      peers.get(data.target).send(
-        JSON.stringify({
-          type: "signal",
-          from: id,
-          data: data.data,
-        })
-      );
+    // Handle signaling
+    if (data.type === "signal" && data.data && pc) {
+      const signal = data.data;
+
+      try {
+        if (signal.sdp) {
+          logger.info("Received SDP", { type: signal.type, id });
+          await pc.setRemoteDescription(signal);
+          if (signal.type === 'offer') {
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({
+              type: "signal",
+              data: pc.localDescription
+            }));
+            logger.info("Sent SDP Answer", { id });
+          }
+        } else if (signal.candidate) {
+          logger.info("Received ICE Candidate", { id });
+          await pc.addIceCandidate(signal.candidate);
+        }
+      } catch (err) {
+        logger.error("Signaling error", { error: err.message, id });
+      }
     }
   });
 
   ws.on("close", () => {
-    if (id) {
-      peers.delete(id);
-      logger.info("Signal WebSocket client disconnected", { id });
+    if (pc) {
+      pc.close();
+      logger.info("Closed PeerConnection", { id });
     }
+    logger.info("Signal WebSocket client disconnected", { id });
   });
 });
 

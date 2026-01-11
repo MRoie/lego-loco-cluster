@@ -11,6 +11,7 @@
     "rfb2": "^0.2.2",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
+    "werift": "^0.19.3",
     "ws": "^8.18.2"
   },
   "devDependencies": {

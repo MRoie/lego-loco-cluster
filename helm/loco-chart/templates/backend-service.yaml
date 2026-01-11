@@ -17,3 +17,7 @@ spec:
   - name: http
     port: {{ .Values.backend.servicePort }}
     targetPort: {{ .Values.backend.servicePort }}
+  - name: video-udp
+    port: 5000
+    targetPort: 5000
+    protocol: UDP

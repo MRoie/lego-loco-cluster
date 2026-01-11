@@ -319,7 +319,7 @@ gst-launch-1.0 -v \
   x264enc tune=zerolatency bitrate=1200 speed-preset=ultrafast key-int-max=25 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   rtph264pay config-interval=1 ! \
-  udpsink host=127.0.0.1 port=5000 sync=false async=false &
+  udpsink host=${VIDEO_DEST_HOST:-127.0.0.1} port=${VIDEO_DEST_PORT:-5000} sync=false async=false &
 GSTREAMER_PID=$!
 
 log_success "GStreamer started with PID: $GSTREAMER_PID"
@@ -339,12 +339,14 @@ validate_stream_health() {
     if kill -0 $GSTREAMER_PID 2>/dev/null; then
       log_success "✅ GStreamer process is running (PID: $GSTREAMER_PID)"
       
-      # Check if UDP port is active
-      if netstat -un | grep -q ":5000 "; then
-        log_success "✅ UDP stream port 5000 is active"
+      # Check if UDP port is active (remote or local)
+      local dest_port=${VIDEO_DEST_PORT:-5000}
+      if netstat -un 2>/dev/null | grep -q ":$dest_port "; then
+        log_success "✅ UDP stream to port $dest_port is active"
         return 0
       else
-        log_info "⏳ Waiting for UDP stream to initialize..."
+        # Fallback check: just check process if netstat is elusive
+        log_info "⏳ Waiting for UDP stream (port $dest_port) to initialize..."
       fi
     else
       log_error "❌ GStreamer process died (PID: $GSTREAMER_PID)"
