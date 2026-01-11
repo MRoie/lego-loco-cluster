@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import ReactVNCViewer from './ReactVNCViewer';
+import VNCViewerSwitcher from './VNCViewerSwitcher';
 import useWebRTC from '../hooks/useWebRTC';
 import AudioSinkSelector from './AudioSinkSelector';
 import QualityIndicator from './QualityIndicator';
@@ -157,10 +157,9 @@ export default function InstanceCard({ instance, isActive, onClick }) {
       </div>
 
       {/* VNC Content Area - styled like the character portrait area */}
-      <div className="relative aspect-video lego-stream-area">
+      <div className="relative aspect-[4/3] lego-stream-area overflow-hidden bg-black">
         {instance.provisioned && (instance.ready || instance.status === 'ready' || instance.status === 'running') ? (
           <>
-            {/* Show placeholder for demo instances or actual VNC for real ones */}
             {instance.id?.startsWith('demo-') ? (
               <div className="w-full h-full bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 flex items-center justify-center relative overflow-hidden">
                 {/* Simulated game content */}
@@ -198,25 +197,20 @@ export default function InstanceCard({ instance, isActive, onClick }) {
                 </div>
               </div>
             ) : (
-              <ReactVNCViewer instanceId={instance.id} />
-            )}
-
-            <video ref={videoRef} className="hidden" />
-            {loading && (
-              <motion.div
-                className="absolute inset-0 flex items-center justify-center text-sm text-white bg-black/80"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-              >
-                <div className="text-center">
-                  <motion.div
-                    className="w-10 h-10 border-3 border-yellow-400 border-t-transparent rounded-full mx-auto mb-3"
-                    animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+              /* Real Instance: WebRTC Video or Fallback VNC */
+              <>
+                {!loading ? (
+                  <video
+                    ref={videoRef}
+                    className="w-full h-full object-contain bg-black"
+                    autoPlay
+                    playsInline
+                    muted
                   />
-                  <p className="lego-text font-bold text-yellow-400">Loading stream...</p>
-                </div>
-              </motion.div>
+                ) : (
+                  <VNCViewerSwitcher instanceId={instance.id} />
+                )}
+              </>
             )}
           </>
         ) : (

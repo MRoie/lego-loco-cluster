@@ -1,4 +1,4 @@
-FROM node:18-alpine AS base
+FROM node:18-bullseye-slim AS base
 
 WORKDIR /app
 
@@ -44,6 +44,6 @@ COPY backend/. .
 # Create config directory for mounted configmap
 RUN mkdir -p config
 
-EXPOSE 3001
+EXPOSE 3001 5000/udp
 
 CMD ["node", "server.js"]

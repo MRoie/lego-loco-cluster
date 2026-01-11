@@ -1,0 +1,52 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "loco.fullname" . }}-ingress
+  namespace: {{ include "loco.namespace" . }}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Enable WebSocket support for /proxy and /signal
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "{{ include "loco.fullname" . }}-backend"
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # API routes to backend
+      - path: /api(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ include "loco.fullname" . }}-backend
+            port:
+              number: {{ .Values.backend.servicePort }}
+      
+      # WebSocket proxy for VNC connections
+      - path: /proxy(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ include "loco.fullname" . }}-backend
+            port:
+              number: {{ .Values.backend.servicePort }}
+      
+      # WebRTC signaling WebSocket
+      - path: /signal(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ include "loco.fullname" . }}-backend
+            port:
+              number: {{ .Values.backend.servicePort }}
+      
+      # Frontend static assets and SPA routing (catch-all, must be last)
+      - path: /(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ include "loco.fullname" . }}-frontend
+            port:
+              number: {{ .Values.frontend.servicePort }}

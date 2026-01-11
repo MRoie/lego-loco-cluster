@@ -55,6 +55,11 @@ spec:
       - name: init-disk-image
         image: {{ include "loco.image" (dict "root" . "image" .Values.emulator.image "tag" .Values.emulator.tag) }}
         imagePullPolicy: {{ .Values.emulator.imagePullPolicy }}
+        env:
+        - name: SNAPSHOT_REGISTRY
+          value: {{ .Values.emulator.snapshotRegistry | quote }}
+        - name: SNAPSHOT_TAG
+          value: {{ .Values.emulator.snapshotTag | quote }}
         command: ['sh', '-c']
         args:
         - |
@@ -73,12 +78,20 @@ spec:
             cp /opt/builtin-images/win98.qcow2.builtin /images/win98.qcow2
             echo "✅ Disk image copied to PVC successfully"
             ls -lh /images/win98.qcow2
-          else
-            echo "❌ Built-in disk image not found"
-            echo "Available files in /opt/builtin-images:"
-            ls -la /opt/builtin-images/
-            exit 1
+            exit 0
           fi
+
+          # Fallback: Download from registry if tools are available
+          echo "⚠️  Built-in disk image not found. Attempting download..."
+          if /usr/local/bin/download_snapshot.sh "${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG}" "/images/win98.qcow2"; then
+             echo "✅ Downloaded snapshot to PVC successfully"
+             ls -lh /images/win98.qcow2
+             exit 0
+          fi
+
+          echo "❌ Failed to initialize disk image (No built-in, no download success)"
+          ls -la /opt/builtin-images/ 2>/dev/null
+          exit 1
         volumeMounts:
           - name: disk
             mountPath: /images
@@ -102,8 +115,13 @@ spec:
         - name: SNAPSHOT_REGISTRY
           value: {{ .Values.emulator.snapshotRegistry | quote }}
         - name: SNAPSHOT_TAG
+        - name: SNAPSHOT_TAG
           value: {{ .Values.emulator.snapshotTag | quote }}
         {{- end }}
+        - name: VIDEO_DEST_HOST
+          value: "{{ include "loco.fullname" . }}-backend"
+        - name: VIDEO_DEST_PORT
+          value: "5000"
         - name: ART_RES_ROOT
           value: "/nfs"
         - name: GIT_USER_NAME
@@ -118,6 +136,7 @@ spec:
               - SYS_ADMIN
         ports:
         - containerPort: {{ .Values.emulator.servicePort }}
+          name: service
         - containerPort: {{ .Values.emulator.healthPort }}
           name: health
         {{- if .Values.emulator.probes.startup.enabled }}

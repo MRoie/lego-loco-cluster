@@ -1,5 +1,5 @@
 # Stage 1: Extract win98 image from the public container
-FROM ghcr.io/mroie/lego-loco-cluster/win98-softgpu:41d14bdbf554bc2617841516027b93dbb3bc226e AS win98-extractor
+FROM ghcr.io/mroie/lego-loco-cluster/win98-softgpu:latest AS win98-extractor
 # The win98_softgpu.qcow2 file is already in the /vm directory of this image
 
 # Stage 2: Build the final emulator container

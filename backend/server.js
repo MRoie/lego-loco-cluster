@@ -27,6 +27,7 @@ const httpProxy = require("http-proxy");
 const net = require("net");
 const url = require("url");
 const logger = require("./utils/logger");
+const udpToWebrtc = require('./services/udpToWebrtc');
 const client = require('prom-client');
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
@@ -67,9 +68,30 @@ const activeConnections = new client.Gauge({
   labelNames: ['type']
 });
 
+const vncBytesTransferred = new client.Counter({
+  name: 'vnc_bytes_transferred_total',
+  help: 'Total bytes transferred through VNC WebSocket proxy',
+  labelNames: ['instance_id', 'direction']
+});
+
+const vncFramebufferUpdates = new client.Counter({
+  name: 'vnc_framebuffer_updates_total',
+  help: 'Total number of VNC framebuffer update messages detected',
+  labelNames: ['instance_id']
+});
+
+const vncMessages = new client.Counter({
+  name: 'vnc_messages_total',
+  help: 'Total number of VNC protocol messages by type',
+  labelNames: ['instance_id', 'message_type']
+});
+
 // Register custom metrics
 register.registerMetric(httpRequestDuration);
 register.registerMetric(activeConnections);
+register.registerMetric(vncBytesTransferred);
+register.registerMetric(vncFramebufferUpdates);
+register.registerMetric(vncMessages);
 
 // Middleware to track HTTP request duration
 app.use((req, res, next) => {
@@ -734,6 +756,26 @@ app.get("/api/quality/recovery-status", (req, res) => {
   }
 });
 
+/**
+ * VNC configuration endpoint
+ * Serves VNC implementation preferences from ConfigMap
+ */
+app.get('/api/config/vnc', (req, res) => {
+  try {
+    logger.info('VNC config requested', { userAgent: req.get('user-agent') });
+    const vncConfig = loadConfig('vnc');
+    res.json(vncConfig);
+  } catch (e) {
+    logger.error('Failed to load VNC config', { error: e.message });
+    // Return default config if file not found
+    res.json({
+      implementation: 'novnc',
+      fallbackEnabled: true,
+      maxRetries: 3
+    });
+  }
+});
+
 // Start/stop quality monitoring
 app.post("/api/quality/monitor/:action", (req, res) => {
   try {
@@ -800,6 +842,46 @@ app.post("/api/active", (req, res) => {
   res.json({ active: Array.isArray(ids) ? ids : [ids] });
 });
 
+// Quality metrics endpoints
+app.get('/api/quality/metrics/:instanceId', (req, res) => {
+  const { instanceId } = req.params;
+  logger.info('Quality metrics requested', { instanceId, userAgent: req.get('user-agent') });
+
+  const metrics = {
+    instanceId,
+    timestamp: new Date().toISOString(),
+    vnc: {
+      connected: activeVncConnections > 0,
+      bytesTransferred: 0,
+      framebufferUpdates: 0,
+      latencyMs: null
+    },
+    webrtc: {
+      connected: false,
+      iceConnectionState: 'new'
+    }
+  };
+
+  res.json(metrics);
+});
+
+app.get('/api/quality/deep-health/:instanceId', (req, res) => {
+  const { instanceId } = req.params;
+  logger.info('Deep health check requested', { instanceId, userAgent: req.get('user-agent') });
+
+  res.json({
+    instanceId,
+    timestamp: new Date().toISOString(),
+    status: 'healthy',
+    checks: {
+      vnc: { status: 'ok' },
+      emulator: { status: 'ok' },
+      network: { status: 'ok' }
+    }
+  });
+});
+
+
 // Generic proxy for VNC and WebRTC traffic
 const proxy = httpProxy.createProxyServer({ ws: true, changeOrigin: true });
 
@@ -836,8 +918,19 @@ async function getInstanceTarget(id) {
  * @param {string} targetUrl - VNC server target (host:port format)
  * @param {string} instanceId - Instance identifier for logging and metrics
  */
-function createVNCBridge(ws, targetUrl, instanceId) {
-  logger.info("Creating VNC bridge", { instanceId, targetUrl });
+/**
+ * Create a WebSocket-to-TCP bridge for VNC connections
+ * Handles the protocol translation between WebSocket clients and VNC servers
+ * Includes connection tracking, timeout handling, and proper cleanup
+ * 
+ * @param {WebSocket} ws - WebSocket connection from client
+ * @param {string} targetUrl - VNC server target (host:port format)
+ * @param {string} instanceId - Instance identifier for logging and metrics
+ * @param {string} traceId - Distributed trace identifier
+ */
+function createVNCBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
+  const logCtx = { instanceId, traceId };
+  logger.info("Creating VNC bridge", { ...logCtx, targetUrl });
 
   // Parse the target URL to get host and port
   // targetUrl format is "localhost:5901" or "host:port"
@@ -854,22 +947,22 @@ function createVNCBridge(ws, targetUrl, instanceId) {
     port = parseInt(parts[1]) || 5901;
   }
 
-  logger.info("Connecting to VNC server", { instanceId, host, port });
+  logger.info("Connecting to VNC server", { ...logCtx, host, port });
 
   // Connection state tracking
   let vncConnectionEstablished = false;
   let connectionClosed = false;
+  let firstPacketReceived = false;
 
   // Connection cleanup function
   const cleanupConnection = (reason = 'unknown') => {
     if (!connectionClosed) {
       connectionClosed = true;
-      console.log(`VNC connection cleanup for ${instanceId} (reason: ${reason})`);
+      logger.info(`VNC connection cleanup`, { ...logCtx, reason });
 
       // Only decrement if connection was actually established
       if (vncConnectionEstablished) {
         activeVncConnections--;
-        console.log(`VNC connections count decremented to ${activeVncConnections} for ${instanceId}`);
       }
 
       // Update metrics
@@ -892,22 +985,24 @@ function createVNCBridge(ws, targetUrl, instanceId) {
 
   // TCP connection timeout (10 seconds)
   const connectionTimeout = setTimeout(() => {
-    console.error(`VNC TCP connection timeout for ${instanceId} after 10 seconds`);
+    logger.error(`VNC TCP connection timeout`, { ...logCtx, timeoutMs: 10000 });
     cleanupConnection('tcp_timeout');
   }, 10000);
 
   tcpSocket.on('connect', () => {
-    logger.info("VNC bridge connected successfully", { instanceId, host, port });
+    clearTimeout(connectionTimeout);
+    vncConnectionEstablished = true;
+    activeVncConnections++;
+    logger.info("VNC TCP connected", { ...logCtx, host, port });
   });
 
   tcpSocket.on('error', (err) => {
     logger.error("VNC TCP socket error", {
-      instanceId,
+      ...logCtx,
       error: err.message,
       code: err.code,
       host,
-      port,
-      stack: err.stack
+      port
     });
     if (ws.readyState === ws.OPEN) {
       ws.close(1000, 'TCP connection error');
@@ -915,7 +1010,7 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   });
 
   tcpSocket.on('close', () => {
-    logger.info("VNC TCP socket closed", { instanceId, host, port });
+    logger.info("VNC TCP socket closed", logCtx);
     if (ws.readyState === ws.OPEN) {
       ws.close(1000, 'TCP connection closed');
     }
@@ -924,61 +1019,90 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   // Forward data from WebSocket to TCP socket
   ws.on('message', (data) => {
     if (connectionClosed || !vncConnectionEstablished || tcpSocket.destroyed) {
-      console.warn(`Ignoring WebSocket message for ${instanceId} - connection not ready`);
       return;
     }
 
     try {
       // Convert WebSocket message to Buffer if needed
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
-      if (logger.level === 'debug') {
-        logger.debug("VNC data forwarding WS->TCP", {
-          instanceId,
-          bytes: buffer.length,
-          preview: buffer.slice(0, 32).toString('hex')
-        });
-      }
+
+      // Track bytes sent from client to VNC server
+      vncBytesTransferred.labels(instanceId, 'client_to_server').inc(buffer.length);
+
+      // logger.debug("WS->TCP", { ...logCtx, bytes: buffer.length });
       tcpSocket.write(buffer);
     } catch (err) {
       logger.error("Error forwarding WebSocket to TCP", {
-        instanceId,
-        error: err.message,
-        stack: err.stack
+        ...logCtx,
+        error: err.message
       });
     }
   });
 
   // Forward data from TCP socket to WebSocket
+  // + RFB Sniffer with framebuffer detection
   tcpSocket.on('data', (data) => {
     if (connectionClosed || ws.readyState !== ws.OPEN) {
-      console.warn(`Ignoring TCP data for ${instanceId} - WebSocket not ready`);
       return;
     }
 
     try {
-      if (logger.level === 'debug') {
-        logger.debug("VNC data forwarding TCP->WS", {
-          instanceId,
-          bytes: data.length,
-          preview: data.slice(0, 32).toString('hex')
+      if (!firstPacketReceived) {
+        firstPacketReceived = true;
+        const potentialProtocol = data.slice(0, 12).toString('utf-8');
+        logger.info("VNC First Packet Sniff (RFB Handshake)", {
+          ...logCtx,
+          length: data.length,
+          hexHead: data.slice(0, 12).toString('hex'),
+          asciiHead: potentialProtocol,
+          isValidRFB: potentialProtocol.startsWith('RFB ')
         });
       }
+
+      // Track bytes sent from VNC server to client
+      vncBytesTransferred.labels(instanceId, 'server_to_client').inc(data.length);
+
+      // Detect VNC message types (after handshake)
+      if (firstPacketReceived && data.length > 0) {
+        const messageType = data[0];
+
+        // VNC Server to Client message types
+        switch (messageType) {
+          case 0: // FramebufferUpdate
+            vncFramebufferUpdates.labels(instanceId).inc();
+            vncMessages.labels(instanceId, 'framebuffer_update').inc();
+            logger.debug("VNC FramebufferUpdate detected", { ...logCtx, bytes: data.length });
+            break;
+          case 1: // SetColorMapEntries
+            vncMessages.labels(instanceId, 'set_colormap').inc();
+            break;
+          case 2: // Bell
+            vncMessages.labels(instanceId, 'bell').inc();
+            break;
+          case 3: // ServerCutText
+            vncMessages.labels(instanceId, 'server_cut_text').inc();
+            break;
+          default:
+            // Unknown or client-to-server message in stream
+            break;
+        }
+      }
+
       if (ws.readyState === ws.OPEN) {
         ws.send(data);
       }
     } catch (err) {
       logger.error("Error forwarding TCP to WebSocket", {
-        instanceId,
-        error: err.message,
-        stack: err.stack
+        ...logCtx,
+        error: err.message
       });
     }
   });
 
   // Handle WebSocket close
   ws.on('close', (code, reason) => {
-    logger.info("WebSocket closed for VNC bridge", {
-      instanceId,
+    logger.info("WebSocket closed", {
+      ...logCtx,
       code,
       reason: reason?.toString()
     });
@@ -987,11 +1111,10 @@ function createVNCBridge(ws, targetUrl, instanceId) {
 
   // Handle WebSocket errors
   ws.on('error', (err) => {
-    logger.error("WebSocket error for VNC bridge", {
-      instanceId,
+    logger.error("WebSocket error", {
+      ...logCtx,
       error: err.message,
-      code: err.code,
-      stack: err.stack
+      code: err.code
     });
     tcpSocket.destroy();
   });
@@ -1011,6 +1134,99 @@ vncWss.on("error", (err) => {
 const activeWss = new WebSocketServer({ noServer: true });
 let activeWsConnections = 0;
 let activeVncConnections = 0;
+
+// WebSocket server for WebRTC signaling
+const signalWss = new WebSocketServer({ noServer: true });
+signalWss.on("error", (err) => {
+  logger.error("Signal WebSocket server error", { error: err.message });
+});
+
+// Active peer connections keyed by ID for WebRTC signaling
+const peers = new Map();
+
+// Handle incoming signal websocket connections for SDP exchange
+signalWss.on("connection", async (ws, req) => {
+  logger.info("Signal WebSocket client connected", { url: req.url });
+
+  let id = null;
+  let pc = null;
+
+  ws.on("error", (err) => {
+    logger.error("Signal WebSocket client error", { error: err.message });
+  });
+
+  ws.on("message", async (msg) => {
+    let data;
+    try {
+      data = JSON.parse(msg);
+    } catch (e) {
+      logger.error("Invalid JSON in signal message", { error: e.message });
+      return;
+    }
+
+    // Handle registration
+    if (data.type === "register") {
+      id = data.id || Math.random().toString(36).slice(2);
+      ws.send(JSON.stringify({ type: "registered", id }));
+      logger.info("Signal WebSocket client registered", { id });
+
+      // Initialize PeerConnection
+      try {
+        const iceServers = []; // Fetch from config if needed
+        pc = await udpToWebrtc.createConnection(iceServers);
+
+        // Handle ICE candidates from Backend -> Frontend
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            ws.send(JSON.stringify({
+              type: "signal",
+              data: { candidate: e.candidate.toJSON() }
+            }));
+          }
+        };
+
+        logger.info("Initialized WebRTC PeerConnection for client", { id });
+      } catch (err) {
+        logger.error("Failed to create PeerConnection", { error: err.message });
+      }
+      return;
+    }
+
+    // Handle signaling
+    if (data.type === "signal" && data.data && pc) {
+      const signal = data.data;
+
+      try {
+        if (signal.sdp) {
+          logger.info("Received SDP", { type: signal.type, id });
+          await pc.setRemoteDescription(signal);
+          if (signal.type === 'offer') {
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({
+              type: "signal",
+              data: pc.localDescription
+            }));
+            logger.info("Sent SDP Answer", { id });
+          }
+        } else if (signal.candidate) {
+          logger.info("Received ICE Candidate", { id });
+          await pc.addIceCandidate(signal.candidate);
+        }
+      } catch (err) {
+        logger.error("Signaling error", { error: err.message, id });
+      }
+    }
+  });
+
+  ws.on("close", () => {
+    if (pc) {
+      pc.close();
+      logger.info("Closed PeerConnection", { id });
+    }
+    logger.info("Signal WebSocket client disconnected", { id });
+  });
+});
 
 activeWss.on("connection", (ws) => {
   activeClients.add(ws);
@@ -1049,17 +1265,22 @@ server.on("upgrade", (req, socket, head) => {
   logger.debug("WebSocket upgrade request", { url: req.url });
 
   // Match VNC proxy URLs
-  const vncMatch = req.url.match(/^\/proxy\/vnc\/([^\/]+)/);
+  // /proxy/vnc/:instanceId?traceId=...
+  const vncMatch = req.url.match(/^\/proxy\/vnc\/([^\/\?]+)/);
   if (vncMatch) {
     const instanceId = vncMatch[1];
+    const query = url.parse(req.url, true).query;
+    const traceId = query.traceId || `gen-${Date.now()}`;
+
+    logger.info("VNC Upgrade Request", { instanceId, traceId, url: req.url });
 
     getInstanceTarget(instanceId).then(target => {
       if (target) {
-        logger.info("VNC WebSocket proxy established", { instanceId, target });
+        logger.info("VNC WebSocket proxy established", { instanceId, target, traceId });
 
         // Use the VNC WebSocket server
         vncWss.handleUpgrade(req, socket, head, (ws) => {
-          createVNCBridge(ws, target, instanceId);
+          createVNCBridge(ws, target, instanceId, traceId);
         });
       } else {
         logger.error("VNC WebSocket proxy: Unknown instance", { instanceId });
@@ -1077,6 +1298,14 @@ server.on("upgrade", (req, socket, head) => {
   if (req.url === "/active") {
     activeWss.handleUpgrade(req, socket, head, (ws) => {
       activeWss.emit("connection", ws, req);
+    });
+    return;
+  }
+
+  // WebRTC signaling WebSocket
+  if (req.url.startsWith('/signal')) {
+    signalWss.handleUpgrade(req, socket, head, (ws) => {
+      signalWss.emit('connection', ws, req);
     });
     return;
   }

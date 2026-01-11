@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createLogger } from '../utils/logger.js';
+import { metrics } from '../utils/metrics';
 
 /**
  * NoVNC-based VNC viewer component
@@ -15,7 +16,7 @@ export default function NoVNCViewer({ instanceId }) {
   const [hasControl, setHasControl] = useState(false);
   const [framebufferSize, setFramebufferSize] = useState(null);
   const [RFB, setRFB] = useState(null);
-  
+
   // Control release tracking
   const keySequenceRef = useRef([]);
   const lastKeyTimeRef = useRef(0);
@@ -34,7 +35,7 @@ export default function NoVNCViewer({ instanceId }) {
         setError(`Failed to load NoVNC: ${err.message}`);
       }
     };
-    
+
     loadNoVNC();
   }, []);
 
@@ -43,14 +44,16 @@ export default function NoVNCViewer({ instanceId }) {
     logger.debug('NoVNC hasControl state changed', { hasControl, instanceId });
   }, [hasControl, instanceId]);
 
+  console.log('[NoVNCViewer] Component mounted', { instanceId });
   logger.debug('NoVNCViewer component mounted', { instanceId });
+  metrics.incrementCounter('novnc_viewer_mount', { instance: instanceId });
 
   useEffect(() => {
     if (!instanceId || !containerRef.current || !RFB) {
-      logger.debug('Missing dependencies for NoVNC initialization', { 
-        instanceId: !!instanceId, 
-        container: !!containerRef.current, 
-        RFB: !!RFB 
+      logger.debug('Missing dependencies for NoVNC initialization', {
+        instanceId: !!instanceId,
+        container: !!containerRef.current,
+        RFB: !!RFB
       });
       return;
     }
@@ -74,7 +77,7 @@ export default function NoVNCViewer({ instanceId }) {
     // Create WebSocket connection URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const vncUrl = `${protocol}//${window.location.host}/proxy/vnc/${instanceId}/`;
-    
+
     logger.debug('Connecting to VNC URL', { vncUrl, instanceId });
 
     try {
@@ -90,43 +93,51 @@ export default function NoVNCViewer({ instanceId }) {
 
       // Event handlers
       rfb.addEventListener('connect', () => {
+        console.log('[NoVNCViewer] ✅ VNC CONNECTED!', { instanceId });
         logger.info('NoVNC connected successfully', { instanceId });
         setConnected(true);
         setConnecting(false);
         setHasControl(true);
         setError(null);
-        
+        metrics.incrementCounter('novnc_connection_success', { instance: instanceId });
+
         // Get framebuffer size
         const canvas = container.querySelector('canvas');
         if (canvas) {
-          setFramebufferSize({ 
-            width: canvas.width, 
-            height: canvas.height 
+          setFramebufferSize({
+            width: canvas.width,
+            height: canvas.height
           });
         }
       });
 
       rfb.addEventListener('disconnect', (e) => {
+        console.log('[NoVNCViewer] ❌ VNC DISCONNECTED', { instanceId, clean: e.detail.clean });
         logger.info('NoVNC disconnected', { instanceId, clean: e.detail.clean, reason: e.detail });
         setConnected(false);
         setConnecting(false);
         setHasControl(false);
-        
+        metrics.incrementCounter('novnc_disconnect', { instance: instanceId });
+
         if (!e.detail.clean) {
           setError('Connection lost');
         }
       });
 
       rfb.addEventListener('credentialsrequired', () => {
+        console.log('[NoVNCViewer] 🔐 VNC CREDENTIALS REQUIRED', { instanceId });
         logger.warn('VNC credentials required', { instanceId });
         setError('VNC server requires authentication');
         setConnecting(false);
+        metrics.incrementCounter('novnc_credentials_required', { instance: instanceId });
       });
 
       rfb.addEventListener('securityfailure', (e) => {
+        console.error('[NoVNCViewer] 🚨 VNC SECURITY FAILURE', { instanceId, detail: e.detail });
         logger.error('VNC security failure', { instanceId, detail: e.detail });
         setError('VNC security failure');
         setConnecting(false);
+        metrics.incrementCounter('novnc_security_failure', { instance: instanceId });
       });
 
       rfb.addEventListener('bell', () => {
@@ -134,11 +145,13 @@ export default function NoVNCViewer({ instanceId }) {
       });
 
       rfb.addEventListener('desktopname', (e) => {
+        console.log('[NoVNCViewer] 🖥️  VNC DESKTOP NAME RECEIVED', { instanceId, desktopName: e.detail.name });
         logger.debug('VNC desktop name received', { instanceId, desktopName: e.detail.name });
+        metrics.incrementCounter('novnc_desktop_name', { instance: instanceId });
       });
 
       // Configure noVNC options
-      rfb.scaleViewport = false;
+      rfb.scaleViewport = true;
       rfb.resizeSession = false;
       rfb.showDotCursor = true;
       rfb.background = '#000000';
@@ -146,13 +159,16 @@ export default function NoVNCViewer({ instanceId }) {
       rfb.compressionLevel = 2;
 
     } catch (err) {
+      console.error('[NoVNCViewer] ⚠️ VNC ERROR', { instanceId, error: err.message, fullError: err });
       logger.error('Failed to create NoVNC RFB', { instanceId, error: err.message });
       setError(`Connection failed: ${err.message}`);
       setConnecting(false);
+      metrics.incrementCounter('novnc_error', { instance: instanceId });
     }
 
     // Cleanup function
     return () => {
+      console.log('[NoVNCViewer] Component unmounting', { instanceId });
       if (rfbRef.current) {
         rfbRef.current.disconnect();
         rfbRef.current = null;
@@ -188,13 +204,13 @@ export default function NoVNCViewer({ instanceId }) {
       if (event.detail.instanceId === instanceId && hasControl && connected && rfbRef.current) {
         const { x, y, button, pressed } = event.detail;
         logger.debug('VR pointer event received', { instanceId, x, y, button, pressed });
-        
+
         if (x >= 0 && y >= 0) {
           const buttonMask = pressed ? (1 << button) : 0;
           try {
             rfbRef.current.sendPointerEvent(x, y, buttonMask);
           } catch (error) {
-          logger.error('Error sending VR pointer event', { instanceId, error: error.message });
+            logger.error('Error sending VR pointer event', { instanceId, error: error.message });
           }
         }
       }
@@ -204,7 +220,7 @@ export default function NoVNCViewer({ instanceId }) {
       if (event.detail.instanceId === instanceId && hasControl && connected && rfbRef.current) {
         const { key, pressed } = event.detail;
         logger.debug('VR keyboard event received', { instanceId, key, pressed });
-        
+
         try {
           // Convert VR key to keySym (basic implementation)
           const keySym = getKeySymbol({ key, code: key });
@@ -236,7 +252,7 @@ export default function NoVNCViewer({ instanceId }) {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (!connected || !hasControl) return;
-      
+
       // Check for control release sequence
       if (checkControlReleaseSequence(event)) {
         logger.info('Control release sequence detected', { instanceId });
@@ -249,7 +265,7 @@ export default function NoVNCViewer({ instanceId }) {
 
     // Add keyboard event listener to document
     document.addEventListener('keydown', handleKeyDown);
-    
+
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
@@ -258,12 +274,12 @@ export default function NoVNCViewer({ instanceId }) {
   // Key symbol mapping for VR compatibility
   const getKeySymbol = (event) => {
     const key = event.key;
-    
+
     // Handle printable characters
     if (key.length === 1) {
       return key.charCodeAt(0);
     }
-    
+
     // Handle special keys
     const specialKeys = {
       'ArrowUp': 0xff52,
@@ -280,7 +296,7 @@ export default function NoVNCViewer({ instanceId }) {
       'Alt': 0xffe9,
       'Shift': 0xffe1,
     };
-    
+
     return specialKeys[key] || 0;
   };
 
@@ -288,14 +304,14 @@ export default function NoVNCViewer({ instanceId }) {
   const checkControlReleaseSequence = (event) => {
     const now = Date.now();
     const resetTimeout = 3000; // 3 seconds to complete sequence
-    
+
     // Reset sequence if too much time has passed
     if (now - lastKeyTimeRef.current > resetTimeout) {
       keySequenceRef.current = [];
     }
-    
+
     lastKeyTimeRef.current = now;
-    
+
     // Control release sequences
     const releaseSequences = [
       // Primary sequence: Ctrl+Alt+R
@@ -307,20 +323,20 @@ export default function NoVNCViewer({ instanceId }) {
       // Gaming-friendly: Ctrl+Alt+Q
       ['Control', 'Alt', 'KeyQ']
     ];
-    
+
     // Add current key to sequence
     keySequenceRef.current.push(event.code);
-    
+
     // Keep only last 5 keys
     if (keySequenceRef.current.length > 5) {
       keySequenceRef.current = keySequenceRef.current.slice(-5);
     }
-    
+
     // Check if any release sequence is matched
     for (const sequence of releaseSequences) {
       if (keySequenceRef.current.length >= sequence.length) {
         const lastKeys = keySequenceRef.current.slice(-sequence.length);
-        
+
         // Special handling for F10 triple-tap
         if (sequence.every(key => key === 'F10')) {
           const f10Times = keySequenceRef.current.filter(key => key === 'F10');
@@ -338,7 +354,7 @@ export default function NoVNCViewer({ instanceId }) {
         }
       }
     }
-    
+
     return false;
   };
 
@@ -347,50 +363,50 @@ export default function NoVNCViewer({ instanceId }) {
     logger.info('Releasing control of NoVNC instance', { instanceId });
     setHasControl(false);
     keySequenceRef.current = [];
-    
+
     // Dispatch custom event for VR and other controllers
     const releaseEvent = new CustomEvent('vncControlReleased', {
-      detail: { 
-        instanceId, 
+      detail: {
+        instanceId,
         timestamp: Date.now(),
         reason: 'keyboard_combo'
       }
     });
     window.dispatchEvent(releaseEvent);
-    
+
     logger.debug('Control release event dispatched for VR/external controllers', { instanceId });
   };
 
   // Regain control of this instance
   const regainControl = () => {
     logger.debug('regainControl called', { instanceId, connected, currentControl: hasControl });
-    
+
     if (!connected) {
       logger.warn('Cannot regain control: VNC not connected', { instanceId });
       return;
     }
-    
+
     logger.info('Regaining control of NoVNC instance', { instanceId });
     setHasControl(true);
     keySequenceRef.current = [];
-    
+
     // Dispatch custom event for VR and other controllers
     const regainEvent = new CustomEvent('vncControlRegained', {
-      detail: { 
-        instanceId, 
+      detail: {
+        instanceId,
         timestamp: Date.now(),
         method: 'click'
       }
     });
     window.dispatchEvent(regainEvent);
-    
+
     // Focus the NoVNC canvas
     const canvas = containerRef.current?.querySelector('canvas');
     if (canvas) {
       canvas.focus();
       logger.debug('Canvas focused for keyboard input', { instanceId });
     }
-    
+
     logger.debug('Control regain event dispatched for VR/external controllers', { instanceId });
     logger.info('Control regained successfully', { instanceId, hasControl: true });
   };
@@ -398,7 +414,7 @@ export default function NoVNCViewer({ instanceId }) {
   const handleReconnect = () => {
     logger.debug('handleReconnect called - triggering reconnection', { instanceId });
     setError(null);
-    
+
     // Trigger reconnection by changing a dependency
     setConnecting(true);
   };
@@ -409,7 +425,7 @@ export default function NoVNCViewer({ instanceId }) {
       handleReconnect();
       return;
     }
-    
+
     if (!hasControl) {
       logger.debug('Container clicked - regaining control', { instanceId });
       regainControl();
@@ -423,7 +439,7 @@ export default function NoVNCViewer({ instanceId }) {
         ref={containerRef}
         className="w-full h-full cursor-pointer"
         onClick={handleContainerClick}
-        style={{ 
+        style={{
           outline: 'none',
           userSelect: 'none'
         }}
@@ -452,7 +468,7 @@ export default function NoVNCViewer({ instanceId }) {
           <div className="bg-red-600 text-white px-4 py-2 rounded-lg text-center max-w-sm">
             <div className="font-semibold mb-2">Connection Error</div>
             <div className="text-sm mb-3">{error}</div>
-            <button 
+            <button
               onClick={handleReconnect}
               className="bg-red-700 hover:bg-red-800 px-3 py-1 rounded text-sm"
             >
@@ -506,7 +522,7 @@ export default function NoVNCViewer({ instanceId }) {
               <div>Click to regain control</div>
               <div>VR users: Use trigger button</div>
             </div>
-            <button 
+            <button
               onClick={regainControl}
               className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-sm"
             >
@@ -520,7 +536,7 @@ export default function NoVNCViewer({ instanceId }) {
       {process.env.NODE_ENV === 'development' && (
         <div className="absolute bottom-2 right-2 bg-red-800 bg-opacity-75 rounded-lg p-2 text-white text-xs">
           <div className="font-semibold mb-1">Debug Controls:</div>
-          <button 
+          <button
             className="bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded text-xs mr-1"
             onClick={() => {
               logger.debug('Force regain control triggered', { instanceId });
@@ -529,7 +545,7 @@ export default function NoVNCViewer({ instanceId }) {
           >
             Force Regain
           </button>
-          <button 
+          <button
             className="bg-orange-600 hover:bg-orange-700 px-2 py-1 rounded text-xs mr-1"
             onClick={() => {
               logger.debug('Force release control triggered', { instanceId });
@@ -538,7 +554,7 @@ export default function NoVNCViewer({ instanceId }) {
           >
             Force Release
           </button>
-          <button 
+          <button
             className="bg-gray-600 hover:bg-gray-700 px-2 py-1 rounded text-xs"
             onClick={() => {
               logger.debug('Current NoVNC state', {

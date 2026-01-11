@@ -29,6 +29,27 @@ This repository uses the Codex agent to build a functional Lego Loco cluster. A#
     ```
 6.  **Test**: Rerun verification tests only AFTER the deployment is confirmed ready.
 
+### ⚠️ CRITICAL: Use Rigorous Deployment Scripts
+
+**Common Problem**: Simply running `docker build` + `helm upgrade` does NOT guarantee container replacement. Kubernetes may not pull the new image, especially when reusing tags like `latest`.
+
+**Solution**: ALWAYS use the rigorous deployment script when modifying Dockerfiles or source code:
+
+```bash
+# Rebuild entire stack (backend, frontend, VR) with unique timestamped tags
+./scripts/deploy_backend_rigorous.sh [optional-tag]
+```
+
+**What this script does**:
+1. Builds ALL images (backend, frontend, VR) with unique timestamped tags
+2. Loads all images into Minikube/Kind
+3. Verifies all images are present in cluster
+4. Forces Helm upgrade with new tags for all services
+5. Waits for all deployment rollouts to complete
+6. Shows deployment summary and pod status
+
+**Why this matters**: Without this process, your code changes may not be reflected in the running pods, leading to confusion during debugging and verification.
+
 ---
 r is provided to ensure all dependencies are available. Begin every session by launching the dev container or installing the packages below so tests and development servers run correctly.
 

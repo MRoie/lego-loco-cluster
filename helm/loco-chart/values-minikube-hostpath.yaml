@@ -60,6 +60,19 @@ registryConfig:
     secretName: "jfrog-secret"
     server: ""
 
+# RBAC configuration for Kubernetes service discovery
+rbac:
+  create: true  # Create service account and RBAC for backend auto-discovery
+
+# Ingress configuration for centralized routing
+ingress:
+  enabled: true  # Enable Ingress for production deployments
+  className: nginx  # Use nginx ingress controller
+  annotations:
+    # Enable WebSocket support
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
 emulator:
   image: qemu-loco
   tag: latest
