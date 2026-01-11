@@ -202,6 +202,7 @@ export default function InstanceCard({ instance, isActive, onClick }) {
             )}
 
             <video ref={videoRef} className="hidden" />
+            {/* WebRTC Loading Overlay - Disabled to allow VNC traffic to be seen
             {loading && (
               <motion.div
                 className="absolute inset-0 flex items-center justify-center text-sm text-white bg-black/80"
@@ -218,6 +219,7 @@ export default function InstanceCard({ instance, isActive, onClick }) {
                 </div>
               </motion.div>
             )}
+            */ }
           </>
         ) : (
           <div className={`w-full h-full flex flex-col items-center justify-center ${placeholder.bgClass}`}>

@@ -4,7 +4,7 @@ set -e
 # Configuration
 NAMESPACE="loco"
 CHART_PATH="./helm/loco-chart"
-VALUES_FILE="./helm/loco-chart/values-minikube-hostpath.yaml"
+VALUES_FILE="./helm/loco-chart/values.yaml"
 
 # Generate unique tag if not provided
 TAG=${1:-"v$(date +%s)"}
@@ -27,6 +27,9 @@ docker build --no-cache -f frontend/Dockerfile -t lego-loco-frontend:$TAG fronte
 echo "📦 Building VR (with --no-cache for fresh config)..."
 docker build --no-cache -f frontend/Dockerfile --build-arg VITE_DEFAULT_VR=true -t lego-loco-frontend:$TAG-vr frontend/
 
+echo "📦 Building Emulator (qemu-softgpu)..."
+docker build -f containers/qemu-softgpu/Dockerfile -t qemu-loco:$TAG containers/qemu-softgpu/
+
 # Load all images into Minikube
 echo ""
 echo "============================================"
@@ -41,6 +44,9 @@ minikube image load lego-loco-frontend:$TAG
 
 echo "⬆️  Loading VR..."
 minikube image load lego-loco-frontend:$TAG-vr
+
+echo "⬆️  Loading Emulator..."
+minikube image load qemu-loco:$TAG
 
 # Verify all images
 echo ""
@@ -71,6 +77,13 @@ else
     IMAGES_OK=false
 fi
 
+if minikube image ls | grep -q "qemu-loco:$TAG"; then
+    echo "✅ Emulator image found"
+else
+    echo "❌ Emulator image NOT found!"
+    IMAGES_OK=false
+fi
+
 if [ "$IMAGES_OK" = false ]; then
     echo "❌ Some images failed to load. Aborting deployment."
     exit 1
@@ -95,7 +108,10 @@ helm upgrade --install loco $CHART_PATH \
     --set frontend.imagePullPolicy=Never \
     --set vr.image=lego-loco-frontend \
     --set vr.tag=$TAG-vr \
-    --set vr.imagePullPolicy=Never
+    --set vr.imagePullPolicy=Never \
+    --set emulator.image=qemu-loco \
+    --set emulator.tag=$TAG \
+    --set emulator.imagePullPolicy=Never
 
 # Wait for all deployments
 echo ""
@@ -112,6 +128,9 @@ kubectl rollout status deployment/loco-loco-frontend -n $NAMESPACE --timeout=120
 echo "⏳ VR..."
 kubectl rollout status deployment/loco-loco-vr -n $NAMESPACE --timeout=120s
 
+echo "⏳ Emulator..."
+kubectl rollout status statefulset/loco-loco-emulator -n $NAMESPACE --timeout=120s
+
 # Final checks
 echo ""
 echo "============================================"
@@ -126,6 +145,7 @@ echo "🏷️  Deployed Tags:"
 echo "  Backend:  lego-loco-backend:$TAG"
 echo "  Frontend: lego-loco-frontend:$TAG"
 echo "  VR:       lego-loco-frontend:$TAG-vr"
+echo "  Emulator: qemu-loco:$TAG"
 
 echo ""
 echo "🎉 Full-stack deployment complete!"

@@ -1,9 +1,7 @@
 replicas: 1
 namespace: loco
 
-# Use local images by default (minikube setup)
-imageRepo: ""
-
+#imageRepo: "ghcr.io/mroie"
 # Storage configuration for minikube with hostPath
 storage:
   class: "standard"  # minikube default storage class
@@ -79,7 +77,7 @@ registryConfig:
 
 emulator:
   # Emulator replicas and instance configuration
-  replicas: 1
+  replicas: 4
   
   # Image configuration
   image: qemu-loco
@@ -87,6 +85,7 @@ emulator:
   imagePullPolicy: Never  # Use local images for minikube
   serviceType: ClusterIP
   servicePort: 5901
+  healthPort: 8080
   diskPVC: win98-disk
   diskReadOnly: false
 
@@ -96,13 +95,14 @@ emulator:
   snapshotTag: "win98-base"
 
   # Health checks configuration
-  healthChecks:
+  probes:
     startup:
       enabled: true
       path: /health
       initialDelaySeconds: 30
       periodSeconds: 10
       timeoutSeconds: 5
+      failureThreshold: 30
     liveness:
       enabled: true
       path: /
@@ -117,6 +117,24 @@ emulator:
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
+
+  # --- Storage Strategy Options ---
+  # Option A: Fully Persistent (Standard Dev) - Requires local win98.qcow2 in Docker image
+  # diskPVC: "win98-disk"
+  # usePrebuiltSnapshot: false
+
+  # Option B: Ephemeral/Cloud (CI/Test) - Downloads snapshot, no persistence
+  # diskPVC: ""
+  # usePrebuiltSnapshot: true
+
+  # Current Default: Option A setup
+  diskPVC: "win98-disk"
+  diskReadOnly: false
+
+  # Snapshot configuration
+  usePrebuiltSnapshot: false
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
 
   # CPU resources for emulator pods
   resources:
