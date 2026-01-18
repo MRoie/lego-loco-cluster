@@ -1,0 +1,83 @@
+{
+  "timestamp": "2026-01-18T13:04:47.039Z",
+  "totalTests": 9,
+  "successfulTests": 1,
+  "failedTests": 8,
+  "results": [
+    {
+      "instance": "instance-0",
+      "success": true,
+      "error": null,
+      "framebufferSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "desktopName": "QEMU",
+      "screenshotPath": "vnc-screenshots/instance-0-screenshot.raw"
+    },
+    {
+      "instance": "instance-1",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-2",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-3",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-4",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-5",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-6",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-7",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-8",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/Users/saar/dev/lego-loco-cluster/logs/.2e08a23b86ffaf4264173364d6c231511001dde4-audit.json",
+    "files": [
+        {
+            "date": 1768741476716,
+            "name": "/Users/saar/dev/lego-loco-cluster/logs/application-2026-01-18.log",
+            "hash": "6921bfdab0d3277411432f2c59a5a840e24c7e73a5ba5e8c47f0517190fb1e6c"
+        }
+    ],
+    "hashType": "sha256"
+}

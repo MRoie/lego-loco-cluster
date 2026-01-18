@@ -997,7 +997,8 @@ function createVNCBridge(ws, targetUrl, instanceId) {
   });
 
   // Set TCP socket timeout
-  tcpSocket.setTimeout(30000); // 30 second idle timeout
+  // Increased to 1 hour to prevent disconnecting idle VNC sessions (e.g. static screens)
+  tcpSocket.setTimeout(3600000);
 }
 
 // --- WebSocket Support for VNC ---

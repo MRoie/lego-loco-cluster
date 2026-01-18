@@ -7,7 +7,7 @@ const { createTestLogger } = require('../utils/logger');
 
 // Configuration
 const TEST_CONFIG = {
-    baseUrl: 'ws://localhost:3000/proxy/vnc',
+    baseUrl: process.env.VNC_URL || 'ws://localhost:3000/proxy/vnc',
     instances: ['instance-0', 'instance-1', 'instance-2', 'instance-3', 'instance-4', 'instance-5', 'instance-6', 'instance-7', 'instance-8'],
     timeout: 30000,
     screenshotDir: './vnc-screenshots'
@@ -32,7 +32,7 @@ class VNCTester {
     async testVNCConnection(instance) {
         return new Promise((resolve) => {
             this.log(`Starting VNC test for ${instance}`, instance);
-            
+
             const ws = new WebSocket(`${TEST_CONFIG.baseUrl}/${instance}/`);
             let handshakeStep = 0;
             let framebufferData = [];
@@ -57,38 +57,38 @@ class VNCTester {
 
             ws.on('message', (data) => {
                 this.log(`Step ${handshakeStep}: Received ${data.length} bytes`, instance);
-                
+
                 if (handshakeStep === 0) {
                     // VNC server version
                     const serverVersion = data.toString();
                     this.log(`Server version: ${JSON.stringify(serverVersion)}`, instance);
-                    
+
                     const clientVersion = 'RFB 003.008\n';
                     this.log(`Sending client version: ${JSON.stringify(clientVersion)}`, instance);
                     ws.send(clientVersion);
                     handshakeStep = 1;
-                    
+
                 } else if (handshakeStep === 1) {
                     // Security types
                     const numTypes = data[0];
                     this.log(`Number of security types: ${numTypes}`, instance);
-                    
+
                     if (numTypes > 0) {
                         for (let i = 0; i < numTypes; i++) {
                             this.log(`Security type ${i}: ${data[1 + i]}`, instance);
                         }
-                        
+
                         // Select "None" security (type 1)
                         this.log('Selecting security type 1 (None)', instance);
                         ws.send(Buffer.from([1]));
                         handshakeStep = 2;
                     }
-                    
+
                 } else if (handshakeStep === 2) {
                     // Security result
                     const result = data.readUInt32BE(0);
                     this.log(`Security result: ${result}`, instance);
-                    
+
                     if (result === 0) {
                         this.log('Security handshake successful', instance);
                         this.log('Sending ClientInit (shared=1)', instance);
@@ -98,24 +98,24 @@ class VNCTester {
                         testResult.error = 'Security handshake failed';
                         this.log('Security handshake failed', instance);
                     }
-                    
+
                 } else if (handshakeStep === 3) {
                     // ServerInit
                     const width = data.readUInt16BE(0);
                     const height = data.readUInt16BE(2);
                     this.log(`Framebuffer size: ${width}x${height}`, instance);
-                    
+
                     // Parse name length and name
                     const nameLength = data.readUInt32BE(20);
                     const name = data.slice(24, 24 + nameLength).toString();
                     this.log(`Desktop name: "${name}"`, instance);
-                    
+
                     testResult.framebufferSize = { width, height };
                     testResult.desktopName = name;
-                    
+
                     this.log('VNC handshake complete!', instance);
                     handshakeStep = 4;
-                    
+
                     // Request screen update
                     setTimeout(() => {
                         this.log('Requesting framebuffer update...', instance);
@@ -128,22 +128,22 @@ class VNCTester {
                         updateRequest.writeUInt16BE(height, 8); // height
                         ws.send(updateRequest);
                     }, 1000);
-                    
+
                 } else {
                     // Framebuffer updates
                     this.log(`Framebuffer data received: ${data.length} bytes`, instance);
                     framebufferData.push(data);
-                    
+
                     // Save screenshot after receiving some data
                     if (framebufferData.length >= 1) {
                         const screenshotPath = path.join(TEST_CONFIG.screenshotDir, `${instance}-screenshot.raw`);
                         const combinedData = Buffer.concat(framebufferData);
                         fs.writeFileSync(screenshotPath, combinedData);
-                        
+
                         testResult.success = true;
                         testResult.screenshotPath = screenshotPath;
                         this.log(`Screenshot saved: ${screenshotPath} (${combinedData.length} bytes)`, instance);
-                        
+
                         clearTimeout(timeout);
                         ws.close();
                         resolve(testResult);
@@ -168,22 +168,22 @@ class VNCTester {
 
     async runAllTests() {
         this.log('Starting VNC cluster connectivity tests...');
-        
+
         for (const instance of TEST_CONFIG.instances) {
             this.log(`Testing ${instance}...`);
             const result = await this.testVNCConnection(instance);
             this.results.push(result);
-            
+
             // Small delay between tests
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
-        
+
         this.generateReport();
     }
 
     generateReport() {
         this.log('Generating test report...');
-        
+
         const report = {
             timestamp: new Date().toISOString(),
             totalTests: this.results.length,
@@ -191,11 +191,11 @@ class VNCTester {
             failedTests: this.results.filter(r => !r.success).length,
             results: this.results
         };
-        
+
         // Save detailed report
         const reportPath = path.join(TEST_CONFIG.screenshotDir, 'vnc-test-report.json');
         fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-        
+
         // Print summary
         console.log('\n=== VNC Cluster Test Report ===');
         console.log(`Total Tests: ${report.totalTests}`);
@@ -203,7 +203,7 @@ class VNCTester {
         console.log(`Failed: ${report.failedTests}`);
         console.log(`Report saved to: ${reportPath}`);
         console.log('\nDetailed Results:');
-        
+
         this.results.forEach(result => {
             const status = result.success ? '✅ SUCCESS' : '❌ FAILED';
             console.log(`${status} ${result.instance}: ${result.error || 'Connected successfully'}`);
@@ -214,7 +214,7 @@ class VNCTester {
                 console.log(`  Screenshot: ${result.screenshotPath}`);
             }
         });
-        
+
         // Generate HTML report
         this.generateHTMLReport(report);
     }
@@ -274,7 +274,7 @@ class VNCTester {
     <pre>${JSON.stringify(report, null, 2)}</pre>
 </body>
 </html>`;
-        
+
         const htmlPath = path.join(TEST_CONFIG.screenshotDir, 'vnc-test-report.html');
         fs.writeFileSync(htmlPath, htmlReport);
         console.log(`HTML report saved to: ${htmlPath}`);

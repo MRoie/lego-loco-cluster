@@ -1,0 +1,208 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VNC Cluster Test Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { background: #f0f0f0; padding: 20px; border-radius: 5px; }
+        .summary { display: flex; gap: 20px; margin: 20px 0; }
+        .stat { background: #e8f5e8; padding: 10px; border-radius: 5px; text-align: center; }
+        .result { border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 5px; }
+        .success { border-left: 5px solid #28a745; }
+        .failure { border-left: 5px solid #dc3545; }
+        .screenshot { max-width: 300px; border: 1px solid #ccc; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>VNC Cluster Test Report</h1>
+        <p>Generated: 2026-01-18T13:04:47.039Z</p>
+    </div>
+    
+    <div class="summary">
+        <div class="stat">
+            <h3>Total Tests</h3>
+            <h2>9</h2>
+        </div>
+        <div class="stat">
+            <h3>Successful</h3>
+            <h2 style="color: #28a745;">1</h2>
+        </div>
+        <div class="stat">
+            <h3>Failed</h3>
+            <h2 style="color: #dc3545;">8</h2>
+        </div>
+    </div>
+    
+    <h2>Test Results</h2>
+    
+        <div class="result success">
+            <h3>instance-0</h3>
+            <p><strong>Status:</strong> ✅ SUCCESS</p>
+            
+            <p><strong>Framebuffer:</strong> 1024x768</p>
+            <p><strong>Desktop:</strong> QEMU</p>
+            <p><strong>Screenshot:</strong> <a href="vnc-screenshots/instance-0-screenshot.raw">vnc-screenshots/instance-0-screenshot.raw</a></p>
+        </div>
+    
+        <div class="result failure">
+            <h3>instance-1</h3>
+            <p><strong>Status:</strong> ❌ FAILED</p>
+            <p><strong>Error:</strong> Unexpected server response: 502</p>
+            
+            
+            
+        </div>
+    
+        <div class="result failure">
+            <h3>instance-2</h3>
+            <p><strong>Status:</strong> ❌ FAILED</p>
+            <p><strong>Error:</strong> Unexpected server response: 502</p>
+            
+            
+            
+        </div>
+    
+        <div class="result failure">
+            <h3>instance-3</h3>
+            <p><strong>Status:</strong> ❌ FAILED</p>
+            <p><strong>Error:</strong> Unexpected server response: 502</p>
+            
+            
+            
+        </div>
+    
+        <div class="result failure">
+            <h3>instance-4</h3>
+            <p><strong>Status:</strong> ❌ FAILED</p>
+            <p><strong>Error:</strong> Unexpected server response: 502</p>
+            
+            
+            
+        </div>
+    
+        <div class="result failure">
+            <h3>instance-5</h3>
+            <p><strong>Status:</strong> ❌ FAILED</p>
+            <p><strong>Error:</strong> Unexpected server response: 502</p>
+            
+            
+            
+        </div>
+    
+        <div class="result failure">
+            <h3>instance-6</h3>
+            <p><strong>Status:</strong> ❌ FAILED</p>
+            <p><strong>Error:</strong> Unexpected server response: 502</p>
+            
+            
+            
+        </div>
+    
+        <div class="result failure">
+            <h3>instance-7</h3>
+            <p><strong>Status:</strong> ❌ FAILED</p>
+            <p><strong>Error:</strong> Unexpected server response: 502</p>
+            
+            
+            
+        </div>
+    
+        <div class="result failure">
+            <h3>instance-8</h3>
+            <p><strong>Status:</strong> ❌ FAILED</p>
+            <p><strong>Error:</strong> Unexpected server response: 502</p>
+            
+            
+            
+        </div>
+    
+    
+    <h2>Raw Data</h2>
+    <pre>{
+  "timestamp": "2026-01-18T13:04:47.039Z",
+  "totalTests": 9,
+  "successfulTests": 1,
+  "failedTests": 8,
+  "results": [
+    {
+      "instance": "instance-0",
+      "success": true,
+      "error": null,
+      "framebufferSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "desktopName": "QEMU",
+      "screenshotPath": "vnc-screenshots/instance-0-screenshot.raw"
+    },
+    {
+      "instance": "instance-1",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-2",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-3",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-4",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-5",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-6",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-7",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    },
+    {
+      "instance": "instance-8",
+      "success": false,
+      "error": "Unexpected server response: 502",
+      "framebufferSize": null,
+      "desktopName": null,
+      "screenshotPath": null
+    }
+  ]
+}</pre>
+</body>
+</html>
