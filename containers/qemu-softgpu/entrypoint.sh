@@ -276,12 +276,13 @@ log_info "QEMU command: qemu-system-i386 -M pc -cpu pentium2 -m 512 -hda $SNAPSH
 log_info "Checking disk image contents..."
 qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
 
-qemu-system-i386 \
   -M pc -cpu pentium2 \
   -m 512 -hda "$SNAPSHOT_NAME" \
   -net nic,model=ne2k_pci -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
-  -vga std -display vnc=0.0.0.0:1 \
+  -vga cirrus -display vnc=0.0.0.0:1 \
+  -usb -device usb-tablet \
+  -no-hpet \
   -audiodev pa,id=snd0 \
   -rtc base=localtime \
   -boot order=dc,menu=on,splash-time=5000 \
@@ -307,16 +308,16 @@ log_info "VNC display available on :5901"
 
 # === STEP 6: Video Streaming Setup ===
 log_info "Starting GStreamer video stream at 1024x768 for Lego Loco compatibility..."
-log_info "Stream configuration: 1024x768@25fps, bitrate=1200kbps (optimized for higher resolution)"
+log_info "Stream configuration: 1024x768@15fps, bitrate=1200kbps (optimized for emulation performance)"
 gst-launch-1.0 -v \
   ximagesrc display-name=:$DISPLAY_NUM use-damage=0 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoconvert ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoscale ! \
-  video/x-raw,width=1024,height=768,framerate=25/1 ! \
+  video/x-raw,width=1024,height=768,framerate=15/1 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  x264enc tune=zerolatency bitrate=1200 speed-preset=ultrafast key-int-max=25 ! \
+  x264enc tune=zerolatency bitrate=1200 speed-preset=ultrafast key-int-max=15 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   rtph264pay config-interval=1 ! \
   udpsink host=127.0.0.1 port=5000 sync=false async=false &
