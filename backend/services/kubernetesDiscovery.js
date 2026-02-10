@@ -65,14 +65,18 @@ class KubernetesDiscovery {
         logger.warn("Namespace was empty, falling back to default");
       }
       
-      // Test API connectivity
+      // Test API connectivity with simple namespace list
       try {
-        await this.k8sApi.listNamespace();
-        logger.info("Kubernetes API connectivity test successful");
+        logger.info("Testing Kubernetes connectivity", { namespace: this.namespace });
+        
+        // Use simple listNamespace call for connectivity test
+        const nsResponse = await this.k8sApi.listNamespace();
+        logger.info("Kubernetes API connectivity test successful", { namespacesFound: nsResponse.body.items.length });
       } catch (connectError) {
         logger.warn("Kubernetes API connectivity test failed", { 
           error: connectError.message,
-          code: connectError.code 
+          code: connectError.code,
+          namespace: this.namespace
         });
         throw connectError;
       }
@@ -118,8 +122,7 @@ class KubernetesDiscovery {
       
       const labelSelector = 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster';
       
-      console.log(`🚀 Calling Kubernetes APIs for namespace: "${namespace}"`);
-      console.log(`📝 Label selector: "${labelSelector}"`);
+      logger.debug("Calling Kubernetes APIs for namespace", { namespace, labelSelector });
       
       // Add pre-call validation
       if (typeof namespace !== 'string') {
@@ -127,22 +130,18 @@ class KubernetesDiscovery {
       }
       
       // Query both Pods and StatefulSets for comprehensive discovery
-      const listPodsParams = {
-        namespace: namespace,
-        labelSelector: labelSelector
-      };
-      
-      const listStatefulSetsParams = {
-        namespace: namespace,
-        labelSelector: labelSelector
-      };
-      
-      console.log(`🔧 API call parameters:`, { pods: listPodsParams, statefulSets: listStatefulSetsParams });
+      logger.debug("API call parameters", { namespace, labelSelector });
       
       // Execute both API calls in parallel for efficiency
       const [podsResponse, statefulSetsResponse] = await Promise.all([
-        this.k8sApi.listNamespacedPod(listPodsParams),
-        this.k8sAppsApi.listNamespacedStatefulSet(listStatefulSetsParams)
+        this.k8sApi.listNamespacedPod({
+          namespace,
+          labelSelector
+        }),
+        this.k8sAppsApi.listNamespacedStatefulSet({
+          namespace,
+          labelSelector
+        })
       ]);
 
       if (!podsResponse || !podsResponse.body) {
@@ -151,13 +150,13 @@ class KubernetesDiscovery {
       }
 
       if (!statefulSetsResponse || !statefulSetsResponse.body) {
-        console.log('⚠️ No StatefulSets response or body from Kubernetes API');
+        logger.warn('No StatefulSets response or body from Kubernetes API');
       }
 
       const pods = podsResponse.body.items || [];
       const statefulSets = statefulSetsResponse.body.items || [];
 
-      console.log(`✅ Kubernetes API responses received - found ${pods.length} pods and ${statefulSets.length} StatefulSets`);
+      logger.info("Kubernetes API responses received", { podsFound: pods.length, statefulSetsFound: statefulSets.length });
 
       const instances = [];      
       logger.debug("Processing discovered pods", { podCount: pods.length });

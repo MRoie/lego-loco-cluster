@@ -20,8 +20,8 @@ storage:
     
     # Option 8: Hybrid Storage with Multiple Backends
     hybrid:
-      enabled: false  # Disabled by default
-      primary: "nfs"  # Default to NFS for production
+      enabled: true  # Enable hybrid storage for testing
+      primary: "emptyDir"  # Use emptyDir for development/testing
       fallback: "emptyDir"
       
       # NFS configuration
@@ -68,9 +68,9 @@ registryConfig:
     server: ""  # e.g., "your-company.jfrog.io"
 
 emulator:
-  image: ghcr.io/mroie/lego-loco-cluster/win98-softgpu
+  image: lego-loco-cluster/win98-softgpu
   tag: latest
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Never
 
   servicePort: 5901
   diskPVC: win98-disk
@@ -122,11 +122,18 @@ emulator:
 backend:
   image: loco-backend
   tag: latest
+  imagePullPolicy: Never
   servicePort: 3001
+  # Environment variables for backend configuration
+  env:
+    ALLOW_EMPTY_DISCOVERY: "true"
+    FORCE_CONSOLE_LOGGING: "true"
+    NODE_ENV: "production"
 
 frontend:
   image: loco-frontend
   tag: latest
+  imagePullPolicy: Never
   servicePort: 3000
 
 git:
@@ -135,7 +142,7 @@ git:
 
 artRes:
   nfs:
-    server: nfs-server
+    server: nfs-server.loco.svc.cluster.local
     path: /exports/art
 
 vr:

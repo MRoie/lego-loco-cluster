@@ -27,7 +27,7 @@ spec:
       containers:
       - name: vr-frontend
         image: {{ include "loco.image" (dict "root" . "image" .Values.vr.image "tag" .Values.vr.tag) }}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Never
         ports:
         - containerPort: {{ .Values.vr.servicePort }}
         env:

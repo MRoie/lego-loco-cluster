@@ -27,7 +27,7 @@ spec:
       containers:
       - name: frontend
         image: {{ include "loco.image" (dict "root" . "image" .Values.frontend.image "tag" .Values.frontend.tag) }}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: {{ .Values.frontend.imagePullPolicy | default "Never" }}
         ports:
         - containerPort: {{ .Values.frontend.servicePort }}
         startupProbe:

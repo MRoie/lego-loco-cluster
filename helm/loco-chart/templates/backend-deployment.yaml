@@ -30,12 +30,18 @@ spec:
       containers:
       - name: backend
         image: {{ include "loco.image" (dict "root" . "image" .Values.backend.image "tag" .Values.backend.tag) }}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: {{ .Values.backend.imagePullPolicy | default "Never" }}
         env:
         - name: KUBERNETES_NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        {{- if .Values.backend.env }}
+        {{- range $key, $value := .Values.backend.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- end }}
         ports:
         - containerPort: {{ .Values.backend.servicePort }}
         startupProbe:
