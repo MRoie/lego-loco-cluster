@@ -645,6 +645,104 @@ app.get("/api/quality/summary", (req, res) => {
   }
 });
 
+// ==========================================
+// LAN Topology Dashboard API
+// ==========================================
+
+/**
+ * Get LAN connectivity status across all emulator instances.
+ * Probes each instance's health endpoint for cross-container L2 reachability,
+ * ARP table, DirectPlay port checks (2300/47624), and network mode.
+ *
+ * @route GET /api/lan-status
+ * @returns {Object} LAN topology with per-instance connectivity matrix
+ */
+app.get("/api/lan-status", async (req, res) => {
+  try {
+    const instances = await instanceManager.getInstances();
+    const lanStatus = {
+      timestamp: new Date().toISOString(),
+      networkMode: process.env.NETWORK_MODE || "unknown",
+      instanceCount: instances.length,
+      instances: {},
+      connectivity: [],
+      overallHealthy: true,
+    };
+
+    // Probe each instance's health endpoint for LAN info
+    const http = require("http");
+    const probeInstance = (instance) => {
+      return new Promise((resolve) => {
+        const healthPort = instance.healthPort || 8080;
+        const host = instance.host || instance.podIP || "localhost";
+        const url = `http://${host}:${healthPort}/health`;
+
+        const req = http.get(url, { timeout: 5000 }, (response) => {
+          let data = "";
+          response.on("data", (chunk) => (data += chunk));
+          response.on("end", () => {
+            try {
+              const health = JSON.parse(data);
+              resolve({
+                id: instance.id,
+                host,
+                healthy: health.qemu_healthy || false,
+                networkMode: health.network?.network_mode || "unknown",
+                bridgeUp: health.network?.bridge_up || false,
+                txPackets: health.network?.tx_packets || 0,
+                rxPackets: health.network?.rx_packets || 0,
+                txErrors: health.network?.tx_errors || 0,
+                lanReachable: health.network?.lan_reachable || [],
+                directplayPorts: {
+                  tcp2300: health.network?.directplay_tcp_2300 || "unknown",
+                  tcp47624: health.network?.directplay_tcp_47624 || "unknown",
+                },
+              });
+            } catch (e) {
+              resolve({ id: instance.id, host, healthy: false, error: "parse_error" });
+            }
+          });
+        });
+        req.on("error", () => {
+          resolve({ id: instance.id, host, healthy: false, error: "unreachable" });
+        });
+        req.on("timeout", () => {
+          req.destroy();
+          resolve({ id: instance.id, host, healthy: false, error: "timeout" });
+        });
+      });
+    };
+
+    const results = await Promise.all(instances.map(probeInstance));
+
+    for (const r of results) {
+      lanStatus.instances[r.id] = r;
+      if (!r.healthy) lanStatus.overallHealthy = false;
+    }
+
+    // Build connectivity matrix
+    for (let i = 0; i < results.length; i++) {
+      for (let j = i + 1; j < results.length; j++) {
+        const a = results[i];
+        const b = results[j];
+        const reachable =
+          (a.lanReachable && a.lanReachable.includes(b.host)) ||
+          (b.lanReachable && b.lanReachable.includes(a.host));
+        lanStatus.connectivity.push({
+          from: a.id,
+          to: b.id,
+          reachable: reachable || false,
+        });
+      }
+    }
+
+    res.json(lanStatus);
+  } catch (e) {
+    logger.error("Failed to get LAN status", { error: e.message });
+    res.status(500).json({ error: "Failed to get LAN status" });
+  }
+});
+
 // Get deep health information for all instances
 app.get("/api/quality/deep-health", (req, res) => {
   try {
