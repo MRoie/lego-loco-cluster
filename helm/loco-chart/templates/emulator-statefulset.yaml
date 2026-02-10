@@ -110,8 +110,10 @@ spec:
         env:
         {{- if .Values.emulator.env }}
         {{- range $key, $value := .Values.emulator.env }}
+        {{- if ne $key "SOCKET_MASTER_HOST" }}
         - name: {{ $key }}
           value: {{ $value | quote }}
+        {{- end }}
         {{- end }}
         {{- end }}
         {{- if .Values.emulator.usePrebuiltSnapshot }}
@@ -119,7 +121,6 @@ spec:
           value: "true"
         - name: SNAPSHOT_REGISTRY
           value: {{ .Values.emulator.snapshotRegistry | quote }}
-        - name: SNAPSHOT_TAG
         - name: SNAPSHOT_TAG
           value: {{ .Values.emulator.snapshotTag | quote }}
         {{- end }}
@@ -169,6 +170,9 @@ spec:
         - containerPort: 4444
           name: lan-socket
           protocol: TCP
+        - containerPort: 1234
+          name: lan-mcast
+          protocol: UDP
         {{- if .Values.emulator.probes.startup.enabled }}
         startupProbe:
           httpGet:
@@ -204,9 +208,6 @@ spec:
           readOnly: {{ .Values.emulator.diskReadOnly }}
         - name: dev-net-tun
           mountPath: /dev/net/tun
-        - name: emulator-scripts
-          mountPath: /usr/local/bin/setup-lan-network.sh
-          subPath: setup-lan-network.sh
         
         {{- if .Values.storage.strategy.hostPath.enabled }}
         # Option 1: HostPath Direct Mounts

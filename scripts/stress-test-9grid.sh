@@ -69,9 +69,10 @@ if [ "$MODE" = "k8s" ]; then
   PODS=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/component=emulator \
     -o jsonpath='{range .items[*]}{.metadata.name},{.status.podIP}{"\n"}{end}' 2>/dev/null || echo "")
 else
+  # Docker Compose mode: use host-mapped health ports 8080+i
   PODS=""
   for i in $(seq 0 $((REPLICAS - 1))); do
-    PODS="${PODS}emulator-${i},localhost\n"
+    PODS="${PODS}emulator-${i},localhost:$((8080 + i))\n"
   done
 fi
 
@@ -88,11 +89,18 @@ while true; do
   log "Sample $SAMPLE — ${ELAPSED}s elapsed, ${REMAINING}s remaining"
 
   # Probe each instance health endpoint
-  echo "$PODS" | while IFS=, read -r pod_name pod_ip; do
+  echo "$PODS" | while IFS=, read -r pod_name pod_addr; do
     [ -z "$pod_name" ] && continue
-    HEALTH_PORT=8080
 
-    HEALTH_JSON=$(curl -s --max-time 5 "http://${pod_ip}:${HEALTH_PORT}/health" 2>/dev/null || echo '{}')
+    # Parse host:port from pod_addr (docker mode: localhost:808X, k8s mode: just IP)
+    HEALTH_HOST="${pod_addr%%:*}"
+    HEALTH_PORT="${pod_addr##*:}"
+    # If no colon, default to port 8080
+    if [ "$HEALTH_HOST" = "$HEALTH_PORT" ]; then
+      HEALTH_PORT=8080
+    fi
+
+    HEALTH_JSON=$(curl -s --max-time 5 "http://${HEALTH_HOST}:${HEALTH_PORT}/health" 2>/dev/null || echo '{}')
     FPS=$(echo "$HEALTH_JSON" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('video',{}).get('estimated_frame_rate',0))" 2>/dev/null || echo 0)
     CPU=$(echo "$HEALTH_JSON" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('system_performance',{}).get('cpu_usage_percent',0))" 2>/dev/null || echo 0)
     MEM=$(echo "$HEALTH_JSON" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('system_performance',{}).get('qemu_memory_mb',0))" 2>/dev/null || echo 0)

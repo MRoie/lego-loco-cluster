@@ -29,6 +29,8 @@ TAP_IF=${TAP_IF:-tap0}
 INSTANCE_ID=${INSTANCE_ID:-0}
 SOCKET_MASTER_HOST=${SOCKET_MASTER_HOST:-loco-emulator-0}
 SOCKET_PORT=${SOCKET_PORT:-4444}
+MCAST_GROUP=${MCAST_GROUP:-230.0.0.1}
+MCAST_PORT=${MCAST_PORT:-1234}
 VXLAN_VNI=${VXLAN_VNI:-42}
 VXLAN_GROUP=${VXLAN_GROUP:-239.1.1.1}
 
@@ -67,26 +69,20 @@ setup_bridge_and_tap() {
 # MODE: socket — QEMU socket networking (shared L2)
 # ---------------------------------------------------------------
 setup_socket_network() {
-  log_info "Setting up QEMU socket networking (shared L2)"
+  log_info "Setting up QEMU multicast socket networking (shared L2 bus)"
 
   # We still need a bridge + TAP for the guest NIC
   setup_bridge_and_tap
 
-  # Build the QEMU -netdev argument for socket mode
-  if [ "$INSTANCE_ID" -eq 0 ]; then
-    # Instance 0 is the socket master (listen)
-    QEMU_NET_ARGS="-netdev socket,id=lan0,listen=:${SOCKET_PORT} -device ne2k_pci,netdev=lan0"
-    log_info "Socket master: listening on port $SOCKET_PORT"
-  else
-    # Other instances connect to the master
-    QEMU_NET_ARGS="-netdev socket,id=lan0,connect=${SOCKET_MASTER_HOST}:${SOCKET_PORT} -device ne2k_pci,netdev=lan0"
-    log_info "Socket client: connecting to $SOCKET_MASTER_HOST:$SOCKET_PORT"
-  fi
+  # Multicast mode creates a true shared L2 segment — all instances join
+  # the same multicast group and see ALL each other's Ethernet frames
+  QEMU_NET_ARGS="-netdev socket,id=lan0,mcast=${MCAST_GROUP}:${MCAST_PORT} -device ne2k_pci,netdev=lan0"
+  log_info "Multicast socket: group=${MCAST_GROUP} port=${MCAST_PORT} (all instances identical)"
 
   # Also keep TAP for host-guest communication (health checks, etc.)
   QEMU_NET_ARGS="${QEMU_NET_ARGS} -net nic,model=rtl8139 -net tap,ifname=${TAP_IF},script=no,downscript=no"
 
-  log_success "Socket network configured for instance $INSTANCE_ID"
+  log_success "Multicast socket network configured for instance $INSTANCE_ID"
 }
 
 # ---------------------------------------------------------------

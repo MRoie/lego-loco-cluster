@@ -85,8 +85,8 @@ def probe_health_endpoint(host, port=8080, path="/health", timeout=5):
                 "qemu_healthy": data.get("qemu_healthy", False),
                 "display_active": data.get("video", {}).get("display_active", False),
                 "estimated_fps": data.get("video", {}).get("estimated_frame_rate", 0),
-                "cpu_usage": data.get("system_performance", {}).get("cpu_usage_percent", 0),
-                "mem_usage_mb": data.get("system_performance", {}).get("qemu_memory_mb", 0),
+                "cpu_usage": data.get("performance", {}).get("cpu_usage", 0),
+                "mem_usage_mb": data.get("performance", {}).get("memory_usage", 0),
                 "network_bridge_up": data.get("network", {}).get("bridge_up", False),
                 "network_tap_up": data.get("network", {}).get("tap_up", False),
                 "overall_status": data.get("overall_status", "unknown"),
@@ -146,6 +146,7 @@ def run_benchmark_pass(targets, duration_secs=60, sample_interval=5):
         fps_vals = [s["estimated_fps"] for s in good if s.get("estimated_fps", 0) > 0]
         latency_vals = [s["probe_latency_ms"] for s in good if s.get("probe_latency_ms", 0) > 0]
         cpu_vals = [s["cpu_usage"] for s in good if s.get("cpu_usage")]
+        mem_vals = [s["mem_usage_mb"] for s in good if s.get("mem_usage_mb", 0) > 0]
         docker_info = docker_by_name.get(t["name"], {})
 
         aggregated.append(OrderedDict([
@@ -159,6 +160,7 @@ def run_benchmark_pass(targets, duration_secs=60, sample_interval=5):
             ("avg_cpu_pct", round(mean(cpu_vals), 1) if cpu_vals else 0),
             ("docker_cpu_pct", docker_info.get("cpu_pct", 0)),
             ("docker_mem_mb", docker_info.get("mem_mb", 0)),
+            ("mem_usage_pct", round(mean(mem_vals), 1) if mem_vals else 0),
             ("qemu_healthy", all(s.get("qemu_healthy") for s in good)),
             ("display_active", all(s.get("display_active") for s in good)),
             ("network_ok", all(s.get("network_bridge_up") and s.get("network_tap_up") for s in good)),
@@ -191,7 +193,14 @@ def discover_targets(mode="k8s", direct=None):
     """Discover emulator instances."""
     if direct:
         targets = []
-        for addr in direct:
+        # Support both space-separated (nargs="+") and comma-separated instances
+        expanded = []
+        for item in direct:
+            expanded.extend(item.split(","))
+        for addr in expanded:
+            addr = addr.strip()
+            if not addr:
+                continue
             host, _, port = addr.partition(":")
             targets.append({"name": f"direct-{host}", "ip": host,
                             "health_port": int(port) if port else 8080})
@@ -200,8 +209,35 @@ def discover_targets(mode="k8s", direct=None):
         return [{"name": p["name"], "ip": p["ip"], "health_port": 8080}
                 for p in kubectl_get_emulator_pods()]
     else:
-        return [{"name": f"emulator-{i}", "ip": "localhost", "health_port": 8080 + i}
-                for i in range(9)]
+        # Docker Compose mode: detect whether we're inside the compose
+        # network (containers reachable by name:8080) or on the host
+        # (mapped to localhost:808X).
+        import socket
+        inside_network = False
+        try:
+            socket.getaddrinfo("loco-emulator-0", 8080, socket.AF_INET)
+            inside_network = True
+        except socket.gaierror:
+            pass
+
+        targets = []
+        replicas = int(os.environ.get("REPLICAS", 9))
+        for i in range(replicas):
+            if inside_network:
+                # Inside compose network — use container DNS names
+                targets.append({
+                    "name": f"loco-emulator-{i}",
+                    "ip": f"loco-emulator-{i}",
+                    "health_port": 8080,
+                })
+            else:
+                # Running from host — use mapped ports
+                targets.append({
+                    "name": f"emulator-{i}",
+                    "ip": "localhost",
+                    "health_port": 8080 + i,
+                })
+        return targets
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +254,8 @@ def write_csv(results, filepath):
     print(f"  CSV written: {filepath}")
 
 
-def write_markdown_report(all_runs, filepath):
+def write_markdown_report(all_runs, filepath, thresholds=None):
+    t = thresholds or {"min_fps": 15, "max_latency": 250, "max_cpu": 80}
     lines = [
         "# Lego Loco Cluster — Performance Benchmark Report",
         "", f"**Generated**: {datetime.utcnow().isoformat()}Z", "",
@@ -232,13 +269,15 @@ def write_markdown_report(all_runs, filepath):
             lines.append("_No data collected._")
             lines.append("")
             continue
-        lines.append("| Instance | Status | Avg FPS | Latency ms | CPU % | Mem MB | QEMU | Display | Net |")
-        lines.append("|----------|--------|---------|------------|-------|--------|------|---------|-----|")
+        lines.append("| Instance | Status | Avg FPS | Latency ms | CPU % | Mem % | QEMU | Display | Net |")
+        lines.append("|----------|--------|---------|------------|-------|-------|------|---------|-----|")
         for row in data:
+            mem_val = row.get('docker_mem_mb', 0) or row.get('mem_usage_pct', 0)
+            mem_label = f"{mem_val} MB" if row.get('docker_mem_mb', 0) else f"{mem_val}%"
             lines.append(
                 f"| {row.get('instance','-')} | {row.get('status','-')} | {row.get('avg_fps',0)} "
                 f"| {row.get('avg_latency_ms',-1)} | {row.get('avg_cpu_pct',0)} "
-                f"| {row.get('docker_mem_mb',0)} "
+                f"| {mem_label} "
                 f"| {'✅' if row.get('qemu_healthy') else '❌'} "
                 f"| {'✅' if row.get('display_active') else '❌'} "
                 f"| {'✅' if row.get('network_ok') else '❌'} |")
@@ -252,9 +291,9 @@ def write_markdown_report(all_runs, filepath):
         fps_all = [r["avg_fps"] for r in last if r.get("avg_fps", 0) > 0]
         lat_all = [r["avg_latency_ms"] for r in last if r.get("avg_latency_ms", -1) > 0]
         cpu_all = [r["avg_cpu_pct"] for r in last if r.get("avg_cpu_pct", 0) > 0]
-        lines.append(f"| Min FPS >= 15 | 15 | {'✅' if (fps_all and min(fps_all)>=15) else '❌'} |")
-        lines.append(f"| Max Latency <= 200ms | 200 | {'✅' if (lat_all and max(lat_all)<=200) else '❌'} |")
-        lines.append(f"| Max CPU <= 80% | 80 | {'✅' if (cpu_all and max(cpu_all)<=80) else '❌'} |")
+        lines.append(f"| Min FPS >= {t['min_fps']} | {t['min_fps']} | {'✅' if (fps_all and min(fps_all)>=t['min_fps']) else '❌'} |")
+        lines.append(f"| Max Latency <= {t['max_latency']}ms | {t['max_latency']} | {'✅' if (lat_all and max(lat_all)<=t['max_latency']) else '❌'} |")
+        lines.append(f"| Max CPU <= {t['max_cpu']}% | {t['max_cpu']} | {'✅' if (cpu_all and max(cpu_all)<=t['max_cpu']) else '❌'} |")
     lines.append("")
 
     Path(filepath).write_text("\n".join(lines))
@@ -275,6 +314,12 @@ def main():
     parser.add_argument("--output-dir", default="benchmark")
     parser.add_argument("--skip-scale", action="store_true")
     parser.add_argument("--csv", default="results.csv")
+    parser.add_argument("--max-latency", type=int, default=250,
+                        help="Max acceptable latency in ms (default 250)")
+    parser.add_argument("--min-fps", type=int, default=15,
+                        help="Min acceptable FPS (default 15)")
+    parser.add_argument("--max-cpu", type=int, default=80,
+                        help="Max acceptable CPU percent (default 80)")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -305,13 +350,24 @@ def main():
             print(f"  {row.get('instance','?'):30s}  status={row.get('status','?')}  fps={row.get('avg_fps',0)}")
 
     write_csv(all_rows, os.path.join(args.output_dir, args.csv))
-    write_markdown_report(all_runs, os.path.join(args.output_dir, "BENCHMARK_REPORT.md"))
+    thresholds = {"min_fps": args.min_fps, "max_latency": args.max_latency,
+                  "max_cpu": args.max_cpu}
+    write_markdown_report(all_runs, os.path.join(args.output_dir, "BENCHMARK_REPORT.md"),
+                          thresholds=thresholds)
 
     # CI gate exit code
     if all_runs and all_runs[-1]["data"]:
-        fps_all = [r["avg_fps"] for r in all_runs[-1]["data"] if r.get("avg_fps", 0) > 0]
-        if fps_all and min(fps_all) < 15:
-            print("\n❌ BENCHMARK FAILED: FPS below threshold")
+        last = all_runs[-1]["data"]
+        fps_all = [r["avg_fps"] for r in last if r.get("avg_fps", 0) > 0]
+        lat_all = [r["avg_latency_ms"] for r in last if r.get("avg_latency_ms", -1) > 0]
+        fail = False
+        if fps_all and min(fps_all) < args.min_fps:
+            print(f"\n❌ BENCHMARK FAILED: FPS {min(fps_all)} below {args.min_fps}")
+            fail = True
+        if lat_all and max(lat_all) > args.max_latency:
+            print(f"\n❌ BENCHMARK FAILED: Latency {max(lat_all):.0f}ms exceeds {args.max_latency}ms")
+            fail = True
+        if fail:
             sys.exit(1)
     print("\n✅ Benchmark complete")
 

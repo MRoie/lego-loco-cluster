@@ -108,7 +108,7 @@ KEY_SCANCODES = {
     "esc": 0x01, "1": 0x02, "2": 0x03, "3": 0x04, "4": 0x05,
     "5": 0x06, "6": 0x07, "7": 0x08, "8": 0x09, "9": 0x0A,
     "0": 0x0B, "minus": 0x0C, "equal": 0x0D, "backspace": 0x0E,
-    "tab": 0x09, "q": 0x10, "w": 0x11, "e": 0x12, "r": 0x13,
+    "tab": 0x0F, "q": 0x10, "w": 0x11, "e": 0x12, "r": 0x13,
     "t": 0x14, "y": 0x15, "u": 0x16, "i": 0x17, "o": 0x18,
     "p": 0x19, "bracketleft": 0x1A, "bracketright": 0x1B,
     "ret": 0x1C, "enter": 0x1C, "ctrl": 0x1D,
@@ -165,8 +165,9 @@ def make_mouse_move_event(x, y):
 
 def make_mouse_button_event(button="left", down=True):
     """Build a QMP input-send-event for a mouse button."""
-    btn_map = {"left": 0, "middle": 1, "right": 2}
-    btn = btn_map.get(button, 0)
+    # QMP expects InputButton enum string, not integer
+    btn_map = {"left": "left", "middle": "middle", "right": "right"}
+    btn = btn_map.get(button, "left")
     return {
         "type": "btn",
         "data": {

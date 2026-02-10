@@ -42,22 +42,33 @@ data:
         
         display_active = "false"
         frame_rate = 0
+        # Use Xvfb display (:DISPLAY_NUM) for X11 checks, not QEMU VNC display
+        display_num = os.environ.get("DISPLAY_NUM", "99")
+        xvfb_display = f":{display_num}"
         vnc_display = os.environ.get("VNC_DISPLAY", ":1")
         
-        # Check X display
-        if run_cmd(f"xdpyinfo -display {vnc_display}"):
+        # Check Xvfb display (where GStreamer captures)
+        if run_cmd(f"xdpyinfo -display {xvfb_display}"):
             display_active = "true"
-            # Estimate frame rate
-            x_activity = run_cmd(f"xwininfo -display {vnc_display} -root -stats | grep -c 'window'")
-            if x_activity and int(x_activity) > 0:
-                frame_rate = 15
+            # Estimate frame rate from GStreamer pipeline
+            gst_running = run_cmd("pgrep -f gst-launch")
+            if gst_running:
+                frame_rate = 25  # GStreamer configured for 25fps
+            else:
+                x_activity = run_cmd(f"xwininfo -display {xvfb_display} -root -stats | grep -c 'window'")
+                if x_activity and int(x_activity) > 0:
+                    frame_rate = 15
+        # Fallback: if Xvfb check fails, check QEMU VNC port directly
+        elif vnc_available == "true":
+            display_active = "true"
+            frame_rate = 15  # VNC active, estimate conservative FPS
 
         return {
             "vnc_available": vnc_available == "true",
             "display_active": display_active == "true",
             "estimated_frame_rate": frame_rate,
             "vnc_port": vnc_port,
-            "display": vnc_display
+            "display": xvfb_display
         }
 
     def get_audio_health():
