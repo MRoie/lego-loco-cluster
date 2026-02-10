@@ -44,3 +44,13 @@ a future Codex prompt.
 
 11. **Active Container Focus** (✅ DONE)
     - Full system implemented. See `docs/ACTIVE_STATE_PLAN.md`.
+
+12. **Smooth & Accessible 3D Sound Integration** (✅ DONE)
+    - `useSpatialAudio` hook enhanced with HRTF distance model, smooth
+      `linearRampToValueAtTime` transitions, and accessible mono fallback.
+    - Shared `AudioContext` across all VR tiles to avoid browser context limits.
+    - `useVRAudioListener` hook syncs the Web Audio listener with the A-Frame
+      camera rig position/orientation for accurate spatial perception.
+    - VR scene includes mono/3D toggle and autoplay resume button.
+    - Benchmark harness extended with `audio_latency_ms` and `spatial_accuracy`
+      placeholder columns for future measurement hooks.
