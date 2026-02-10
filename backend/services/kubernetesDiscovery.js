@@ -71,7 +71,19 @@ class KubernetesDiscovery {
         
         // Use simple listNamespace call for connectivity test
         const nsResponse = await this.k8sApi.listNamespace();
-        logger.info("Kubernetes API connectivity test successful", { namespacesFound: nsResponse.body.items.length });
+        
+        // Debug the response structure
+        logger.debug("Namespace API response structure", { 
+          hasResponse: !!nsResponse,
+          hasBody: !!nsResponse?.body,
+          hasItems: !!nsResponse?.body?.items,
+          responseKeys: nsResponse ? Object.keys(nsResponse) : [],
+          bodyKeys: nsResponse?.body ? Object.keys(nsResponse.body) : []
+        });
+        
+        // Handle different response structures
+        const items = nsResponse?.body?.items || nsResponse?.items || [];
+        logger.info("Kubernetes API connectivity test successful", { namespacesFound: items.length });
       } catch (connectError) {
         logger.warn("Kubernetes API connectivity test failed", { 
           error: connectError.message,

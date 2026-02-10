@@ -26,10 +26,10 @@ kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f 
 
 # Build backend and frontend images if they don't exist
 echo "🔨 Building backend image..."
-docker build -t ${IMAGE_REPO}/loco-backend:latest ./backend/
+docker build -t ${IMAGE_REPO}/loco-backend:latest -f ./backend/Dockerfile .
 
 echo "🔨 Building frontend image..."
-docker build -t ${IMAGE_REPO}/loco-frontend:latest ./frontend/
+docker build -t ${IMAGE_REPO}/loco-frontend:latest -f ./frontend/Dockerfile ./frontend/
 
 # Deploy with Helm
 echo "📦 Deploying with Helm..."
