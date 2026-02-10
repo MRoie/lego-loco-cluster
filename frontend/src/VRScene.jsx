@@ -1,8 +1,9 @@
 import 'aframe';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useActive } from './ActiveContext';
 import useWebRTC from './hooks/useWebRTC';
 import useSpatialAudio from './hooks/useSpatialAudio';
+import useVRAudioListener from './hooks/useVRAudioListener';
 import VRReactVNCViewer from './components/VRReactVNCViewer';
 import ControlsConfig from './components/ControlsConfig';
 import VRToast from './components/VRToast';
@@ -14,13 +15,18 @@ function positionForIndex(i, cols, rows) {
   return { x: x * 1.4, y: y * 1.0 };
 }
 
-function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds }) {
+function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio }) {
   const vncRef = useRef(null);
   const planeRef = useRef(null);
   const [textureCreated, setTextureCreated] = useState(false);
   const { videoRef: rtcVideoRef } = useWebRTC(inst.id);
   const pos = positionForIndex(idx, cols, rows);
-  const { setVolume } = useSpatialAudio(rtcVideoRef, [pos.x, pos.y, -3]);
+  const { setVolume, resumeContext } = useSpatialAudio(
+    rtcVideoRef,
+    [pos.x, pos.y, -3],
+    { mono: monoAudio },
+    sharedAudioCtx,
+  );
 
 
   useEffect(() => {
@@ -187,7 +193,40 @@ export default function VRScene({ onExit }) {
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [volumes, setVolumes] = useState([]);
+  const [monoAudio, setMonoAudio] = useState(false);
+  const [audioResumed, setAudioResumed] = useState(false);
+  const sharedAudioCtxRef = useRef(null);
   const ambientVolume = 0.2;
+
+  // Lazily create a single shared AudioContext for all tiles
+  const getSharedAudioCtx = useCallback(() => {
+    if (!sharedAudioCtxRef.current) {
+      sharedAudioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return sharedAudioCtxRef.current;
+  }, []);
+
+  // Resume the shared context on first user gesture (autoplay policy)
+  const handleAudioResume = useCallback(async () => {
+    const ctx = getSharedAudioCtx();
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    setAudioResumed(true);
+  }, [getSharedAudioCtx]);
+
+  // Sync the AudioContext listener with the VR camera rig position
+  useVRAudioListener(sharedAudioCtxRef.current);
+
+  // Clean up shared context on unmount
+  useEffect(() => {
+    return () => {
+      if (sharedAudioCtxRef.current) {
+        sharedAudioCtxRef.current.close();
+        sharedAudioCtxRef.current = null;
+      }
+    };
+  }, []);
   const defaultControllerMap = {
     abuttondown: 'F1',
     bbuttondown: 'F2',
@@ -413,13 +452,14 @@ export default function VRScene({ onExit }) {
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-4 z-10 bg-white/90 p-2 rounded-lg border-2 border-yellow-400">
+      <div className="absolute bottom-4 left-4 z-10 bg-white/90 p-2 rounded-lg border-2 border-yellow-400" role="group" aria-label="Audio controls">
         <label className="text-sm font-bold text-black mb-1 block">🔊 Volume:</label>
         <input
           type="range"
           min="0"
           max="1"
           step="0.01"
+          aria-label={`Volume for tile ${active + 1}`}
           value={volumes[active] || 1}
           onChange={(e) => {
             const v = parseFloat(e.target.value);
@@ -431,6 +471,25 @@ export default function VRScene({ onExit }) {
           }}
           className="w-20"
         />
+        <div className="flex items-center mt-1 gap-2">
+          <button
+            onClick={() => setMonoAudio((m) => !m)}
+            className={`text-xs px-2 py-0.5 rounded border font-bold ${monoAudio ? 'bg-blue-500 text-white border-blue-700' : 'bg-gray-200 text-black border-gray-400'}`}
+            aria-pressed={monoAudio}
+            title="Mono audio disables 3D spatial sound for accessibility"
+          >
+            {monoAudio ? '🔈 Mono' : '🎧 3D'}
+          </button>
+          {!audioResumed && (
+            <button
+              onClick={handleAudioResume}
+              className="text-xs px-2 py-0.5 rounded border font-bold bg-green-400 text-black border-green-600 animate-pulse"
+              aria-label="Enable audio playback"
+            >
+              ▶ Enable Audio
+            </button>
+          )}
+        </div>
       </div>
 
       {menuOpen && (
@@ -472,6 +531,8 @@ export default function VRScene({ onExit }) {
               volume={volumes[idx] || 1}
               ambientVolume={ambientVolume}
               onVNCReady={handleVNCReady}
+              sharedAudioCtx={sharedAudioCtxRef.current}
+              monoAudio={monoAudio}
             />
           ))}
         </a-entity>

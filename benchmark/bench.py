@@ -15,7 +15,13 @@ def run_deploy(replicas):
         return None
     # Placeholder for real measurement hooks
     time.sleep(1)
-    return {'replicas': replicas, 'fps': 0, 'bitrate': 0}
+    return {
+        'replicas': replicas,
+        'fps': 0,
+        'bitrate': 0,
+        'audio_latency_ms': 0,
+        'spatial_accuracy': 0,
+    }
 
 def main():
     parser = argparse.ArgumentParser(description='Simple VR benchmark harness')
@@ -29,8 +35,9 @@ def main():
         if res:
             results.append(res)
     if results:
+        fieldnames = ['replicas', 'fps', 'bitrate', 'audio_latency_ms', 'spatial_accuracy']
         with open(args.output, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['replicas', 'fps', 'bitrate'])
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(results)
         print('Results written to', args.output)
