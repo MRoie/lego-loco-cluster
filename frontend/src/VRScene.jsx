@@ -195,16 +195,18 @@ export default function VRScene({ onExit }) {
   const [volumes, setVolumes] = useState([]);
   const [monoAudio, setMonoAudio] = useState(false);
   const [audioResumed, setAudioResumed] = useState(false);
-  const sharedAudioCtxRef = useRef(null);
+  const [sharedAudioCtx, setSharedAudioCtx] = useState(null);
   const ambientVolume = 0.2;
 
   // Lazily create a single shared AudioContext for all tiles
   const getSharedAudioCtx = useCallback(() => {
-    if (!sharedAudioCtxRef.current) {
-      sharedAudioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    if (!sharedAudioCtx) {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      setSharedAudioCtx(ctx);
+      return ctx;
     }
-    return sharedAudioCtxRef.current;
-  }, []);
+    return sharedAudioCtx;
+  }, [sharedAudioCtx]);
 
   // Resume the shared context on first user gesture (autoplay policy)
   const handleAudioResume = useCallback(async () => {
@@ -216,17 +218,16 @@ export default function VRScene({ onExit }) {
   }, [getSharedAudioCtx]);
 
   // Sync the AudioContext listener with the VR camera rig position
-  useVRAudioListener(sharedAudioCtxRef.current);
+  useVRAudioListener(sharedAudioCtx);
 
   // Clean up shared context on unmount
   useEffect(() => {
     return () => {
-      if (sharedAudioCtxRef.current) {
-        sharedAudioCtxRef.current.close();
-        sharedAudioCtxRef.current = null;
+      if (sharedAudioCtx) {
+        sharedAudioCtx.close();
       }
     };
-  }, []);
+  }, [sharedAudioCtx]);
   const defaultControllerMap = {
     abuttondown: 'F1',
     bbuttondown: 'F2',
@@ -531,7 +532,7 @@ export default function VRScene({ onExit }) {
               volume={volumes[idx] || 1}
               ambientVolume={ambientVolume}
               onVNCReady={handleVNCReady}
-              sharedAudioCtx={sharedAudioCtxRef.current}
+              sharedAudioCtx={sharedAudioCtx}
               monoAudio={monoAudio}
             />
           ))}

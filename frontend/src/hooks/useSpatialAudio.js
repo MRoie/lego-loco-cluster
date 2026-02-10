@@ -34,7 +34,8 @@ export default function useSpatialAudio(
   options = {},
   sharedCtx = null,
 ) {
-  const cfg = { ...SPATIAL_DEFAULTS, ...options };
+  const mono = !!(options.mono ?? SPATIAL_DEFAULTS.mono);
+  const cfg = { ...SPATIAL_DEFAULTS, ...options, mono };
   const ctxRef = useRef(null);
   const gainRef = useRef(null);
   const pannerRef = useRef(null);
@@ -107,7 +108,7 @@ export default function useSpatialAudio(
       setIsReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoRef, position[0], position[1], position[2], cfg.mono, sharedCtx]);
+  }, [videoRef, position[0], position[1], position[2], mono, sharedCtx]);
 
   /** Smoothly ramp volume to the target value. */
   const setVolume = useCallback(

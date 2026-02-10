@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
 
+/** Default smooth-ramp duration (seconds) for listener transitions. */
+const LISTENER_RAMP_TIME = 0.05;
+
 /**
  * Keeps the Web Audio API listener in sync with the A-Frame camera rig
  * so that spatial audio sources are perceived relative to the user's
@@ -24,7 +27,7 @@ export default function useVRAudioListener(ctx, rigSelector = '#rig', intervalMs
 
       // Prefer the AudioParam-based API (modern browsers)
       if (listener.positionX) {
-        const t = ctx.currentTime + 0.05;
+        const t = ctx.currentTime + LISTENER_RAMP_TIME;
         listener.positionX.linearRampToValueAtTime(pos.x, t);
         listener.positionY.linearRampToValueAtTime(pos.y, t);
         listener.positionZ.linearRampToValueAtTime(pos.z, t);
@@ -47,7 +50,7 @@ export default function useVRAudioListener(ctx, rigSelector = '#rig', intervalMs
         const uz = 2 * (q.y * q.z + q.w * q.x);
 
         if (listener.forwardX) {
-          const t = ctx.currentTime + 0.05;
+          const t = ctx.currentTime + LISTENER_RAMP_TIME;
           listener.forwardX.linearRampToValueAtTime(fx, t);
           listener.forwardY.linearRampToValueAtTime(fy, t);
           listener.forwardZ.linearRampToValueAtTime(fz, t);
