@@ -12,3 +12,4 @@ images/*
 compose/*.tar
 talosctl
 
+.vscode/settings.json

@@ -161,3 +161,37 @@ Completing these tasks will yield a robust Windows 98 cluster with automated de
 14. ✅ **Comprehensive Monitoring Integration Tests** – **COMPLETED**: Added comprehensive test suite validating container health monitoring, API endpoints, auto-discovery, and recovery mechanisms. Integrated monitoring tests into CI pipeline with proper cluster setup and validation.
 
 15. ✅ **Container Health Instrumentation** – **COMPLETED**: Enhanced QEMU containers with detailed health monitoring scripts exposing metrics via HTTP endpoints. Integrated health monitoring into Helm charts with proper port exposure and configuration.
+
+## In-Game LAN Networking (CRITICAL)
+> **Current state**: Each QEMU container creates an isolated `loco-br` bridge at `192.168.10.1/24`. Guests cannot see each other at L2. DirectPlay LAN discovery and Lego Loco multiplayer are **non-functional**. No IPX, NetBIOS, or QEMU socket networking is configured anywhere.
+
+16. **Shared L2 Virtual Network Between QEMU Guests** – Replace isolated per-container bridges with a shared L2 segment. Preferred approach: QEMU socket networking (`-netdev socket,listen=` / `-netdev socket,connect=`). Alternative: VXLAN overlay or Multus macvlan. Update all three entrypoint.sh variants. Add `NETWORK_MODE` Helm value (`socket | vxlan | macvlan | user`). Ensure `qemu-manager.sh` production mode uses shared networking.
+
+17. **DirectPlay & Game Port Configuration** – Forward TCP/UDP 2300 (Lego Loco) and 47624 (DirectPlay) between guests on shared L2 segment. Configure unique static IPs per instance via DHCP or pre-baked registry hives. Add `k8s-tests/test-directplay.sh` for port 2300 cross-pod reachability.
+
+18. **IPX/NetBIOS Support (Optional Legacy)** – Configure IPX-over-UDP tunnel or NetBEUI drivers in Win98 snapshot if DirectPlay requires broadcast-based discovery. Validate with tcpdump on bridge interfaces.
+
+19. **LAN Topology Dashboard** – Extend health-monitor.sh to report cross-container L2 reachability (ARP table, neighbour ping, DirectPlay port checks). Add `/api/lan-status` backend endpoint. Show LAN connectivity heat-map on frontend.
+
+## Computer-Use Benchmarks & In-Game Automation
+> **Current state**: `bench.py` is a stub returning hardcoded zero metrics. No scripts inject mouse/keyboard into QEMU guests. No automated gameplay or LAN lobby verification exists.
+
+20. **Real Benchmark Harness** – Replace bench.py stub with actual metric collection via QMP `query-display`, GStreamer bus messages, and `docker stats`. Measure stream FPS, H.264 bitrate, end-to-end latency, CPU/memory per instance across replica counts (1/3/9). Generate CSV + Markdown performance report. Integrate into CI as nightly regression job.
+
+21. **QMP Computer-Use Agent** – Build a service connecting to QEMU's QMP socket in each container. Expose REST/WebSocket API for mouse/keyboard injection via `input-send-event`. Supersedes the Go input-proxy (task 6) with a lighter QMP-native approach. Package as sidecar or integrate into emulator container.
+
+22. **Automated LAN Session Test** – Orchestrate a full Lego Loco multiplayer session: wait for all instances ready, use QMP agent to navigate menus (host creates game, clients join), verify lobby via VNC screenshot + OCR/pixel-diff, start game and measure FPS/input responsiveness for 60 seconds. Requires shared L2 network (task 16). Output `BENCHMARK_LAN_SESSION.md`.
+
+23. **Input-to-Display Latency Benchmark** – Inject known input via QMP, capture VNC/WebRTC frames to detect visual change, measure round-trip latency. Target < 150ms for smooth interactive feel.
+
+24. **Streaming Pipeline Profiling** – Instrument every stage from QEMU framebuffer → Xvfb → GStreamer capture → H.264 encode → RTP → UDP → WebRTC relay → browser decode → canvas paint. Identify per-stage bottlenecks, output flame-chart and timing breakdown, provide auto-tuning recommendations.
+
+## Smooth Ops & Production Hardening
+
+25. **Zero-Downtime Rolling Updates** – Implement proper `maxUnavailable`/`maxSurge` in StatefulSet update strategy. Add pre-stop hooks for graceful VNC/WebRTC drain. Test with `helm upgrade` during active LAN sessions.
+
+26. **Startup Time Optimization** – Profile full boot sequence (QEMU cold-start → Win98 boot → SoftGPU → GStreamer). Target < 45s to game desktop. Use QEMU `-loadvm` snapshots to skip Win98 boot. Implement startup probe with 30s failure threshold.
+
+27. **Multi-Instance Stress Test (3×3 Grid)** – Run all 9 emulators with LAN session benchmark for 30 minutes. Monitor for memory leaks, CPU creep, GStreamer stalls, WebSocket disconnects, OOM kills. Record resource utilization time-series and flag > 10% degradation.
+
+28. **CI Performance Gate** – GitHub Actions job running benchmark harness on every PR against stored baselines. Fail if stream FPS drops > 15%, latency increases > 20ms, or CPU per instance increases > 10%. Store baseline artefacts and trend charts.
