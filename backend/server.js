@@ -645,6 +645,104 @@ app.get("/api/quality/summary", (req, res) => {
   }
 });
 
+// ==========================================
+// LAN Topology Dashboard API
+// ==========================================
+
+/**
+ * Get LAN connectivity status across all emulator instances.
+ * Probes each instance's health endpoint for cross-container L2 reachability,
+ * ARP table, DirectPlay port checks (2300/47624), and network mode.
+ *
+ * @route GET /api/lan-status
+ * @returns {Object} LAN topology with per-instance connectivity matrix
+ */
+app.get("/api/lan-status", async (req, res) => {
+  try {
+    const instances = await instanceManager.getInstances();
+    const lanStatus = {
+      timestamp: new Date().toISOString(),
+      networkMode: process.env.NETWORK_MODE || "unknown",
+      instanceCount: instances.length,
+      instances: {},
+      connectivity: [],
+      overallHealthy: true,
+    };
+
+    // Probe each instance's health endpoint for LAN info
+    const http = require("http");
+    const probeInstance = (instance) => {
+      return new Promise((resolve) => {
+        const healthPort = instance.healthPort || 8080;
+        const host = instance.host || instance.podIP || "localhost";
+        const url = `http://${host}:${healthPort}/health`;
+
+        const req = http.get(url, { timeout: 5000 }, (response) => {
+          let data = "";
+          response.on("data", (chunk) => (data += chunk));
+          response.on("end", () => {
+            try {
+              const health = JSON.parse(data);
+              resolve({
+                id: instance.id,
+                host,
+                healthy: health.qemu_healthy || false,
+                networkMode: health.network?.network_mode || "unknown",
+                bridgeUp: health.network?.bridge_up || false,
+                txPackets: health.network?.tx_packets || 0,
+                rxPackets: health.network?.rx_packets || 0,
+                txErrors: health.network?.tx_errors || 0,
+                lanReachable: health.network?.lan_reachable || [],
+                directplayPorts: {
+                  tcp2300: health.network?.directplay_tcp_2300 || "unknown",
+                  tcp47624: health.network?.directplay_tcp_47624 || "unknown",
+                },
+              });
+            } catch (e) {
+              resolve({ id: instance.id, host, healthy: false, error: "parse_error" });
+            }
+          });
+        });
+        req.on("error", () => {
+          resolve({ id: instance.id, host, healthy: false, error: "unreachable" });
+        });
+        req.on("timeout", () => {
+          req.destroy();
+          resolve({ id: instance.id, host, healthy: false, error: "timeout" });
+        });
+      });
+    };
+
+    const results = await Promise.all(instances.map(probeInstance));
+
+    for (const r of results) {
+      lanStatus.instances[r.id] = r;
+      if (!r.healthy) lanStatus.overallHealthy = false;
+    }
+
+    // Build connectivity matrix
+    for (let i = 0; i < results.length; i++) {
+      for (let j = i + 1; j < results.length; j++) {
+        const a = results[i];
+        const b = results[j];
+        const reachable =
+          (a.lanReachable && a.lanReachable.includes(b.host)) ||
+          (b.lanReachable && b.lanReachable.includes(a.host));
+        lanStatus.connectivity.push({
+          from: a.id,
+          to: b.id,
+          reachable: reachable || false,
+        });
+      }
+    }
+
+    res.json(lanStatus);
+  } catch (e) {
+    logger.error("Failed to get LAN status", { error: e.message });
+    res.status(500).json({ error: "Failed to get LAN status" });
+  }
+});
+
 // Get deep health information for all instances
 app.get("/api/quality/deep-health", (req, res) => {
   try {
@@ -829,6 +927,155 @@ function broadcastActive(ids) {
     }
   }
 }
+
+// ========== LIVE BENCHMARK API ==========
+/**
+ * Real-time benchmark metrics endpoint.
+ * Probes all emulator health endpoints and returns aggregated metrics
+/**
+ * GET /api/lan-status — LAN connectivity status across all emulator instances.
+ * Reports socket networking state, cross-instance reachability, and DirectPlay port status.
+ */
+app.get("/api/lan-status", async (req, res) => {
+  try {
+    const instances = await instanceManager.getInstances();
+    const httpLib = require("http");
+
+    const checkLan = (instance) => {
+      return new Promise((resolve) => {
+        const healthPort = (instance.ports && instance.ports.health) || instance.healthPort || 8080;
+        const host = (instance.addresses && (instance.addresses.podIP || instance.addresses.dnsName)) || instance.host || instance.podIP || "localhost";
+        const url = `http://${host}:${healthPort}/health`;
+
+        const request = httpLib.get(url, { timeout: 5000 }, (response) => {
+          let data = "";
+          response.on("data", (chunk) => (data += chunk));
+          response.on("end", () => {
+            try {
+              const h = JSON.parse(data);
+              resolve({
+                id: instance.id,
+                host,
+                networkOk: (h.network?.bridge_up && h.network?.tap_up) || false,
+                bridgeUp: h.network?.bridge_up || false,
+                tapUp: h.network?.tap_up || false,
+                txBytes: h.network?.tx_bytes || 0,
+                rxBytes: h.network?.rx_bytes || 0,
+                socketMode: process.env.NETWORK_MODE || "socket",
+                reachable: true,
+              });
+            } catch (e) {
+              resolve({ id: instance.id, host, reachable: true, networkOk: false, error: "parse_error" });
+            }
+          });
+        });
+        request.on("error", () => resolve({ id: instance.id, host, reachable: false, networkOk: false, error: "unreachable" }));
+        request.on("timeout", () => { request.destroy(); resolve({ id: instance.id, host, reachable: false, networkOk: false, error: "timeout" }); });
+      });
+    };
+
+    const results = await Promise.all(instances.map(checkLan));
+    const allReachable = results.every(r => r.reachable);
+    const allNetworkOk = results.every(r => r.networkOk);
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      networkMode: process.env.NETWORK_MODE || "socket",
+      instances: results,
+      summary: {
+        totalCount: results.length,
+        reachableCount: results.filter(r => r.reachable).length,
+        networkOkCount: results.filter(r => r.networkOk).length,
+        allReachable,
+        allNetworkOk,
+        socketMasterHost: process.env.SOCKET_MASTER_HOST || "auto",
+      },
+    });
+  } catch (e) {
+    logger.error("LAN status check failed", { error: e.message });
+    res.status(500).json({ error: "LAN status check failed" });
+  }
+});
+
+/**
+ * GET /api/benchmark/live — Real-time benchmark metrics for all emulator instances.
+ * suitable for the live overlay dashboard.
+ *
+ * @route GET /api/benchmark/live
+ * @returns {Object} { instances: [...], summary: {...} }
+ */
+app.get("/api/benchmark/live", async (req, res) => {
+  try {
+    const instances = await instanceManager.getInstances();
+    const httpLib = require("http");
+
+    const probeInstance = (instance) => {
+      return new Promise((resolve) => {
+        const healthPort = (instance.ports && instance.ports.health) || instance.healthPort || 8080;
+        const host = (instance.addresses && (instance.addresses.podIP || instance.addresses.dnsName)) || instance.host || instance.podIP || "localhost";
+        const url = `http://${host}:${healthPort}/health`;
+        const t0 = Date.now();
+
+        const request = httpLib.get(url, { timeout: 5000 }, (response) => {
+          let data = "";
+          response.on("data", (chunk) => (data += chunk));
+          response.on("end", () => {
+            const latency = Date.now() - t0;
+            try {
+              const h = JSON.parse(data);
+              resolve({
+                id: instance.id,
+                instanceId: instance.instanceId || instance.id,
+                host,
+                healthy: h.overall_status === "healthy",
+                fps: h.video?.estimated_frame_rate || 0,
+                latency,
+                cpu: h.performance?.cpu_usage || 0,
+                memory: h.performance?.memory_usage || 0,
+                qemuHealthy: h.qemu_healthy || false,
+                displayActive: h.video?.display_active || false,
+                networkOk: (h.network?.bridge_up && h.network?.tap_up) || false,
+                vncAvailable: h.video?.vnc_available || false,
+                audioRunning: h.audio?.pulse_running || false,
+              });
+            } catch (e) {
+              resolve({ id: instance.id, instanceId: instance.id, host, healthy: false, error: "parse_error", latency });
+            }
+          });
+        });
+        request.on("error", () => resolve({ id: instance.id, instanceId: instance.id, host, healthy: false, error: "unreachable", latency: Date.now() - t0 }));
+        request.on("timeout", () => { request.destroy(); resolve({ id: instance.id, instanceId: instance.id, host, healthy: false, error: "timeout", latency: 5000 }); });
+      });
+    };
+
+    const results = await Promise.all(instances.map(probeInstance));
+
+    const healthy = results.filter(r => r.healthy);
+    const fpsVals = results.filter(r => r.fps > 0).map(r => r.fps);
+    const latVals = results.filter(r => r.latency > 0).map(r => r.latency);
+    const cpuVals = results.filter(r => r.cpu > 0).map(r => r.cpu);
+    const memVals = results.filter(r => r.memory > 0).map(r => r.memory);
+    const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      instances: results,
+      summary: {
+        totalCount: results.length,
+        healthyCount: healthy.length,
+        allHealthy: healthy.length === results.length && results.length > 0,
+        avgFps: Math.round(avg(fpsVals)),
+        avgLatency: Math.round(avg(latVals)),
+        avgCpu: Math.round(avg(cpuVals) * 10) / 10,
+        avgMemory: Math.round(avg(memVals) * 10) / 10,
+        networkMode: process.env.NETWORK_MODE || "socket",
+      },
+    });
+  } catch (e) {
+    logger.error("Benchmark live probe failed", { error: e.message });
+    res.status(500).json({ error: "Benchmark probe failed" });
+  }
+});
 
 app.get("/api/active", (req, res) => {
   res.json({ active: readActive() });

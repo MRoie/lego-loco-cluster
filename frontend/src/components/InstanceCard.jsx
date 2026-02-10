@@ -13,7 +13,7 @@ import QualityIndicator from './QualityIndicator';
  * - isActive: whether this card is currently focused
  * - onClick: callback when card is clicked
  */
-export default function InstanceCard({ instance, isActive, onClick }) {
+export default function InstanceCard({ instance, isActive, onClick, onFullscreen }) {
   const { videoRef, loading, connectionQuality } = useWebRTC(instance.id);
   const getStatusColor = (status) => {
     switch (status) {
@@ -108,6 +108,10 @@ export default function InstanceCard({ instance, isActive, onClick }) {
   return (
     <motion.div
       onClick={onClick}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (onFullscreen && instance.provisioned) onFullscreen();
+      }}
       className={`
         relative transition-all duration-300 cursor-pointer overflow-hidden
         ${isActive
@@ -145,6 +149,18 @@ export default function InstanceCard({ instance, isActive, onClick }) {
           <div className="flex justify-between items-center">
             <AudioSinkSelector mediaRef={videoRef} />
             <div className="flex space-x-2">
+              {instance.provisioned && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onFullscreen) onFullscreen();
+                  }}
+                  className="lego-mini-button bg-green-600 border-green-800 hover:bg-green-500 text-white shadow-lg"
+                  title="Fullscreen control (or double-click card)"
+                >
+                  ⛶
+                </button>
+              )}
               <button className="lego-mini-button bg-red-500 border-red-700 hover:bg-red-400 text-white shadow-lg">
                 ×
               </button>

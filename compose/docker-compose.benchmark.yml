@@ -1,0 +1,19 @@
+services:
+  # Benchmark runner — runs inside the Docker network so it can reach
+  # emulator containers by name on internal port 8080.
+  benchmark-runner:
+    image: python:3.11-slim
+    container_name: loco-benchmark-runner
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace:rw
+    networks:
+      - loco-network
+    depends_on:
+      - backend
+    entrypoint: ["sleep", "infinity"]
+    # Run interactively: docker compose exec benchmark-runner python3 benchmark/bench.py --mode docker
+
+networks:
+  loco-network:
+    driver: bridge

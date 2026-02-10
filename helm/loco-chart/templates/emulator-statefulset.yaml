@@ -6,6 +6,11 @@ metadata:
 spec:
   serviceName: {{ include "loco.fullname" . }}-emulator
   replicas: {{ .Values.replicas }}
+  # Zero-downtime rolling update strategy
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: {{ include "loco.fullname" . }}-emulator
@@ -105,8 +110,10 @@ spec:
         env:
         {{- if .Values.emulator.env }}
         {{- range $key, $value := .Values.emulator.env }}
+        {{- if ne $key "SOCKET_MASTER_HOST" }}
         - name: {{ $key }}
           value: {{ $value | quote }}
+        {{- end }}
         {{- end }}
         {{- end }}
         {{- if .Values.emulator.usePrebuiltSnapshot }}
@@ -114,7 +121,6 @@ spec:
           value: "true"
         - name: SNAPSHOT_REGISTRY
           value: {{ .Values.emulator.snapshotRegistry | quote }}
-        - name: SNAPSHOT_TAG
         - name: SNAPSHOT_TAG
           value: {{ .Values.emulator.snapshotTag | quote }}
         {{- end }}
@@ -128,17 +134,45 @@ spec:
           value: {{ .Values.git.userName | quote }}
         - name: GIT_USER_EMAIL
           value: {{ .Values.git.userEmail | quote }}
+        # Instance identity from StatefulSet ordinal (hostname = <name>-<ordinal>)
+        - name: INSTANCE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+        # Socket master is always ordinal-0 pod (headless service DNS)
+        - name: SOCKET_MASTER_HOST
+          value: "{{ include "loco.fullname" . }}-emulator-0.{{ include "loco.fullname" . }}-emulator.{{ include "loco.namespace" . }}.svc.cluster.local"
         securityContext:
           privileged: true
           capabilities:
             add:
               - NET_ADMIN
               - SYS_ADMIN
+        # Graceful shutdown for zero-downtime rolling updates
+        lifecycle:
+          preStop:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  echo "Pre-stop: draining VNC/WebRTC connections..."
+                  # Signal GStreamer to stop cleanly
+                  killall -SIGTERM gst-launch-1.0 2>/dev/null || true
+                  sleep 5
+                  # Give QEMU time to save state if needed
+                  echo "Pre-stop: complete"
         ports:
         - containerPort: {{ .Values.emulator.servicePort }}
           name: service
         - containerPort: {{ .Values.emulator.healthPort }}
           name: health
+        - containerPort: 4444
+          name: lan-socket
+          protocol: TCP
+        - containerPort: 1234
+          name: lan-mcast
+          protocol: UDP
         {{- if .Values.emulator.probes.startup.enabled }}
         startupProbe:
           httpGet:

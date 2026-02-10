@@ -6,7 +6,7 @@ import { metrics } from '../utils/metrics';
  * NoVNC-based VNC viewer component
  * Uses the noVNC library for robust VNC protocol implementation
  */
-export default function NoVNCViewer({ instanceId }) {
+export default function NoVNCViewer({ instanceId, fullscreen = false }) {
   const logger = createLogger('NoVNCViewer');
   const containerRef = useRef(null);
   const rfbRef = useRef(null);
@@ -445,14 +445,14 @@ export default function NoVNCViewer({ instanceId }) {
         }}
       />
 
-      {/* Status Indicators */}
-      {connecting && (
+      {/* Status Indicators — hidden in fullscreen */}
+      {!fullscreen && connecting && (
         <div className="absolute top-2 left-2 bg-blue-500 text-white px-2 py-1 rounded text-xs">
           <div className="animate-pulse">Connecting...</div>
         </div>
       )}
 
-      {connected && (
+      {!fullscreen && connected && (
         <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-semibold">
           <div>NoVNC Connected</div>
           {framebufferSize && (
@@ -478,8 +478,8 @@ export default function NoVNCViewer({ instanceId }) {
         </div>
       )}
 
-      {/* Control Panel */}
-      {connected && (
+      {/* Control Panel — hidden in fullscreen */}
+      {!fullscreen && connected && (
         <div className="absolute top-2 right-2 bg-black bg-opacity-75 rounded-lg p-2 flex items-center space-x-2 text-white text-xs">
           <span className={hasControl ? "text-green-400" : "text-orange-400"}>●</span>
           <span>{instanceId}</span>
@@ -496,8 +496,8 @@ export default function NoVNCViewer({ instanceId }) {
         </div>
       )}
 
-      {/* Input Instructions */}
-      {connected && hasControl && (
+      {/* Input Instructions — hidden in fullscreen */}
+      {!fullscreen && connected && hasControl && (
         <div className="absolute bottom-2 left-2 bg-black bg-opacity-75 rounded-lg p-2 text-white text-xs max-w-xs">
           <div className="font-semibold mb-1">NoVNC Controls:</div>
           <div>• Full mouse and keyboard support via NoVNC</div>
@@ -512,8 +512,8 @@ export default function NoVNCViewer({ instanceId }) {
         </div>
       )}
 
-      {/* No Control Overlay */}
-      {connected && !hasControl && (
+      {/* No Control Overlay — hidden in fullscreen (user can just click) */}
+      {!fullscreen && connected && !hasControl && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white">
           <div className="text-center bg-orange-600 bg-opacity-90 rounded-lg p-4">
             <div className="text-lg font-semibold mb-2">🔓 No Control</div>
@@ -532,8 +532,8 @@ export default function NoVNCViewer({ instanceId }) {
         </div>
       )}
 
-      {/* Debug Controls (remove in production) */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* Debug Controls — hidden in fullscreen and production */}
+      {!fullscreen && process.env.NODE_ENV === 'development' && (
         <div className="absolute bottom-2 right-2 bg-red-800 bg-opacity-75 rounded-lg p-2 text-white text-xs">
           <div className="font-semibold mb-1">Debug Controls:</div>
           <button
@@ -571,8 +571,8 @@ export default function NoVNCViewer({ instanceId }) {
         </div>
       )}
 
-      {/* Info Overlay for Disconnected State */}
-      {!connected && !connecting && !error && (
+      {/* Info Overlay for Disconnected State — hidden in fullscreen */}
+      {!fullscreen && !connected && !connecting && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 text-white">
           <div className="text-center">
             <div className="text-lg font-semibold mb-2">QEMU Instance</div>
