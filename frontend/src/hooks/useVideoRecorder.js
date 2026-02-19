@@ -1,18 +1,26 @@
 import { useRef, useCallback, useState } from 'react';
+import {
+  recorderMimeForFormat,
+  downloadFilename,
+  downloadBlob,
+  createGifRecorder,
+  EXPORT_FORMATS,
+} from '../utils/mediaExport';
 
 /**
- * Records the A-Frame <canvas> as a WebM video using MediaRecorder.
+ * Records the A-Frame <canvas> in multiple formats.
+ *
+ * Supported formats: webm, mp4, mkv, gif, mp3
  *
  * Usage:
- *   const { videoRecording, startVideoRecording, stopVideoRecording } = useVideoRecorder();
- *   // Start: captures the <a-scene> canvas at the given FPS
- *   startVideoRecording();
- *   // Stop: triggers a browser download of the .webm file
- *   stopVideoRecording();
+ *   const { videoRecording, startVideoRecording, stopVideoRecording } = useVideoRecorder('webm');
+ *   startVideoRecording();   // captures the <a-scene> canvas
+ *   stopVideoRecording();    // triggers a browser download in the chosen format
  */
-export default function useVideoRecorder(fps = 30) {
+export default function useVideoRecorder(format = 'webm', fps = 30) {
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
+  const gifRef = useRef(null);
   const [videoRecording, setVideoRecording] = useState(false);
 
   const startVideoRecording = useCallback(() => {
@@ -23,10 +31,31 @@ export default function useVideoRecorder(fps = 30) {
 
     chunksRef.current = [];
 
-    const stream = canvas.captureStream(fps);
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : 'video/webm';
+    // GIF uses a separate frame-capture pipeline
+    if (format === 'gif') {
+      const gif = createGifRecorder(canvas, 10);
+      gif.start();
+      gifRef.current = gif;
+      setVideoRecording(true);
+      return;
+    }
+
+    const isAudioOnly = EXPORT_FORMATS[format]?.type === 'audio';
+    const mimeType = recorderMimeForFormat(format);
+
+    let stream;
+    if (isAudioOnly) {
+      // Capture audio from the AudioContext destination via the canvas stream
+      // (canvas stream includes audio tracks when A-Frame scenes have audio)
+      stream = canvas.captureStream(0); // 0 fps = no video frames
+      // If no audio tracks, fall back to full capture
+      if (stream.getAudioTracks().length === 0) {
+        stream = canvas.captureStream(fps);
+      }
+    } else {
+      stream = canvas.captureStream(fps);
+    }
+
     const recorder = new MediaRecorder(stream, { mimeType });
 
     recorder.ondataavailable = (e) => {
@@ -37,23 +66,27 @@ export default function useVideoRecorder(fps = 30) {
 
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `vr-spatial-audio-${Date.now()}.webm`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, downloadFilename(format));
       chunksRef.current = [];
     };
 
-    recorder.start(1000); // collect data every second
+    recorder.start(1000);
     recorderRef.current = recorder;
     setVideoRecording(true);
-  }, [fps]);
+  }, [format, fps]);
 
   const stopVideoRecording = useCallback(() => {
+    // GIF path
+    if (gifRef.current) {
+      gifRef.current.stop();
+      const blob = gifRef.current.getBlob();
+      downloadBlob(blob, downloadFilename('gif'));
+      gifRef.current = null;
+      setVideoRecording(false);
+      return;
+    }
+
+    // MediaRecorder path (webm, mp4, mkv, mp3)
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
       recorderRef.current.stop();
       recorderRef.current = null;

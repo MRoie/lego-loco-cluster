@@ -6,6 +6,7 @@ import useSpatialAudio from './hooks/useSpatialAudio';
 import useVRAudioListener from './hooks/useVRAudioListener';
 import usePerformanceRecorder from './hooks/usePerformanceRecorder';
 import useVideoRecorder from './hooks/useVideoRecorder';
+import { FORMAT_KEYS, EXPORT_FORMATS } from './utils/mediaExport';
 import VRReactVNCViewer from './components/VRReactVNCViewer';
 import ControlsConfig from './components/ControlsConfig';
 import VRToast from './components/VRToast';
@@ -198,6 +199,7 @@ export default function VRScene({ onExit }) {
   const [monoAudio, setMonoAudio] = useState(false);
   const [audioResumed, setAudioResumed] = useState(false);
   const [sharedAudioCtx, setSharedAudioCtx] = useState(null);
+  const [exportFormat, setExportFormat] = useState('webm');
   const ambientVolume = 0.2;
 
   // Lazily create a single shared AudioContext for all tiles
@@ -230,12 +232,12 @@ export default function VRScene({ onExit }) {
     exportRecording: exportPerfRecording,
   } = usePerformanceRecorder();
 
-  // Video recorder for canvas capture
+  // Video recorder for canvas capture (multi-format)
   const {
     videoRecording,
     startVideoRecording,
     stopVideoRecording,
-  } = useVideoRecorder();
+  } = useVideoRecorder(exportFormat);
 
   // Feed tile snapshot into the recorder each time volumes/active change
   useEffect(() => {
@@ -260,12 +262,12 @@ export default function VRScene({ onExit }) {
   const handleToggleVideoRecording = useCallback(() => {
     if (videoRecording) {
       stopVideoRecording();
-      setToast('Video saved');
+      setToast(`${EXPORT_FORMATS[exportFormat]?.label || 'File'} saved`);
     } else {
       startVideoRecording();
-      setToast('Video recording started');
+      setToast(`Recording ${EXPORT_FORMATS[exportFormat]?.label || exportFormat}…`);
     }
-  }, [videoRecording, startVideoRecording, stopVideoRecording]);
+  }, [videoRecording, startVideoRecording, stopVideoRecording, exportFormat]);
 
   // Clean up shared context on unmount
   useEffect(() => {
@@ -536,13 +538,27 @@ export default function VRScene({ onExit }) {
           >
             {perfRecording ? '⏹ Export Log' : '⏺ Record Perf'}
           </button>
+          <select
+            value={exportFormat}
+            onChange={(e) => setExportFormat(e.target.value)}
+            disabled={videoRecording}
+            className="text-xs px-1 py-0.5 rounded border font-bold bg-gray-200 text-black border-gray-400"
+            aria-label="Export format"
+            title="Choose recording format"
+          >
+            {FORMAT_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {EXPORT_FORMATS[k].label}
+              </option>
+            ))}
+          </select>
           <button
             onClick={handleToggleVideoRecording}
             className={`text-xs px-2 py-0.5 rounded border font-bold ${videoRecording ? 'bg-red-500 text-white border-red-700 animate-pulse' : 'bg-gray-200 text-black border-gray-400'}`}
             aria-pressed={videoRecording}
-            title={videoRecording ? 'Stop video recording and save WebM' : 'Record VR scene as video'}
+            title={videoRecording ? `Stop recording and save ${EXPORT_FORMATS[exportFormat]?.label}` : `Record VR scene as ${EXPORT_FORMATS[exportFormat]?.label}`}
           >
-            {videoRecording ? '⏹ Save Video' : '🎥 Record Video'}
+            {videoRecording ? `⏹ Save ${EXPORT_FORMATS[exportFormat]?.label}` : `🎥 Rec ${EXPORT_FORMATS[exportFormat]?.label}`}
           </button>
           {!audioResumed && (
             <button
