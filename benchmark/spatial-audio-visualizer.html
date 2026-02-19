@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spatial Audio Visualizer — LEGO LOCO VR</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #eee; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  #hud {
+    position: absolute; top: 12px; left: 12px;
+    background: rgba(0,0,0,0.75); padding: 12px 16px; border-radius: 8px;
+    font-size: 13px; line-height: 1.6; min-width: 220px;
+    border: 1px solid #444;
+  }
+  #hud h2 { color: #FFD700; margin-bottom: 6px; font-size: 15px; }
+  #hud .label { color: #aaa; }
+  #hud .val   { color: #3ABFF8; font-weight: bold; }
+  #hud .warn  { color: #F87272; }
+  #controls {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 10px; align-items: center;
+  }
+  #controls button {
+    padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer;
+    font-weight: bold; font-size: 13px;
+  }
+  #playBtn { background: #00A651; color: #fff; }
+  #playBtn.paused { background: #FFD700; color: #000; }
+  #speedBtn { background: #555; color: #fff; }
+  #timeline {
+    width: 300px; accent-color: #FFD700;
+  }
+  #legend {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(0,0,0,0.75); padding: 10px 14px; border-radius: 8px;
+    font-size: 12px; border: 1px solid #444;
+  }
+  #legend div { margin: 3px 0; display: flex; align-items: center; gap: 6px; }
+  #legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+<canvas id="viz"></canvas>
+
+<div id="hud">
+  <h2>🎮 LEGO LOCO — Spatial Audio</h2>
+  <div><span class="label">Time:</span> <span class="val" id="hTime">0.0s</span></div>
+  <div><span class="label">Listener:</span> <span class="val" id="hListener">—</span></div>
+  <div><span class="label">Active Tile:</span> <span class="val" id="hActive">—</span></div>
+  <div><span class="label">Latency:</span> <span class="val" id="hLatency">—</span></div>
+  <div><span class="label">Mode:</span> <span class="val" id="hMode">—</span></div>
+  <div><span class="label">Context:</span> <span class="val" id="hCtx">—</span></div>
+</div>
+
+<div id="legend">
+  <div><span class="dot" style="background:#FFD700"></span> Active tile</div>
+  <div><span class="dot" style="background:#C4281C"></span> Inactive tile</div>
+  <div><span class="dot" style="background:#3ABFF8"></span> Listener (camera)</div>
+  <div><span class="dot" style="background:rgba(255,215,0,0.15)"></span> Sound propagation</div>
+</div>
+
+<div id="controls">
+  <button id="playBtn" onclick="togglePlay()">⏸ Pause</button>
+  <input type="range" id="timeline" min="0" max="1" step="0.001" value="0" oninput="seek(this.value)">
+  <button id="speedBtn" onclick="cycleSpeed()">1×</button>
+</div>
+
+<script>
+// ── Embedded sample data (same as benchmark/sample-vr-audio-perf.json) ──
+const PERF_DATA = {
+  "sampleCount": 15,
+  "durationMs": 3000,
+  "summary": {
+    "audioLatency": { "min": 2.67, "max": 5.33, "avg": 3.56, "p50": 3.2, "p95": 5.1 }
+  },
+  "samples": [
+    {"elapsedMs":0,"listenerPosition":{"x":0,"y":1.6,"z":3},"outputLatencyMs":2.67,"activeTile":0,"mono":false,
+     "tiles":[
+       {"id":"loco-1","volume":1.0,"position":{"x":-1.4,"y":1.0,"z":-3}},
+       {"id":"loco-2","volume":0.2,"position":{"x":0,"y":1.0,"z":-3}},
+       {"id":"loco-3","volume":0.2,"position":{"x":1.4,"y":1.0,"z":-3}},
+       {"id":"loco-4","volume":0.2,"position":{"x":-1.4,"y":0,"z":-3}},
+       {"id":"loco-5","volume":0.2,"position":{"x":0,"y":0,"z":-3}},
+       {"id":"loco-6","volume":0.2,"position":{"x":1.4,"y":0,"z":-3}},
+       {"id":"loco-7","volume":0.2,"position":{"x":-1.4,"y":-1.0,"z":-3}},
+       {"id":"loco-8","volume":0.2,"position":{"x":0,"y":-1.0,"z":-3}},
+       {"id":"loco-9","volume":0.2,"position":{"x":1.4,"y":-1.0,"z":-3}}
+     ]},
+    {"elapsedMs":200,"listenerPosition":{"x":0,"y":1.6,"z":3},"outputLatencyMs":2.67,"activeTile":0,"mono":false,"tiles":[]},
+    {"elapsedMs":400,"listenerPosition":{"x":0,"y":1.6,"z":3},"outputLatencyMs":3.2,"activeTile":0,"mono":false,"tiles":[]},
+    {"elapsedMs":600,"listenerPosition":{"x":0.1,"y":1.6,"z":2.9},"outputLatencyMs":3.2,"activeTile":0,"mono":false,"tiles":[]},
+    {"elapsedMs":800,"listenerPosition":{"x":0.2,"y":1.6,"z":2.8},"outputLatencyMs":2.67,"activeTile":1,"mono":false,"tiles":[]},
+    {"elapsedMs":1000,"listenerPosition":{"x":0.2,"y":1.6,"z":2.8},"outputLatencyMs":3.56,"activeTile":1,"mono":false,"tiles":[]},
+    {"elapsedMs":1200,"listenerPosition":{"x":0.3,"y":1.6,"z":2.7},"outputLatencyMs":3.2,"activeTile":1,"mono":false,"tiles":[]},
+    {"elapsedMs":1400,"listenerPosition":{"x":0.3,"y":1.6,"z":2.7},"outputLatencyMs":3.56,"activeTile":1,"mono":false,"tiles":[]},
+    {"elapsedMs":1600,"listenerPosition":{"x":0.4,"y":1.6,"z":2.6},"outputLatencyMs":4.0,"activeTile":2,"mono":false,"tiles":[]},
+    {"elapsedMs":1800,"listenerPosition":{"x":0.4,"y":1.6,"z":2.6},"outputLatencyMs":3.56,"activeTile":2,"mono":false,"tiles":[]},
+    {"elapsedMs":2000,"listenerPosition":{"x":0.5,"y":1.6,"z":2.5},"outputLatencyMs":5.33,"activeTile":2,"mono":false,"tiles":[]},
+    {"elapsedMs":2200,"listenerPosition":{"x":0.5,"y":1.6,"z":2.5},"outputLatencyMs":4.0,"activeTile":2,"mono":false,"tiles":[]},
+    {"elapsedMs":2400,"listenerPosition":{"x":0.5,"y":1.6,"z":2.5},"outputLatencyMs":3.56,"activeTile":3,"mono":false,"tiles":[]},
+    {"elapsedMs":2600,"listenerPosition":{"x":0.4,"y":1.6,"z":2.6},"outputLatencyMs":3.2,"activeTile":3,"mono":false,"tiles":[]},
+    {"elapsedMs":3000,"listenerPosition":{"x":0.4,"y":1.6,"z":2.6},"outputLatencyMs":5.1,"activeTile":3,"mono":false,"tiles":[]}
+  ]
+};
+
+// ── Tile reference positions (from first sample that has tiles) ──
+const tileDefs = PERF_DATA.samples.find(s => s.tiles && s.tiles.length)?.tiles || [];
+
+// ── Canvas setup ──
+const canvas = document.getElementById('viz');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+// ── Playback state ──
+let playing = true;
+let speed = 1;
+const speeds = [0.25, 0.5, 1, 2, 4];
+let speedIdx = 2;
+let playbackMs = 0;
+let lastFrameTime = performance.now();
+const duration = PERF_DATA.durationMs;
+
+function togglePlay() {
+  playing = !playing;
+  if (playing) lastFrameTime = performance.now();
+  document.getElementById('playBtn').textContent = playing ? '⏸ Pause' : '▶ Play';
+  document.getElementById('playBtn').className = playing ? '' : 'paused';
+}
+function cycleSpeed() {
+  speedIdx = (speedIdx + 1) % speeds.length;
+  speed = speeds[speedIdx];
+  document.getElementById('speedBtn').textContent = speed + '×';
+}
+function seek(v) { playbackMs = v * duration; }
+
+// ── Interpolate between samples ──
+function lerp(a, b, t) { return a + (b - a) * t; }
+function getSampleAt(ms) {
+  const samples = PERF_DATA.samples;
+  if (ms <= 0) return samples[0];
+  if (ms >= duration) return samples[samples.length - 1];
+  let i = 0;
+  while (i < samples.length - 1 && samples[i + 1].elapsedMs <= ms) i++;
+  if (i >= samples.length - 1) return samples[samples.length - 1];
+  const a = samples[i], b = samples[i + 1];
+  const t = (ms - a.elapsedMs) / (b.elapsedMs - a.elapsedMs);
+  return {
+    ...a,
+    listenerPosition: {
+      x: lerp(a.listenerPosition.x, b.listenerPosition.x, t),
+      y: lerp(a.listenerPosition.y, b.listenerPosition.y, t),
+      z: lerp(a.listenerPosition.z, b.listenerPosition.z, t),
+    },
+    outputLatencyMs: lerp(a.outputLatencyMs || 0, b.outputLatencyMs || 0, t),
+    activeTile: t < 0.5 ? a.activeTile : b.activeTile,
+  };
+}
+
+// ── Coordinate mapping (3D x,z → screen) ──
+function toScreen(x3d, z3d) {
+  const cx = W / 2, cy = H / 2;
+  const scale = Math.min(W, H) / 12;
+  return { x: cx + x3d * scale, y: cy - z3d * scale };
+}
+
+// ── Draw ──
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  const gridScale = Math.min(W, H) / 12;
+  for (let g = -6; g <= 6; g++) {
+    const sx = W / 2 + g * gridScale;
+    const sy = H / 2 - g * gridScale;
+    ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W, sy); ctx.stroke();
+  }
+
+  // "LEGO baseplate" label
+  ctx.fillStyle = 'rgba(0,166,81,0.15)';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText('Top-down view (X ↔, Z ↕)', 12, H - 12);
+
+  const sample = getSampleAt(playbackMs);
+  const lp = sample.listenerPosition;
+  const activeTile = sample.activeTile;
+
+  // Draw tiles
+  tileDefs.forEach((tile, i) => {
+    const tp = toScreen(tile.position.x, tile.position.z);
+    const isActive = i === activeTile;
+    const vol = isActive ? 1.0 : 0.2;
+
+    // Sound propagation ring
+    const dist = Math.sqrt((lp.x - tile.position.x) ** 2 + (lp.z - tile.position.z) ** 2);
+    const ringR = 20 + vol * 40;
+    const ringAlpha = Math.max(0.04, 0.3 - dist * 0.03);
+    ctx.beginPath();
+    ctx.arc(tp.x, tp.y, ringR + Math.sin(playbackMs / 200 + i) * 5, 0, Math.PI * 2);
+    ctx.fillStyle = isActive
+      ? `rgba(255,215,0,${ringAlpha})`
+      : `rgba(196,40,28,${ringAlpha * 0.5})`;
+    ctx.fill();
+
+    // Tile box
+    const boxW = 50, boxH = 38;
+    ctx.fillStyle = isActive ? '#FFD700' : '#C4281C';
+    ctx.fillRect(tp.x - boxW / 2, tp.y - boxH / 2, boxW, boxH);
+    ctx.strokeStyle = isActive ? '#fff' : '#888';
+    ctx.lineWidth = isActive ? 2 : 1;
+    ctx.strokeRect(tp.x - boxW / 2, tp.y - boxH / 2, boxW, boxH);
+
+    // Tile label
+    ctx.fillStyle = isActive ? '#000' : '#fff';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(tile.id, tp.x, tp.y + 4);
+
+    // Volume bar
+    const barH = vol * 20;
+    ctx.fillStyle = isActive ? 'rgba(255,215,0,0.8)' : 'rgba(255,255,255,0.3)';
+    ctx.fillRect(tp.x + boxW / 2 + 4, tp.y + boxH / 2 - barH, 4, barH);
+  });
+
+  // Draw listener
+  const lScreen = toScreen(lp.x, lp.z);
+  // Glow
+  const grad = ctx.createRadialGradient(lScreen.x, lScreen.y, 0, lScreen.x, lScreen.y, 30);
+  grad.addColorStop(0, 'rgba(58,191,248,0.5)');
+  grad.addColorStop(1, 'rgba(58,191,248,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(lScreen.x, lScreen.y, 30, 0, Math.PI * 2);
+  ctx.fill();
+  // Dot
+  ctx.fillStyle = '#3ABFF8';
+  ctx.beginPath();
+  ctx.arc(lScreen.x, lScreen.y, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Label
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('👤 Listener', lScreen.x, lScreen.y - 16);
+
+  // Direction lines from listener to each tile
+  tileDefs.forEach((tile, i) => {
+    const tp = toScreen(tile.position.x, tile.position.z);
+    const isActive = i === activeTile;
+    ctx.beginPath();
+    ctx.moveTo(lScreen.x, lScreen.y);
+    ctx.lineTo(tp.x, tp.y);
+    ctx.strokeStyle = isActive ? 'rgba(255,215,0,0.4)' : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = isActive ? 2 : 1;
+    ctx.setLineDash(isActive ? [] : [4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Latency bar graph (bottom-right)
+  const barX = W - 140, barY = H - 80;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(barX - 10, barY - 40, 140, 70);
+  ctx.fillStyle = '#aaa';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Audio Latency', barX, barY - 28);
+  const latMs = sample.outputLatencyMs || 0;
+  const latBarW = Math.min(latMs / 8 * 110, 110);
+  const latColor = latMs > 5 ? '#F87272' : latMs > 3 ? '#FBBD23' : '#36D399';
+  ctx.fillStyle = latColor;
+  ctx.fillRect(barX, barY - 10, latBarW, 16);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.fillText(latMs.toFixed(1) + ' ms', barX + latBarW + 6, barY + 3);
+
+  // Update HUD
+  document.getElementById('hTime').textContent = (playbackMs / 1000).toFixed(1) + 's';
+  document.getElementById('hListener').textContent = `(${lp.x.toFixed(2)}, ${lp.z.toFixed(2)})`;
+  document.getElementById('hActive').textContent = tileDefs[activeTile]?.id || '—';
+  document.getElementById('hLatency').textContent = latMs.toFixed(2) + ' ms';
+  document.getElementById('hLatency').className = latMs > 5 ? 'warn' : 'val';
+  document.getElementById('hMode').textContent = sample.mono ? '🔈 Mono' : '🎧 3D HRTF';
+  document.getElementById('hCtx').textContent = 'running';
+}
+
+// ── Animation loop ──
+function frame(now) {
+  if (playing) {
+    const dt = now - lastFrameTime;
+    playbackMs += dt * speed;
+    if (playbackMs > duration) playbackMs = 0; // loop
+  }
+  lastFrameTime = now;
+  document.getElementById('timeline').value = playbackMs / duration;
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

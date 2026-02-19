@@ -5,6 +5,7 @@ import useWebRTC from './hooks/useWebRTC';
 import useSpatialAudio from './hooks/useSpatialAudio';
 import useVRAudioListener from './hooks/useVRAudioListener';
 import usePerformanceRecorder from './hooks/usePerformanceRecorder';
+import useVideoRecorder from './hooks/useVideoRecorder';
 import VRReactVNCViewer from './components/VRReactVNCViewer';
 import ControlsConfig from './components/ControlsConfig';
 import VRToast from './components/VRToast';
@@ -229,6 +230,13 @@ export default function VRScene({ onExit }) {
     exportRecording: exportPerfRecording,
   } = usePerformanceRecorder();
 
+  // Video recorder for canvas capture
+  const {
+    videoRecording,
+    startVideoRecording,
+    stopVideoRecording,
+  } = useVideoRecorder();
+
   // Feed tile snapshot into the recorder each time volumes/active change
   useEffect(() => {
     if (!perfRecording) return;
@@ -248,6 +256,16 @@ export default function VRScene({ onExit }) {
       setToast('Recording started');
     }
   }, [perfRecording, sharedAudioCtx, exportPerfRecording, startPerfRecording]);
+
+  const handleToggleVideoRecording = useCallback(() => {
+    if (videoRecording) {
+      stopVideoRecording();
+      setToast('Video saved');
+    } else {
+      startVideoRecording();
+      setToast('Video recording started');
+    }
+  }, [videoRecording, startVideoRecording, stopVideoRecording]);
 
   // Clean up shared context on unmount
   useEffect(() => {
@@ -517,6 +535,14 @@ export default function VRScene({ onExit }) {
             title={perfRecording ? 'Stop recording and export performance log' : 'Start recording spatial audio performance'}
           >
             {perfRecording ? '⏹ Export Log' : '⏺ Record Perf'}
+          </button>
+          <button
+            onClick={handleToggleVideoRecording}
+            className={`text-xs px-2 py-0.5 rounded border font-bold ${videoRecording ? 'bg-red-500 text-white border-red-700 animate-pulse' : 'bg-gray-200 text-black border-gray-400'}`}
+            aria-pressed={videoRecording}
+            title={videoRecording ? 'Stop video recording and save WebM' : 'Record VR scene as video'}
+          >
+            {videoRecording ? '⏹ Save Video' : '🎥 Record Video'}
           </button>
           {!audioResumed && (
             <button
