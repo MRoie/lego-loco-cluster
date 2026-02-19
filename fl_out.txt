@@ -1,0 +1,270 @@
+=== LEGO LOCO Full Launch Pipeline ===
+VM: running, running=True
+
+[1_initial] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   W   W   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   g   g   g   g   g   g   W   W   W   W   W   W   W   W
+y=144    W   W   T   T   g   g   g   g   W   W   W   W   l   W   W   W
+y=192    W   W   g   T   g   g   g   g   W   W   W   ?   W   W   W   W
+y=240    W   W   g   T   g   g   g   g   W   W   W   l   W   W   W   ?
+y=288    W   W   T   T   g   g   g   g   W   W   W   W   W   W   W   W
+y=336    W   W   g   g   g   g   g   g   W   W   ?   W   W   W   W   W
+y=384    W   W   g   g   g   g   g   g   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=79%, g=13%, ?=2%, T=2%, d=0%, l=0%, B=0%, K=0%, G=0%
+
+--- Step 2: Dismiss SoftGPU dialog ---
+
+[2_dismissed] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   W   W   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   B   B   B   ?   ?   T   g   W   W   W   W
+y=384    W   W   l   W   W   g   g   g   W   g   g   g   W   W   W   W
+y=432    W   W   W   W   W   g   g   g   g   g   g   g   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=90%, g=4%, ?=3%, l=1%, B=0%, K=0%, T=0%, G=0%
+  Teal desktop: 0%
+  Desktop not visible yet, trying more dismissal...
+
+[2b_extra_dismiss] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   W   W   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   B   B   B   ?   ?   T   g   W   W   W   W
+y=384    W   W   l   W   W   g   g   g   W   g   g   g   W   W   W   W
+y=432    W   W   W   W   W   g   g   g   g   g   g   g   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=90%, g=4%, ?=3%, l=1%, B=0%, K=0%, T=0%, G=0%
+
+--- Step 3: Win+R to open Run dialog ---
+
+[3_run_dialog] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   W   W   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   B   B   B   ?   ?   T   g   W   W   W   W
+y=384    W   W   l   W   W   g   g   g   W   g   g   g   W   W   W   W
+y=432    W   W   W   W   W   g   g   g   g   g   g   g   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=90%, g=4%, ?=3%, l=1%, B=0%, K=0%, T=0%, G=0%
+
+--- Step 4: Type game path ---
+
+[4_typed] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   W   W   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=95%, ?=3%, l=1%, K=0%, g=0%
+
+--- Step 5: Launch! ---
+
+--- Step 6: Monitoring launch ---
+
+  [3s] VM: running, running=True
+
+[5_3s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   W   W   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=95%, ?=3%, l=1%, K=0%, g=0%
+
+  [8s] VM: running, running=True
+
+[5_8s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, d=0%, O=0%
+
+  [13s] VM: running, running=True
+
+[5_13s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, O=0%, d=0%
+
+  [20s] VM: running, running=True
+
+[5_20s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, O=0%, d=0%
+
+  [30s] VM: running, running=True
+
+[5_30s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, O=0%, d=0%
+
+  [45s] VM: running, running=True
+
+[5_45s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, O=0%, d=0%
+
+  [60s] VM: running, running=True
+
+[5_60s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, O=0%, d=0%
+
+=== PIPELINE COMPLETE ===

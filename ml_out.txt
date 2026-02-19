@@ -1,0 +1,301 @@
+=== LEGO LOCO Mouse-Based Launch ===
+VM: running, running=True
+
+[M0_initial] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, d=0%
+  Taskbar gray pixels: 45/51
+
+--- Step 2: Dismiss dialogs via mouse + keys ---
+
+[M1_after_enter1] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, d=0%
+  Taskbar gray pixels: 45/51
+
+[M2_after_clicks] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, d=0%
+  Taskbar gray pixels: 45/51
+
+--- Step 3: Minimize all (Win+M) ---
+
+[M3_winm] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=624    W   W   W   W   W   W   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=720    W   W   l   W   W   W   W   W   W   W   W   W   W   W   W   W
+  Colors: W=92%, ?=3%, g=1%, l=1%, T=0%, K=0%, R=0%, d=0%
+  Taskbar gray pixels: 45/51
+
+--- Step 4: Win+R ---
+
+[M4_winr] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   B   B   B   T   T   W   W   W   W   W   W   W   W   W   W
+y=624    W   g   g   g   g   g   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   d   W   W   W   W   W   W   W   W   W   W
+y=720    W   g   g   g   g   g   W   W   W   W   W   W   W   W   W   W
+  Colors: W=86%, g=6%, ?=3%, T=1%, l=1%, B=0%, K=0%, d=0%, R=0%
+  Taskbar gray pixels: 45/51
+
+--- Step 5: Ctrl+Esc (Start menu) ---
+
+[M5_start] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   g   g   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   g   g   ?   ?   ?   W   W   W   W   W   W   W   W   W   W
+y=624    W   g   g   g   g   g   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   g   g   W   W   d   W   W   W   W   W   W   W   W   W   W
+y=720    W   g   g   g   g   g   W   W   W   W   W   W   W   W   W   W
+  Colors: W=84%, g=8%, ?=4%, l=0%, T=0%, K=0%, B=0%, d=0%, R=0%
+  Taskbar gray pixels: 46/51
+
+--- Step 5b: Click on Run menu item ---
+
+[M6_run_clicked] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   g   g   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   g   g   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   g   g   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   g   g   ?   ?   ?   W   W   W   W   W   W   W   W   W   W
+y=624    W   g   g   g   g   g   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   d   d   W   W   d   W   W   W   W   W   W   W   W   W   W
+y=720    W   g   g   g   g   g   W   W   W   W   W   W   W   W   W   W
+  Colors: W=82%, g=9%, ?=4%, l=0%, T=0%, K=0%, B=0%, d=0%, R=0%, Y=0%
+  Taskbar gray pixels: 46/51
+
+--- Step 6: Clear and type game path ---
+
+[M7_typed] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y= 48    W   T   T   W   W   W   K   W   W   W   W   W   W   W   W   W
+y= 96    W   W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=144    W   W   l   W   W   W   W   W   W   W   W   W   l   W   W   W
+y=192    W   T   W   T   W   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   g   g   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   g   g   g   g   W   B   K   B   B   W   W   W   W   W   W
+y=528    W   g   g   g   g   g   g   W   g   g   W   W   W   W   W   W
+y=576    W   g   g   ?   K   ?   g   W   W   W   W   W   W   W   W   W
+y=624    W   g   g   g   g   g   g   W   W   W   ?   ?   W   W   W   W
+y=672    W   d   d   W   W   d   W   W   W   W   W   W   W   W   W   W
+y=720    W   g   g   g   g   g   W   W   W   W   W   W   W   W   W   W
+  Colors: W=75%, g=14%, ?=3%, B=2%, K=1%, l=0%, d=0%, T=0%, R=0%, Y=0%
+  Taskbar gray pixels: 46/51
+
+--- Step 7: Launch! (Enter) ---
+
+  [3s] VM: running, running=True
+
+[M8_3s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    l   l   l   l   l   W   W   W   W   W   W   W   W   W   W   W
+y= 48    l   K   K   g   g   W   K   W   W   W   W   W   W   W   W   W
+y= 96    l   g   g   g   g   W   W   W   W   W   W   W   W   W   W   W
+y=144    l   l   l   l   l   W   W   W   W   W   W   W   l   W   W   W
+y=192    l   g   g   K   g   W   W   W   W   W   W   ?   W   W   W   W
+y=240    W   W   W   W   W   W   W   W   W   W   W   l   W   W   W   ?
+y=288    W   T   W   W   ?   W   W   W   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   g   g   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   g   g   g   g   W   B   K   g   g   W   W   W   W   W   W
+y=528    W   g   g   g   g   g   g   W   g   g   W   W   W   W   W   W
+y=576    W   g   g   ?   K   ?   g   W   W   W   W   W   W   W   W   W
+y=624    W   g   g   g   g   g   g   W   W   W   ?   ?   W   W   W   W
+y=672    W   d   d   W   W   d   W   W   W   W   W   W   W   W   W   W
+y=720    W   g   g   g   g   g   W   W   W   W   W   W   W   W   W   W
+  Colors: W=70%, g=18%, ?=3%, l=2%, K=2%, B=2%, d=0%, T=0%, R=0%, Y=0%
+  Taskbar gray pixels: 46/51
+
+  [8s] VM: running, running=True
+
+[M8_8s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    l   l   l   l   l   W   W   W   W   W   W   W   W   W   W   W
+y= 48    l   K   K   g   g   W   K   W   W   W   W   W   W   W   W   W
+y= 96    l   g   g   g   g   W   W   W   W   W   W   W   W   W   W   W
+y=144    l   l   l   l   l   W   W   W   W   W   W   W   l   W   W   W
+y=192    l   g   g   K   g   ?   ?   ?   W   W   W   ?   W   W   W   W
+y=240    W   W   W   g   g   K   g   g   W   W   W   l   W   W   W   ?
+y=288    W   T   W   g   g   g   g   g   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   g   g   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   g   g   g   g   W   B   K   g   g   W   W   W   W   W   W
+y=528    W   g   g   g   g   g   g   W   g   g   W   W   W   W   W   W
+y=576    W   g   g   ?   K   ?   g   W   W   W   W   W   W   W   W   W
+y=624    W   g   g   g   g   g   g   W   W   W   ?   ?   W   W   W   W
+y=672    W   d   d   W   W   d   W   W   W   W   W   W   W   W   W   W
+y=720    W   g   g   g   g   g   W   W   W   W   W   W   W   W   W   W
+  Colors: W=65%, g=21%, ?=3%, l=2%, K=2%, B=2%, d=1%, T=0%, R=0%, Y=0%
+  Taskbar gray pixels: 43/51
+
+  [18s] VM: running, running=True
+
+[M8_18s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    l   l   l   l   l   W   W   W   W   W   W   W   W   W   W   W
+y= 48    l   K   K   g   g   W   K   W   W   W   W   W   W   W   W   W
+y= 96    l   g   g   g   g   W   W   W   W   W   W   W   W   W   W   W
+y=144    l   l   l   l   l   W   W   W   W   W   W   W   l   W   W   W
+y=192    l   g   g   K   g   ?   ?   ?   W   W   W   ?   W   W   W   W
+y=240    W   W   W   g   g   K   g   g   W   W   W   l   W   W   W   ?
+y=288    W   T   W   g   g   g   g   g   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   d   ?   ?   ?   ?   W   W   W   W   W   W   W   W   W   W
+y=624    W   g   g   g   g   g   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   d   W   W   W   W   W   W   W   W   W   W
+y=720    W   g   g   g   g   g   W   W   W   W   W   W   W   W   W   W
+  Colors: W=76%, g=13%, ?=3%, l=2%, K=2%, d=1%, T=0%, B=0%, R=0%
+  Taskbar gray pixels: 42/51
+
+  [33s] VM: running, running=True
+
+[M8_33s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    l   l   l   l   l   W   W   W   W   W   W   W   W   W   W   W
+y= 48    l   K   K   g   g   W   K   W   W   W   W   W   W   W   W   W
+y= 96    l   g   g   g   g   W   W   W   W   W   W   W   W   W   W   W
+y=144    l   l   l   l   l   W   W   W   W   W   W   W   l   W   W   W
+y=192    l   g   g   K   g   ?   ?   ?   W   W   W   ?   W   W   W   W
+y=240    W   W   W   g   g   K   g   g   W   W   W   l   W   W   W   ?
+y=288    W   T   W   g   g   g   g   g   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   d   ?   ?   ?   ?   W   W   W   W   W   W   W   W   W   W
+y=624    W   g   g   g   g   g   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   d   W   W   W   W   W   W   W   W   W   W
+y=720    W   g   g   g   g   g   W   W   W   W   W   W   W   W   W   W
+  Colors: W=76%, g=13%, ?=3%, l=2%, K=2%, d=1%, T=0%, B=0%, R=0%
+  Taskbar gray pixels: 42/51
+
+  [48s] VM: running, running=True
+
+[M8_48s] 1024x768
+        0  64 128 192 256 320 384 448 512 576 640 704 768 832 896 960
+y=  0    l   l   l   l   l   W   W   W   W   W   W   W   W   W   W   W
+y= 48    l   K   K   g   g   W   K   W   W   W   W   W   W   W   W   W
+y= 96    l   g   g   g   g   W   W   W   W   W   W   W   W   W   W   W
+y=144    l   l   l   l   l   W   W   W   W   W   W   W   l   W   W   W
+y=192    l   g   g   K   g   ?   ?   ?   W   W   W   ?   W   W   W   W
+y=240    W   W   W   g   g   K   g   g   W   W   W   l   W   W   W   ?
+y=288    W   T   W   g   g   g   g   g   W   W   W   W   W   W   W   W
+y=336    W   W   W   W   W   W   W   W   W   W   ?   W   W   W   W   W
+y=384    W   W   l   W   W   W   W   W   K   W   ?   W   W   W   W   W
+y=432    W   W   W   W   W   ?   W   W   W   W   W   W   W   W   W   W
+y=480    W   W   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=528    W   ?   W   W   W   W   W   W   W   W   W   W   W   W   W   W
+y=576    W   d   ?   ?   ?   ?   W   W   W   W   W   W   W   W   W   W
+y=624    W   g   g   g   g   g   W   W   W   W   ?   ?   W   W   W   W
+y=672    W   W   W   W   W   d   W   W   W   W   W   W   W   W   W   W
+y=720    W   g   g   g   g   g   W   W   W   W   W   W   W   W   W   W
+  Colors: W=76%, g=13%, ?=3%, l=2%, K=2%, d=1%, T=0%, B=0%, R=0%
+  Taskbar gray pixels: 42/51
+
+=== DONE ===

@@ -1,0 +1,28 @@
+[NAV] Connecting instance=0
+[NAV] Connected
+[NAV] === Dismissing dialogs ===
+[NAV] dismissed: W=94% B=0% G=4% O=1% ctr=(0,0,0)
+[NAV] === Opening Start menu ===
+[NAV] start_menu: W=87% B=0% G=10% O=2% ctr=(0,0,0)
+[NAV] Blue strip: 60 (need >5)
+[NAV] === Navigating to Programs ===
+[NAV] at_top: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV] Opening Programs submenu...
+[NAV] programs_open: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV] === Scanning Programs menu items ===
+[NAV] prog_item_0: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV]   item 0: px60=(255,255,255) px200=(255,255,255)
+[NAV] prog_item_1: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV]   item 1: px60=(255,255,255) px200=(255,255,255)
+[NAV] prog_item_2: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV]   item 2: px60=(255,255,255) px200=(255,255,255)
+[NAV] prog_item_3: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV]   item 3: px60=(255,255,255) px200=(255,255,255)
+[NAV] prog_item_4: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV]   item 4: px60=(255,255,255) px200=(255,255,255)
+[NAV] prog_item_5: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV]   item 5: px60=(255,255,255) px200=(255,255,255)
+[NAV] prog_item_6: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV]   item 6: px60=(255,255,255) px200=(255,255,255)
+[NAV] prog_item_7: W=87% B=0% G=9% O=2% ctr=(0,0,0)
+[NAV]   item 7: px60=(255,255,255) px200=(255,255,255)

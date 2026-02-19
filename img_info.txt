@@ -1,0 +1,12 @@
+image: /opt/builtin-images/win98.qcow2.builtin
+file format: qcow2
+virtual size: 2 GiB (2147483648 bytes)
+disk size: 954 MiB
+cluster_size: 65536
+Format specific information:
+    compat: 1.1
+    compression type: zlib
+    lazy refcounts: false
+    refcount bits: 16
+    corrupt: false
+    extended l2: false

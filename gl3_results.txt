@@ -1,0 +1,5 @@
+START id=0
+connected
+S0_initial: W=94% B=0% G=3% T=0% O=1%
+dismissing white dialog...
+S1_after_dismiss: W=12% B=8% G=0% T=0% O=78%

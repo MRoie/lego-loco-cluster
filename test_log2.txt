@@ -1,0 +1,27 @@
+[T] START id=0
+[T] Connected
+[T] Opening Run dialog...
+[T] run_dialog: W=45% B=48% G=5% O=1%
+[T] Test 1: Opening cmd...
+[T] cmd_opened: W=98% B=0% G=0% O=0%
+[T] Typing 'dir' in cmd...
+[T] dir_result: W=85% B=0% G=12% O=1%
+[T] Typing 'dir /x' to see 8.3 names...
+[T] dir_x_result: W=85% B=0% G=12% O=1%
+[T] Sampling screen regions:
+[T]   y=200: 9 black pixels (text row?)
+[T]   y=450: 8 black pixels (text row?)
+[T] Exiting cmd...
+[T] Opening Run dialog for game launch...
+[T] run_for_game: W=85% B=0% G=12% O=1%
+[T] Typing game path...
+[T] Typed: C:\Program Files\LEGO Media\Constructive\LEGO LOCO\Exe\Loco.exe
+[T] path_typed: W=88% B=0% G=9% O=1%
+[T] Pressing Enter to launch game...
+[T] after_launch_enter: W=88% B=0% G=9% O=1%
+[T] wait_3s: W=85% B=0% G=12% O=1%
+[T] Non-desktop: 2% (game if >30%)
+[T] wait_5s: W=85% B=0% G=12% O=1%
+[T] Non-desktop: 2% (game if >30%)
+[T] wait_10s: W=85% B=0% G=12% O=1%
+[T] Non-desktop: 2% (game if >30%)

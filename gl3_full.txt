@@ -1,0 +1,21 @@
+START id=0
+connected
+S0_initial: W=94% B=0% G=3% T=0% O=1%
+dismissing white dialog...
+S1_after_dismiss: W=12% B=8% G=0% T=0% O=78%
+S2_cleared: W=0% B=100% G=0% T=0% O=0%
+opening Run via Start>Up>Up>Enter...
+S3_start_menu: W=0% B=100% G=0% T=0% O=0%
+S4_run_dialog: W=0% B=100% G=0% T=0% O=0%
+typing 51 keys...
+S5_path_typed: W=0% B=100% G=0% T=0% O=0%
+pressing Enter...
+S6_t3s: W=0% B=100% G=0% T=0% O=0%
+S6_t5s: W=0% B=100% G=0% T=0% O=0%
+S6_t10s: W=0% B=100% G=0% T=0% O=0%
+S6_t15s: W=0% B=100% G=0% T=0% O=0%
+S6_t20s: W=0% B=100% G=0% T=0% O=0%
+S6_t30s: W=0% B=100% G=0% T=0% O=0%
+attempting video dismiss...
+S7_after_video_dismiss: W=0% B=100% G=0% T=0% O=0%
+DONE

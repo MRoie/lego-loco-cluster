@@ -1,0 +1,120 @@
+=== Searching BASE image: /opt/builtin-images/win98.qcow2.builtin ===
+  [LOCO] offset=445344: ..5i.Z.Z..:i.Z...(..LOCO    LGC .aVi.Z.Z..Xi.Z..*v..............
+  [LEGO] offset=4655871: busy.ani..Loco.exe..LEGO LOCO.scr..POSTBAG.lnk..SAVEGAME.lnk..ca
+  [LEGO] offset=4676130: 110e00 "C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE"..R 
+  [LEGO] offset=4676148: 1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE"..R c19c6c50 0 40..R c
+  [LEGO] offset=4682487: 110e00 "C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE"..R 
+  [LEGO] offset=4682505: 1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE"..R c19bc6a0 0 8..R c1
+  [LOCO] offset=4655765: .DLL..explorer.exe..LOCO.lnk..SHELL32.DLL..SHELL32.DLL..My Docum
+  [LOCO] offset=4655876: ani..Loco.exe..LEGO LOCO.scr..POSTBAG.lnk..SAVEGAME.lnk..cabview
+  [LOCO] offset=4676161: NSTR~1\LEGOLO~1\EXE\LOCO.EXE"..R c19c6c50 0 40..R c19c6c50 c0 f8
+  [LOCO] offset=4682518: NSTR~1\LEGOLO~1\EXE\LOCO.EXE"..R c19bc6a0 0 8..R c19bc6a0 0 e..R
+  [Loco] offset=4655861: LL32.DLL..busy.ani..Loco.exe..LEGO LOCO.scr..POSTBAG.lnk..SAVEGA
+  [DirectPlay] offset=6944103: PWSOCK.dll.CreateNewDirectPlay........................................
+  [DirectPlay] offset=6994104: SERIAL.dll.CreateNewDirectPlay........................................
+  [DirectPlay] offset=7322368: .......F............DirectPlay 1.0 (C) Microsoft 1994-1995...........|
+  [DirectPlay] offset=7330934: ...2......DPLAY.dll.DirectPlayCreate.DirectPlayEnumerate..............
+  [DirectPlay] offset=7330951: ll.DirectPlayCreate.DirectPlayEnumerate...............................
+  [Loco] offset=44317483: e.EXE. .2.....F%.y .Loco.exe.LOCO.EXE...n...............-.......
+  [Loco] offset=44317603: ctive\LEGO LOCO\Exe\Loco.exe..H...\..\..\..\Program Files\LEGO M
+  [Loco] offset=44317679: ctive\LEGO LOCO\Exe\Loco.exe6.C:\Program Files\LEGO Media\Constr
+  [Constructive] offset=44317392: OME~1.$.1......ZlO..Constructive.CONSTR~1.!.1......ZlO..LEGO LOCO.LEGOLO
+  [Constructive] offset=44317576: am Files\LEGO Media\Constructive\LEGO LOCO\Exe\Loco.exe..H...\..\..\..\P
+  [Constructive] offset=44317652: am Files\LEGO Media\Constructive\LEGO LOCO\Exe\Loco.exe6.C:\Program File
+  [Constructive] offset=44317717: am Files\LEGO Media\Constructive\LEGO LOCO\ExeK.C:\Program Files\LEGO Me
+  [Constructive] offset=44317773: am Files\LEGO Media\Constructive\LEGO LOCO\Art-res\cursors\lEGO.ico.....
+  [lego] offset=53304678: ise...palegreen...palegoldenrod...orchid..orangered...orange..ol
+  [lego] offset=53756806: ise...palegreen...palegoldenrod...orchid..orangered...orange..ol
+  [lego] offset=65563164: ....dll\msadds.dbg.\lego\msadds.dll.............................
+  [lego] offset=67258918: daprst.dbg.t\21\x86\lego\msdaprst.dll...........................
+  [lego] offset=67498535: arem.dbg.ote\21\x86\lego\msdarem.dll............................
+  [Lego] offset=86928171: e.EXE...2.v....Z.R .Lego.ini....n...............-...uctim.......
+  [loco] offset=231391047: written..M......N...locoff..P......Q...java/util/zip/Deflater..S
+  [loco] offset=762659212: ......@.............loco.exe..........2.PathC:\Program Files\LEG
+  [loco] offset=762659349: structive\LEGO LOCO\loco.exe......@.............LEGO LOCO.......
+  [Loco] offset=768940843: e.EXE. .2.....F%.y .Loco.exe.LOCO.EXE...n...............-.......
+  [loco] offset=770849730: ution...PRODUCT_KEY=loco.exe..UNINST_DISPLAY_NAME=LEGO LOCO..ERR
+  [loco] offset=771349175: s\resource.rfh..exe=loco.exe....[Video]..Dir=C:\Program Files\LE
+  [Lego] offset=830003290: X'..........cursors\Lego.ico.............zooms\building\house1.d
+  [Lego] offset=995722375: O.INI...0...........Lego.lnk..............'.cwinter.bmp...0.....
+  LEGO: 675 occurrences
+  Lego: 3 occurrences
+  lego: 20 occurrences
+  LOCO: 344 occurrences
+  Loco: 11 occurrences
+  loco: 16 occurrences
+  Constructive: 236 occurrences
+  DirectPlay: 1424 occurrences
+
+=== Searching OVERLAY: /tmp/win98_1770767852_1.qcow2 ===
+  [LEGO] offset=343680: ..M.e.d.i.a.........LEGOME~1   ...k_.Z.Z..l_.Z.......~.T.M.P.4..
+  [LEGO] offset=819168: ..L.O.C.O...s...c.r.LEGOLO~1SCR ..:b.Z.Z...hF%......WINPOPUPEXE 
+  [LEGO] offset=821920: ..l.n.k.............LEGO    LNK .m\c.ZK\..]c.Z.N%...Aw.i.n.t.e..
+  [LOCO] offset=445344: ..5i.Z.Z..:i.Z...(..LOCO    LGC .aVi.Z.Z..Xi.Z..*v..............
+  [LEGO] offset=1915202: mponents............LEGO_LOCO LEGO_LOCO ........................
+  [LEGO] offset=1915212: ..........LEGO_LOCO LEGO_LOCO ................................0t
+  [LOCO] offset=1549006: ...........WorkgroupLOCO............Comment....h...............V
+  [LOCO] offset=1567575: ...........WorkgroupLOCO............Comment....egio....StaticVxD
+  [LOCO] offset=1915207: nts............LEGO_LOCO LEGO_LOCO .............................
+  [LOCO] offset=1915217: .....LEGO_LOCO LEGO_LOCO ................................0ty3...
+  [loco] offset=2019724: ......@.............loco.exe..........2.PathC:\Program Files\LEG
+  [loco] offset=2019861: structive\LEGO LOCO\loco.exe......@.............LEGO LOCO.......
+  [Constructive] offset=2019776: am Files\LEGO Media\Constructive\LEGO LOCO..........;.C:\Program Files\L
+  [Constructive] offset=2019838: am Files\LEGO Media\Constructive\LEGO LOCO\loco.exe......@.............L
+  [Constructive] offset=2019980: am Files\LEGO Media\Constructive\LEGO LOCO\Uninst.isu"....its.....Displa
+  [Constructive] offset=2020176: am Files\LEGO Media\Constructive\LEGO LOCO\Exe<.....@.<...........ATL.Re
+  [DirectPlay] offset=1811872: B68038D}............DirectPlay8LobbiedApplicationT.......T...........P
+  [DirectPlay] offset=1812240: A413BEF}............DirectPlay8LobbyEventT.......T...........ProxyStub
+  [DirectPlay] offset=1812600: 4C71FA4}............DirectPlay8EventT.......T...........ProxyStubClsid
+  [DirectPlay] offset=1870973: D471EFC}....REV_....DirectPlay8PeerV.......V...........ProxyStubClsid3
+  [DirectPlay] offset=1871595: 52A906B}............DirectPlay8AddressT...r...T...........ProxyStubCls
+  [lego] offset=2202363: xesystem............legoisle.exesystem............mib.exesystem.
+  [Lego] offset=3702915: O.INI...0...........Lego.lnk..............'.cwinter.bmp...0.....
+  [Constructive] offset=3655992: OME~1.$.1......ZlO..Constructive.CONSTR~1...............12.....O. .:i...
+  [lego] offset=5752048: \...SaveGame\...res.lego.ini....\...SOFTWARE\Intelligent Games\L
+  [Loco] offset=5712683: e.EXE. .2.....F%.y .Loco.exe.LOCO.EXE...n...............-.......
+  [Loco] offset=5712803: ctive\LEGO LOCO\Exe\Loco.exe..H...\..\..\..\Program Files\LEGO M
+  [Loco] offset=5712879: ctive\LEGO LOCO\Exe\Loco.exe6.C:\Program Files\LEGO Media\Constr
+  [loco] offset=9400716: ......@.............loco.exe..........2.PathC:\Program Files\LEG
+  [loco] offset=9400853: structive\LEGO LOCO\loco.exe......@.............LEGO LOCO.......
+  [lego] offset=9718523: xesystem............legoisle.exesystem............mib.exesystem.
+  LEGO: 131 occurrences
+  Lego: 1 occurrences
+  lego: 3 occurrences
+  LOCO: 77 occurrences
+  Loco: 3 occurrences
+  loco: 4 occurrences
+  Constructive: 27 occurrences
+  DirectPlay: 272 occurrences
+
+=== Checking for Windows 98 markers ===
+  [WINDOWS] offset=436928: .......Z..R..Z4.b...WINDOWS    ........Z.."..Z......NETLOG  TXT ...
+  [WINDOWS] offset=449115: .................C:\WINDOWS......(.................................
+  [WINDOWS] offset=453151: Loading Device = C:\WINDOWS\HIMEM.SYS..[000D05D9] LoadSuccess    = 
+  [WINDOWS] offset=453201: LoadSuccess    = C:\WINDOWS\HIMEM.SYS..[000D05D9] Loading Device = 
+  [WINDOWS] offset=453251: Loading Device = C:\WINDOWS\DBLBUFF.SYS..[000D05D9] LoadSuccess    
+  [PROGRA~1] offset=437376: . a.m. .F.i.l...e.s.PROGRA~1   ........Z.."..Z......Ad.r.i.v.e...Gr.
+  [PROGRA~1] offset=4676121: c19c6c50 110e00 "C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE
+  [PROGRA~1] offset=4682478: c19bc6a0 110e00 "C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE
+  [PROGRA~1] offset=4682636: c19cf440 110e00 "C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE
+  [PROGRA~1] offset=4682753: c19cf440 110e00 "C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE
+  [COMMAND.COM] offset=12011952: 0 ..CONFIG.SYS=31 ..COMMAND.COM=30 ..COMMAND.COM=31 ..IO.SYS=30 ..IO.SY
+  [COMMAND.COM] offset=12011969:  ..COMMAND.COM=30 ..COMMAND.COM=31 ..IO.SYS=30 ..IO.SYS=31 ..MSDOS.SYS=
+  [Program Files] offset=17966016: ram_files.......Old Program Files.......PROGRAMF....h...programf........P
+  [Program Files] offset=20641607: rogram_Files = "Old Program Files" ; review..PROGRAMF          = "Progra~
+  [Program Files] offset=21085582:                  = "Program Files"..LMSIE4                     = "Interne
+  [Program Files] offset=21113275:                  = "Program Files"..LMSIE4                     = "Interne
+  [Program Files] offset=21128108:                  = "Program Files"..LMSIE4                     = "Interne
+  [COMMAND.COM] offset=22568059: PT.EXE. /e:1024 /C .COMMAND.COM.COMSPEC.\MAILSLOT\TEMP\NETLOGON.\MAILSL
+  [COMMAND.COM] offset=24628916: \WINDOWS.COMSPEC=C:\COMMAND.COM.TEMP=C:\TEMP.TMP=C:\TEMP.BPATH=;c:\b\ma
+  [COMMAND.COM] offset=121567780:                 ....COMMAND.COM.                                       
+  [SoftGPU] offset=475422859: .... ...............SoftGPU....!...............setup-40............
+  [SoftGPU] offset=477672125: ...label............SoftGPU InstallerF.....:.F...........DXDIAG.EXE
+  [SoftGPU] offset=478152034: ...label............SoftGPU Installer....z.K.............Enum0...{.
+  [SoftGPU] offset=478154190: ry Managerrunssors..SoftGPU Installer[windows]..load=..run=..NullPo
+  [SoftGPU] offset=674869730: for installers (eg. SoftGPU)..; please do not add any other section
+  WINDOWS: 19912 occurrences
+  COMMAND.COM: 62 occurrences
+  Program Files: 868 occurrences
+  PROGRA~1: 1789 occurrences
+  SoftGPU: 10 occurrences

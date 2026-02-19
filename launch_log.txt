@@ -1,0 +1,5 @@
+[L] === Game Launcher START (id=0) ===
+[L] QMP connected
+[L] initial_state: W=12% B=8% G=0% BL=0% O=77%
+[L]   center_samples: [(215, 223, 239), (56, 56, 56), (199, 215, 231), (231, 239, 247), (80, 135, 191)]
+[L] Dismissing dialogs...

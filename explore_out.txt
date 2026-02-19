@@ -1,0 +1,38 @@
+[STEP] Connecting to /tmp/qmp-0.sock
+[STEP] Connected
+[STEP] === STEP 0: Dismiss dialogs ===
+[STEP] After dismiss: W=95% Blk=0% Gry=2% Tl=0% Blu=0% Oth=0%
+[STEP]   center(512,384): RGB(255,255,255)
+[STEP]   bar(512,750): RGB(189,190,189)
+[STEP]   top(512,30): RGB(255,255,255)
+[STEP] === STEP 1: Open Start menu ===
+[STEP] After Ctrl+Esc: W=87% Blk=0% Gry=8% Tl=0% Blu=0% Oth=1%
+[STEP]   center(512,384): RGB(255,255,255)
+[STEP]   bar(512,750): RGB(189,190,189)
+[STEP]   top(512,30): RGB(255,255,255)
+[STEP]   Blue strip check: 60 blue pixels (need >5)
+[STEP] === STEP 2: Navigate to Run ===
+[STEP] After Up x2: W=87% Blk=0% Gry=8% Tl=0% Blu=1% Oth=1%
+[STEP]   center(512,384): RGB(255,255,255)
+[STEP]   bar(512,750): RGB(189,190,189)
+[STEP]   top(512,30): RGB(255,255,255)
+[STEP] After Enter (Run dialog?): W=90% Blk=0% Gry=6% Tl=0% Blu=0% Oth=1%
+[STEP]   center(512,384): RGB(189,190,189)
+[STEP]   bar(512,750): RGB(189,190,189)
+[STEP]   top(512,30): RGB(255,255,255)
+[STEP]   Gray center (dialog): 308 (need >20)
+[STEP] === STEP 3: Type command ===
+[STEP] After 'command' Enter: W=95% Blk=0% Gry=2% Tl=0% Blu=0% Oth=0%
+[STEP]   center(512,384): RGB(255,255,255)
+[STEP]   bar(512,750): RGB(189,190,189)
+[STEP]   top(512,30): RGB(255,255,255)
+[STEP] === STEP 4: List directories ===
+[STEP] dir progra~1: W=95% Blk=0% Gry=2% Tl=0% Blu=0% Oth=0%
+[STEP]   center(512,384): RGB(255,255,255)
+[STEP]   bar(512,750): RGB(189,190,189)
+[STEP]   top(512,30): RGB(255,255,255)
+[STEP] dir lego*: W=95% Blk=0% Gry=2% Tl=0% Blu=0% Oth=0%
+[STEP]   center(512,384): RGB(255,255,255)
+[STEP]   bar(512,750): RGB(189,190,189)
+[STEP]   top(512,30): RGB(255,255,255)
+[STEP] === STEP 5: Try direct launch with quotes ===

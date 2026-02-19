@@ -1,0 +1,10 @@
+STATUS: {
+  "return": {
+    "status": "shutdown",
+    "singlestep": false,
+    "running": false
+  }
+}
+DISPLAY: {"return": "unknown command: 'info display'\r\n"}
+VM STATUS: {"return": "VM status: paused (shutdown)\r\n"}
+VNC: {"return": "default:\r\n  Server: 0.0.0.0:5901 (ipv4)\r\n    Auth: none (Sub: none)\r\n"}

@@ -1,0 +1,93 @@
+=== LEGO LOCO Launcher via Win+R ===
+VM status: running
+
+[S0_before] 1024x768
+        0   50  100  150  200  250  300  350  400  450  500  550  600  650  700  750  800  850  900  950 1000
+y=  0    l    l    l    l    l    l    l    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y= 50    l    K    K    K    g    g    g    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=100    l    d    d    d    d    d    g    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=150    l    g    g    g    g    g    g    W    W    W    W    W    W    W    W    W    ?    W    W    W    W
+y=200    l    W    W    W    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W
+y=250    W    ?    W    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W    W    l    W
+y=300    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W    W    W    W    W
+y=350    W    W    W    W    W    W    W    W    W    W    W    W    W    ?    W    W    W    W    W    W    W
+y=400    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=450    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=500    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W    W    W    W    W
+y=550    W    l    W    W    W    W    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W
+y=600    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=650    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=700    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=750    g    g    R    g    g    g    g    g    g    g    g    g    g    g    g    g    g    g    g    d    g
+  Center area: {'W': 222, 'l': 5, '?': 4}
+  Gray pixels in center dialog area: 0
+
+--- Dismissing any open dialogs (Esc x3) ---
+
+[S1_cleared] 1024x768
+        0   50  100  150  200  250  300  350  400  450  500  550  600  650  700  750  800  850  900  950 1000
+y=  0    l    l    l    l    l    l    l    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y= 50    l    K    K    K    g    g    g    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=100    l    d    d    d    d    d    g    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=150    l    g    g    g    g    g    g    W    W    W    W    W    W    W    W    W    ?    W    W    W    W
+y=200    l    W    W    W    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W
+y=250    W    ?    W    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W    W    l    W
+y=300    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W    W    W    W    W
+y=350    W    W    W    W    W    W    W    W    W    W    W    W    W    ?    W    W    W    W    W    W    W
+y=400    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=450    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=500    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W    W    W    W    W
+y=550    W    l    W    W    W    W    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W
+y=600    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=650    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=700    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=750    g    g    R    g    g    g    g    g    g    g    g    g    g    g    g    g    g    g    g    d    g
+  Center area: {'W': 222, 'l': 5, '?': 4}
+  Gray pixels in center dialog area: 0
+
+--- Sending Win+R (meta_l-r) ---
+
+[S2_run_dialog] 1024x768
+        0   50  100  150  200  250  300  350  400  450  500  550  600  650  700  750  800  850  900  950 1000
+y=  0    l    l    l    l    l    l    l    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y= 50    l    K    K    K    g    g    g    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=100    l    d    d    d    d    d    g    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=150    l    g    g    g    g    g    g    W    W    W    W    W    W    W    W    W    ?    W    W    W    W
+y=200    l    W    W    W    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W
+y=250    W    ?    W    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W    W    l    W
+y=300    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W    W    W    W    W
+y=350    W    W    W    W    W    W    W    W    W    W    W    W    W    ?    W    W    W    W    W    W    W
+y=400    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=450    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=500    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W    W    W    W    W
+y=550    W    l    W    W    W    W    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W
+y=600    W    g    g    g    g    g    g    d    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=650    W    g    g    g    g    g    g    d    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=700    W    g    g    g    g    g    g    d    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=750    g    g    R    g    g    g    g    g    g    g    g    g    g    g    g    g    g    g    g    d    g
+  Center area: {'W': 222, 'l': 5, '?': 4}
+  Gray pixels in center dialog area: 0
+
+--- Clearing text field (Ctrl+A) ---
+
+--- Typing: C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE ---
+
+[S3_typed] 1024x768
+        0   50  100  150  200  250  300  350  400  450  500  550  600  650  700  750  800  850  900  950 1000
+y=  0    l    l    l    l    l    l    l    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y= 50    l    K    K    K    g    g    g    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=100    l    d    d    d    d    d    g    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=150    l    g    g    g    g    g    g    W    W    W    W    W    W    W    W    W    ?    W    W    W    W
+y=200    l    W    W    W    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W
+y=250    W    ?    W    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W    W    l    W
+y=300    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W    W    W    W    W
+y=350    W    W    W    W    W    W    W    W    W    W    W    W    W    ?    W    W    W    W    W    W    W
+y=400    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=450    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=500    W    W    W    W    W    W    W    W    W    W    l    W    W    W    W    W    W    W    W    W    W
+y=550    W    l    W    W    W    W    W    W    ?    W    W    W    W    W    W    W    W    W    W    W    W
+y=600    W    g    g    g    g    g    g    d    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=650    W    g    g    g    g    g    g    d    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=700    W    g    g    g    g    g    g    d    W    W    W    W    W    W    W    W    W    W    W    W    W
+y=750    g    g    R    g    g    g    g    g    g    g    g    g    g    g    g    g    g    g    g    d    g
+  Center area: {'W': 222, 'l': 5, '?': 4}

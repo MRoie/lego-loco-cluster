@@ -1,0 +1,29 @@
+[R] START id=0
+[R] Connected
+[R] initial: W=95% B=0% G=3% O=0%
+[R] === TEST 1: Launch calc ===
+[R] Typed: calc
+[R] after_calc: W=94% B=0% G=3% O=1%
+[R] === TEST 2: Explorer C:\ ===
+[R] Typed: explorer /e,C:\
+[R] explorer_c: W=0% B=100% G=0% O=0%
+[R] explorer_max: W=12% B=9% G=0% O=78%
+[R] === TEST 3: command.com ===
+[R] Typed: command.com
+[R] command_com: W=12% B=9% G=0% O=78%
+[R] Typing dir command...
+[R] dir_lego: W=12% B=9% G=0% O=78%
+[R] Looking for DOS text areas:
+[R]   y=100: B=15 W=24 (possible text row)
+[R]   y=150: B=16 W=23 (possible text row)
+[R]   y=200: B=12 W=30 (possible text row)
+[R]   y=250: B=9 W=24 (possible text row)
+[R]   y=400: B=128 W=0 (possible text row)
+[R]   y=450: B=128 W=0 (possible text row)
+[R]   y=500: B=128 W=0 (possible text row)
+[R]   y=550: B=128 W=0 (possible text row)
+[R]   y=600: B=128 W=0 (possible text row)
+[R] Looking for window title bars (blue):
+[R] Checking full game path...
+[R] dir_full_path: W=12% B=9% G=0% O=78%
+[R] Testing IF EXIST...
