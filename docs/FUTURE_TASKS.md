@@ -54,3 +54,9 @@ a future Codex prompt.
     - VR scene includes mono/3D toggle and autoplay resume button.
     - Benchmark harness extended with `audio_latency_ms` and `spatial_accuracy`
       placeholder columns for future measurement hooks.
+    - Multi-format media export (WebM, MP4, MKV, GIF, MP3) via
+      `mediaExport.js` utility with format selector in VR controls.
+    - **Agent Skill**: `scripts/record-spatial-audio.js` — headless Playwright
+      recorder that captures the spatial audio visualizer as a WebM video
+      and PNG screenshots for automated PR review and benchmarking.
+      Run: `npm run record:spatial-audio`

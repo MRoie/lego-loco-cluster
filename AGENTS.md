@@ -161,3 +161,27 @@ Completing these tasks will yield a robust Windows 98 cluster with automated de
 14. ✅ **Comprehensive Monitoring Integration Tests** – **COMPLETED**: Added comprehensive test suite validating container health monitoring, API endpoints, auto-discovery, and recovery mechanisms. Integrated monitoring tests into CI pipeline with proper cluster setup and validation.
 
 15. ✅ **Container Health Instrumentation** – **COMPLETED**: Enhanced QEMU containers with detailed health monitoring scripts exposing metrics via HTTP endpoints. Integrated health monitoring into Helm charts with proper port exposure and configuration.
+
+## Agent Skills
+
+### 🎧 Spatial Audio Recording
+Record the spatial audio visualizer headlessly and produce video/screenshot
+artifacts for PR review and benchmarking.
+
+```bash
+# Record a 5-second session (default)
+npm run record:spatial-audio
+
+# Custom duration and output directory
+node scripts/record-spatial-audio.js --duration 8000 --out benchmark/
+
+# Outputs:
+#   benchmark/spatial-audio-recording.webm   — screen capture video
+#   benchmark/spatial-audio-frame-start.png  — first-frame screenshot
+#   benchmark/spatial-audio-frame-mid.png    — mid-point screenshot
+#   benchmark/spatial-audio-frame-end.png    — final-frame screenshot
+```
+
+Supported export formats in the VR scene UI: **WebM**, **MP4**, **MKV**,
+**GIF**, **MP3**. See `frontend/src/utils/mediaExport.js` for the format
+registry and MIME negotiation logic.
