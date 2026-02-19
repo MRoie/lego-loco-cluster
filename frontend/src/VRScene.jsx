@@ -4,6 +4,7 @@ import { useActive } from './ActiveContext';
 import useWebRTC from './hooks/useWebRTC';
 import useSpatialAudio from './hooks/useSpatialAudio';
 import useVRAudioListener from './hooks/useVRAudioListener';
+import usePerformanceRecorder from './hooks/usePerformanceRecorder';
 import VRReactVNCViewer from './components/VRReactVNCViewer';
 import ControlsConfig from './components/ControlsConfig';
 import VRToast from './components/VRToast';
@@ -219,6 +220,34 @@ export default function VRScene({ onExit }) {
 
   // Sync the AudioContext listener with the VR camera rig position
   useVRAudioListener(sharedAudioCtx);
+
+  // Performance recorder for spatial audio metrics
+  const {
+    recording: perfRecording,
+    startRecording: startPerfRecording,
+    recordTileSnapshot,
+    exportRecording: exportPerfRecording,
+  } = usePerformanceRecorder();
+
+  // Feed tile snapshot into the recorder each time volumes/active change
+  useEffect(() => {
+    if (!perfRecording) return;
+    const tileData = instances.map((inst, idx) => {
+      const p = positionForIndex(idx, cols, rows);
+      return { id: inst.id, volume: volumes[idx] || 1, position: { x: p.x, y: p.y, z: -3 } };
+    });
+    recordTileSnapshot(active, monoAudio, tileData);
+  }, [perfRecording, active, monoAudio, volumes, instances, cols, rows, recordTileSnapshot]);
+
+  const handleTogglePerfRecording = useCallback(() => {
+    if (perfRecording) {
+      exportPerfRecording();
+      setToast('Performance log exported');
+    } else if (sharedAudioCtx) {
+      startPerfRecording(sharedAudioCtx);
+      setToast('Recording started');
+    }
+  }, [perfRecording, sharedAudioCtx, exportPerfRecording, startPerfRecording]);
 
   // Clean up shared context on unmount
   useEffect(() => {
@@ -480,6 +509,14 @@ export default function VRScene({ onExit }) {
             title="Mono audio disables 3D spatial sound for accessibility"
           >
             {monoAudio ? '🔈 Mono' : '🎧 3D'}
+          </button>
+          <button
+            onClick={handleTogglePerfRecording}
+            className={`text-xs px-2 py-0.5 rounded border font-bold ${perfRecording ? 'bg-red-500 text-white border-red-700 animate-pulse' : 'bg-gray-200 text-black border-gray-400'}`}
+            aria-pressed={perfRecording}
+            title={perfRecording ? 'Stop recording and export performance log' : 'Start recording spatial audio performance'}
+          >
+            {perfRecording ? '⏹ Export Log' : '⏺ Record Perf'}
           </button>
           {!audioResumed && (
             <button
