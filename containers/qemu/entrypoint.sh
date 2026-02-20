@@ -281,23 +281,24 @@ log_info "VNC display available on :5901"
 
 # === STEP 6: Video Streaming Setup ===
 log_info "Starting GStreamer video stream at 1024x768 for Lego Loco compatibility..."
-log_info "Stream configuration: 1024x768@25fps, bitrate=1200kbps (optimized for higher resolution)"
+log_info "Stream configuration: VP8 via VNC capture (rfbsrc), 1024x768, bitrate=1200kbps"
+log_info "Note: Using rfbsrc to capture from QEMU VNC display (not ximagesrc/Xvfb which is empty)"
 gst-launch-1.0 -v \
-  ximagesrc display-name=:$DISPLAY_NUM use-damage=0 ! \
+  rfbsrc host=127.0.0.1 port=5901 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoconvert ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoscale ! \
-  video/x-raw,width=1024,height=768,framerate=25/1 ! \
+  video/x-raw,width=1024,height=768 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  x264enc tune=zerolatency bitrate=1200 speed-preset=ultrafast key-int-max=25 ! \
+  vp8enc deadline=1 target-bitrate=1200000 keyframe-max-dist=25 cpu-used=8 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  rtph264pay config-interval=1 ! \
+  rtpvp8pay ! \
   udpsink host=127.0.0.1 port=5000 sync=false async=false &
 GSTREAMER_PID=$!
 
 log_success "GStreamer started with PID: $GSTREAMER_PID"
-log_info "Stream details: 1024x768@25fps H.264 stream on UDP port 5000"
+log_info "Stream details: 1024x768 VP8 stream via rfbsrc on UDP port 5000"
 
 # === STEP 7: Stream Health Monitoring (SRE Principles) ===
 log_info "Implementing SRE monitoring for stream reliability..."

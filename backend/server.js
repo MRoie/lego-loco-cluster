@@ -1145,78 +1145,88 @@ signalWss.on("error", (err) => {
 const peers = new Map();
 
 // Handle incoming signal websocket connections for SDP exchange
-signalWss.on("connection", async (ws, req) => {
+signalWss.on("connection", (ws, req) => {
   logger.info("Signal WebSocket client connected", { url: req.url });
 
   let id = null;
   let pc = null;
+  // Queue to serialize async message processing (prevents race conditions
+  // when register + offer arrive in the same TCP payload)
+  let msgQueue = Promise.resolve();
 
   ws.on("error", (err) => {
     logger.error("Signal WebSocket client error", { error: err.message });
   });
 
-  ws.on("message", async (msg) => {
-    let data;
-    try {
-      data = JSON.parse(msg);
-    } catch (e) {
-      logger.error("Invalid JSON in signal message", { error: e.message });
-      return;
-    }
-
-    // Handle registration
-    if (data.type === "register") {
-      id = data.id || Math.random().toString(36).slice(2);
-      ws.send(JSON.stringify({ type: "registered", id }));
-      logger.info("Signal WebSocket client registered", { id });
-
-      // Initialize PeerConnection
+  ws.on("message", (msg) => {
+    // Chain each message handler to ensure serial processing
+    msgQueue = msgQueue.then(async () => {
+      let data;
       try {
-        const iceServers = []; // Fetch from config if needed
-        pc = await udpToWebrtc.createConnection(iceServers);
-
-        // Handle ICE candidates from Backend -> Frontend
-        pc.onicecandidate = (e) => {
-          if (e.candidate) {
-            ws.send(JSON.stringify({
-              type: "signal",
-              data: { candidate: e.candidate.toJSON() }
-            }));
-          }
-        };
-
-        logger.info("Initialized WebRTC PeerConnection for client", { id });
-      } catch (err) {
-        logger.error("Failed to create PeerConnection", { error: err.message });
+        data = JSON.parse(msg);
+      } catch (e) {
+        logger.error("Invalid JSON in signal message", { error: e.message });
+        return;
       }
-      return;
-    }
 
-    // Handle signaling
-    if (data.type === "signal" && data.data && pc) {
-      const signal = data.data;
+      // Handle registration
+      if (data.type === "register") {
+        id = data.id || Math.random().toString(36).slice(2);
+        ws.send(JSON.stringify({ type: "registered", id }));
+        logger.info("Signal WebSocket client registered", { id });
 
-      try {
-        if (signal.sdp) {
-          logger.info("Received SDP", { type: signal.type, id });
-          await pc.setRemoteDescription(signal);
-          if (signal.type === 'offer') {
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
+        // Initialize PeerConnection (synchronous - no await needed)
+        try {
+          const iceServers = []; // Fetch from config if needed
+          pc = udpToWebrtc.createConnection(iceServers);
+
+          // Handle ICE candidates from Backend -> Frontend
+          // NOTE: werift uses pc.onIceCandidate.subscribe() not pc.onicecandidate
+          pc.onIceCandidate.subscribe((candidate) => {
+            const candidateJson = candidate.toJSON ? candidate.toJSON() : candidate;
             ws.send(JSON.stringify({
               type: "signal",
-              data: pc.localDescription
+              data: candidateJson
             }));
-            logger.info("Sent SDP Answer", { id });
-          }
-        } else if (signal.candidate) {
-          logger.info("Received ICE Candidate", { id });
-          await pc.addIceCandidate(signal.candidate);
+            logger.debug("Sent ICE candidate to client", { id, sdpMid: candidateJson.sdpMid });
+          });
+
+          logger.info("Initialized WebRTC PeerConnection for client", { id });
+        } catch (err) {
+          logger.error("Failed to create PeerConnection", { error: err.message });
         }
-      } catch (err) {
-        logger.error("Signaling error", { error: err.message, id });
+        return;
       }
-    }
+
+      // Handle signaling
+      if (data.type === "signal" && data.data && pc) {
+        const signal = data.data;
+
+        try {
+          if (signal.sdp) {
+            logger.info("Received SDP", { type: signal.type, id });
+            await pc.setRemoteDescription(signal);
+            if (signal.type === 'offer') {
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              ws.send(JSON.stringify({
+                type: "signal",
+                data: pc.localDescription
+              }));
+              logger.info("Sent SDP Answer", { id });
+            }
+          } else if (signal.candidate) {
+            logger.info("Received ICE Candidate", { id });
+            // Pass the full candidate object (with sdpMid, sdpMLineIndex) to werift
+            await pc.addIceCandidate(signal);
+          }
+        } catch (err) {
+          logger.error("Signaling error", { error: err.message, id });
+        }
+      }
+    }).catch(err => {
+      logger.error("Message processing error", { error: err.message, id });
+    });
   });
 
   ws.on("close", () => {

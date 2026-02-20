@@ -1,5 +1,5 @@
 const dgram = require('dgram');
-const { RTCPeerConnection, RTCRtpCodecParameters, MediaStreamTrack } = require('werift');
+const { RTCPeerConnection, RTCRtpCodecParameters, MediaStreamTrack, useNACK, usePLI, useREMB } = require('werift');
 const logger = require('../utils/logger');
 
 class UdpToWebRTC {
@@ -19,6 +19,15 @@ class UdpToWebRTC {
     }
 
     setupUdp() {
+        let videoCount = 0;
+        let audioCount = 0;
+        // Log packet counts every 5 seconds
+        setInterval(() => {
+            if (videoCount > 0 || audioCount > 0) {
+                logger.info(`RTP packets received - video: ${videoCount}, audio: ${audioCount}`);
+            }
+        }, 5000);
+
         // Video UDP listener (port 5000)
         this.videoSocket.on('error', (err) => {
             logger.error(`Video UDP server error:\n${err.stack}`);
@@ -26,15 +35,17 @@ class UdpToWebRTC {
         });
 
         this.videoSocket.on('message', (msg, rinfo) => {
+            videoCount++;
             try {
                 this.videoTrack.writeRtp(msg);
             } catch (e) {
                 // Suppress errors for malformed packets
+                if (videoCount < 5) logger.warn(`Video writeRtp error: ${e.message}`);
             }
         });
 
         this.videoSocket.bind(5000);
-        logger.info("UDP Video Bridge listening on 5000 (WERIFT)");
+        logger.info("UDP Video Bridge listening on 5000 (WERIFT - VP8)");
 
         // Audio UDP listener (port 5001)
         this.audioSocket.on('error', (err) => {
@@ -43,10 +54,12 @@ class UdpToWebRTC {
         });
 
         this.audioSocket.on('message', (msg, rinfo) => {
+            audioCount++;
             try {
                 this.audioTrack.writeRtp(msg);
             } catch (e) {
                 // Suppress errors for malformed packets
+                if (audioCount < 5) logger.warn(`Audio writeRtp error: ${e.message}`);
             }
         });
 
@@ -54,8 +67,37 @@ class UdpToWebRTC {
         logger.info("UDP Audio Bridge listening on 5001 (WERIFT - Opus)");
     }
 
-    async createConnection(iceServers = []) {
-        const pc = new RTCPeerConnection({ iceServers });
+    createConnection(iceServers = []) {
+        // Announce IP for ICE candidates (use node/host IP when behind NAT/K8s)
+        const announceIp = process.env.WEBRTC_ANNOUNCE_IP;
+        // Port range for WebRTC UDP (useful when exposing via NodePort/hostPort)
+        const portRange = process.env.WEBRTC_PORT_RANGE
+            ? process.env.WEBRTC_PORT_RANGE.split('-').map(Number)
+            : undefined;
+
+        const pc = new RTCPeerConnection({
+            iceServers,
+            iceAdditionalHostAddresses: announceIp ? [announceIp] : undefined,
+            icePortRange: portRange,
+            codecs: {
+                audio: [
+                    new RTCRtpCodecParameters({
+                        mimeType: "audio/opus",
+                        clockRate: 48000,
+                        channels: 2,
+                    }),
+                ],
+                video: [
+                    // VP8 - universally supported (including headless Chromium)
+                    // GStreamer pipeline must use vp8enc + rtpvp8pay to match
+                    new RTCRtpCodecParameters({
+                        mimeType: "video/VP8",
+                        clockRate: 90000,
+                        rtcpFeedback: [useNACK(), usePLI(), useREMB()],
+                    }),
+                ],
+            },
+        });
 
         // Add the video track (sendonly)
         const videoTransceiver = pc.addTransceiver(this.videoTrack, {
