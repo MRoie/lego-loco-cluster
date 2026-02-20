@@ -322,8 +322,30 @@ gst-launch-1.0 -v \
   udpsink host=${VIDEO_DEST_HOST:-127.0.0.1} port=${VIDEO_DEST_PORT:-5000} sync=false async=false &
 GSTREAMER_PID=$!
 
-log_success "GStreamer started with PID: $GSTREAMER_PID"
-log_info "Stream details: 1024x768@25fps H.264 stream on UDP port 5000"
+log_success "GStreamer video started with PID: $GSTREAMER_PID"
+log_info "Stream details: 1024x768@25fps H.264 stream on UDP port ${VIDEO_DEST_PORT:-5000}"
+
+# === STEP 6b: Audio Streaming Setup ===
+log_info "Starting GStreamer audio stream (PulseAudio → Opus → RTP)..."
+AUDIO_DEST_HOST=${AUDIO_DEST_HOST:-${VIDEO_DEST_HOST:-127.0.0.1}}
+AUDIO_DEST_PORT=${AUDIO_DEST_PORT:-5001}
+
+# Wait a moment for PulseAudio to have a sink from QEMU
+sleep 2
+
+gst-launch-1.0 -v \
+  pulsesrc ! \
+  queue max-size-time=100000000 max-size-buffers=10 leaky=downstream ! \
+  audioconvert ! \
+  audioresample ! \
+  audio/x-raw,rate=48000,channels=2 ! \
+  opusenc bitrate=64000 frame-size=20 ! \
+  rtpopuspay pt=97 ! \
+  udpsink host=${AUDIO_DEST_HOST} port=${AUDIO_DEST_PORT} sync=false async=false &
+GSTREAMER_AUDIO_PID=$!
+
+log_success "GStreamer audio started with PID: $GSTREAMER_AUDIO_PID"
+log_info "Audio stream: Opus 48kHz stereo on UDP port ${AUDIO_DEST_PORT}"
 
 # === STEP 7: Stream Health Monitoring (SRE Principles) ===
 log_info "Implementing SRE monitoring for stream reliability..."
@@ -391,11 +413,13 @@ fi
 log_success "Container setup complete!"
 log_info "Services:"
 log_info "  - VNC: localhost:5901"
-log_info "  - Video stream: UDP port 5000 (1024x768@25fps H.264)"
+log_info "  - Video stream: UDP port ${VIDEO_DEST_PORT:-5000} (1024x768@25fps H.264)"
+log_info "  - Audio stream: UDP port ${AUDIO_DEST_PORT:-5001} (Opus 48kHz stereo)"
 log_info "  - Health monitor: HTTP port ${HEALTH_PORT:-8080}"
 log_info "  - QEMU PID: $EMU_PID"
 log_info "  - Xvfb PID: $XVFB_PID"
-log_info "  - GStreamer PID: $GSTREAMER_PID (1024x768 stream)"
+log_info "  - GStreamer Video PID: $GSTREAMER_PID (1024x768 stream)"
+log_info "  - GStreamer Audio PID: $GSTREAMER_AUDIO_PID (Opus stream)"
 if [ -n "${HEALTH_PID:-}" ]; then
   log_info "  - Health monitor PID: $HEALTH_PID"
 fi
@@ -410,8 +434,13 @@ cleanup() {
   fi
   
   if [ -n "${GSTREAMER_PID:-}" ]; then
-    log_info "Stopping GStreamer (PID: $GSTREAMER_PID)"
+    log_info "Stopping GStreamer video (PID: $GSTREAMER_PID)"
     kill $GSTREAMER_PID 2>/dev/null || true
+  fi
+  
+  if [ -n "${GSTREAMER_AUDIO_PID:-}" ]; then
+    log_info "Stopping GStreamer audio (PID: $GSTREAMER_AUDIO_PID)"
+    kill $GSTREAMER_AUDIO_PID 2>/dev/null || true
   fi
   
   if [ -n "${EMU_PID:-}" ]; then

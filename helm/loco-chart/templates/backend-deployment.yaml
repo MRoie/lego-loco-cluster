@@ -44,6 +44,12 @@ spec:
         {{- end }}
         ports:
         - containerPort: {{ .Values.backend.servicePort }}
+        - containerPort: 5000
+          protocol: UDP
+          name: video-udp
+        - containerPort: 5001
+          protocol: UDP
+          name: audio-udp
         resources:
           {{- toYaml .Values.backend.resources | nindent 10 }}
         startupProbe:

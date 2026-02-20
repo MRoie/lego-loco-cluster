@@ -5,7 +5,9 @@
     "test:playwright": "playwright test",
     "test:playwright:ui": "playwright test --ui",
     "test:vnc-capture": "node scripts/playwright-vnc-capture-test.js",
-    "record:spatial-audio": "node scripts/record-spatial-audio.js"
+    "record:spatial-audio": "node scripts/record-spatial-audio.js",
+    "record:cluster-audio": "node scripts/record-cluster-audio.js",
+    "record:game-stats": "node scripts/record-game-stats.js"
   },
   "devDependencies": {
     "ws": "^8.18.2",

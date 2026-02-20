@@ -192,6 +192,10 @@ export default function useWebRTC(targetId) {
 
         ws.onopen = async () => {
           ws.send(JSON.stringify({ type: "register" }));
+          // Add recvonly transceivers so the SDP offer includes video and audio
+          // m= sections. Without these, the server cannot send media back.
+          pc.addTransceiver('video', { direction: 'recvonly' });
+          pc.addTransceiver('audio', { direction: 'recvonly' });
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           ws.send(

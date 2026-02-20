@@ -18,11 +18,11 @@ function positionForIndex(i, cols, rows) {
   return { x: x * 1.4, y: y * 1.0 };
 }
 
-function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio }) {
+function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio, muted, audioLevel, onAudioLevel }) {
   const vncRef = useRef(null);
   const planeRef = useRef(null);
   const [textureCreated, setTextureCreated] = useState(false);
-  const { videoRef: rtcVideoRef } = useWebRTC(inst.id);
+  const { videoRef: rtcVideoRef, audioLevel: tileAudioLevel } = useWebRTC(inst.id);
   const pos = positionForIndex(idx, cols, rows);
   const { setVolume, resumeContext } = useSpatialAudio(
     rtcVideoRef,
@@ -31,11 +31,20 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
     sharedAudioCtx,
   );
 
+  // Propagate audio level up to parent for per-tile meters
+  useEffect(() => {
+    if (onAudioLevel) onAudioLevel(idx, tileAudioLevel);
+  }, [tileAudioLevel, idx, onAudioLevel]);
+
 
   useEffect(() => {
+    if (muted) {
+      setVolume(0);
+      return;
+    }
     const finalVol = volume * (activeIds.includes(inst.id) ? 1 : ambientVolume);
     setVolume(finalVol);
-  }, [volume, activeIds, inst.id, ambientVolume, setVolume]);
+  }, [volume, activeIds, inst.id, ambientVolume, setVolume, muted]);
 
   const handleVNCConnect = (instanceId) => {
     console.log(`VR: VNC connected for ${instanceId}`);
@@ -123,6 +132,11 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   };
 
   // reuse computed position
+  // Compute audio ring scale from audioLevel (0-1) for 3D visualisation
+  const ringScale = 1 + (tileAudioLevel || 0) * 0.6;
+  const ringOpacity = Math.min(0.15 + (tileAudioLevel || 0) * 0.5, 0.7);
+  const ringColor = muted ? '#666' : (active === idx ? '#FFD700' : '#3ABFF8');
+
   return (
     <>
       <VRReactVNCViewer
@@ -148,6 +162,24 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
           material={`color: ${active === idx ? '#0055BF' : '#C4281C'}; side: double`}
           position="0 0 -0.01"
         />
+
+        {/* Audio level ring — pulses with live audio level */}
+        <a-entity
+          geometry="primitive: ring; radiusInner: 0.55; radiusOuter: 0.62"
+          material={`color: ${ringColor}; opacity: ${ringOpacity}; side: double; transparent: true`}
+          scale={`${ringScale} ${ringScale} 1`}
+          position="0 0 0.015"
+        />
+
+        {/* Mute indicator */}
+        {muted && (
+          <a-text
+            value="🔇"
+            align="center"
+            width="0.6"
+            position="0.5 -0.35 0.03"
+          />
+        )}
         
         {status && status !== 'ready' && (
           <a-text
@@ -196,6 +228,8 @@ export default function VRScene({ onExit }) {
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [volumes, setVolumes] = useState([]);
+  const [mutedTiles, setMutedTiles] = useState([]);
+  const [audioLevels, setAudioLevels] = useState([]);
   const [monoAudio, setMonoAudio] = useState(false);
   const [audioResumed, setAudioResumed] = useState(false);
   const [sharedAudioCtx, setSharedAudioCtx] = useState(null);
@@ -357,6 +391,8 @@ export default function VRScene({ onExit }) {
           setInstances(data);
           vncRefs.current = new Array(data.length);
           setVolumes(new Array(data.length).fill(1));
+          setMutedTiles(new Array(data.length).fill(false));
+          setAudioLevels(new Array(data.length).fill(0));
         } else {
           throw new Error('no data');
         }
@@ -367,6 +403,8 @@ export default function VRScene({ onExit }) {
         );
         vncRefs.current = new Array(3);
         setVolumes(new Array(3).fill(1));
+        setMutedTiles(new Array(3).fill(false));
+        setAudioLevels(new Array(3).fill(0));
         setInfo('Using placeholder streams');
       });
     
@@ -469,6 +507,15 @@ export default function VRScene({ onExit }) {
     setConnectedVNCs(prev => new Set([...prev, idx]));
   };
 
+  const handleAudioLevel = useCallback((idx, level) => {
+    setAudioLevels(prev => {
+      if (prev[idx] === level) return prev;
+      const arr = [...prev];
+      arr[idx] = level;
+      return arr;
+    });
+  }, []);
+
   const cols = Math.ceil(Math.sqrt(instances.length || 1));
   const rows = Math.ceil((instances.length || 1) / cols);
 
@@ -521,7 +568,35 @@ export default function VRScene({ onExit }) {
           }}
           className="w-20"
         />
+        <span className="text-xs font-bold text-black ml-1">{Math.round((volumes[active] || 1) * 100)}%</span>
+        {/* Audio level meter for active tile */}
+        <div className="flex items-center gap-1 mt-1">
+          <span className="text-xs text-gray-600">🎵</span>
+          <div className="flex-1 h-1.5 bg-gray-300 rounded-full overflow-hidden w-20">
+            <div
+              className="h-full rounded-full transition-all duration-75"
+              style={{
+                width: `${Math.min((audioLevels[active] || 0) * 100, 100)}%`,
+                backgroundColor: (audioLevels[active] || 0) > 0.75 ? '#ef4444' : (audioLevels[active] || 0) > 0.4 ? '#eab308' : '#22c55e'
+              }}
+            />
+          </div>
+        </div>
         <div className="flex items-center mt-1 gap-2">
+          <button
+            onClick={() => {
+              setMutedTiles((m) => {
+                const arr = [...m];
+                arr[active] = !arr[active];
+                return arr;
+              });
+            }}
+            className={`text-xs px-2 py-0.5 rounded border font-bold ${mutedTiles[active] ? 'bg-gray-400 text-white border-gray-600' : 'bg-green-500 text-white border-green-700'}`}
+            aria-pressed={!mutedTiles[active]}
+            title={mutedTiles[active] ? 'Unmute this tile' : 'Mute this tile'}
+          >
+            {mutedTiles[active] ? '🔇 Muted' : '🔊 On'}
+          </button>
           <button
             onClick={() => setMonoAudio((m) => !m)}
             className={`text-xs px-2 py-0.5 rounded border font-bold ${monoAudio ? 'bg-blue-500 text-white border-blue-700' : 'bg-gray-200 text-black border-gray-400'}`}
@@ -613,6 +688,9 @@ export default function VRScene({ onExit }) {
               onVNCReady={handleVNCReady}
               sharedAudioCtx={sharedAudioCtx}
               monoAudio={monoAudio}
+              muted={mutedTiles[idx] || false}
+              audioLevel={audioLevels[idx] || 0}
+              onAudioLevel={handleAudioLevel}
             />
           ))}
         </a-entity>

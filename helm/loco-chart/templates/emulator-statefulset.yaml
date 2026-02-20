@@ -122,6 +122,10 @@ spec:
           value: "{{ include "loco.fullname" . }}-backend"
         - name: VIDEO_DEST_PORT
           value: "5000"
+        - name: AUDIO_DEST_HOST
+          value: "{{ include "loco.fullname" . }}-backend"
+        - name: AUDIO_DEST_PORT
+          value: "5001"
         - name: ART_RES_ROOT
           value: "/nfs"
         - name: GIT_USER_NAME

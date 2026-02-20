@@ -52,6 +52,8 @@
   <div><span class="label">Latency:</span> <span class="val" id="hLatency">—</span></div>
   <div><span class="label">Mode:</span> <span class="val" id="hMode">—</span></div>
   <div><span class="label">Context:</span> <span class="val" id="hCtx">—</span></div>
+  <div><span class="label">View:</span> <span class="val" id="hView">VR + 2D</span></div>
+  <div><span class="label">Muted Tiles:</span> <span class="val" id="hMuted">0</span></div>
 </div>
 
 <div id="legend">
@@ -59,6 +61,12 @@
   <div><span class="dot" style="background:#C4281C"></span> Inactive tile</div>
   <div><span class="dot" style="background:#3ABFF8"></span> Listener (camera)</div>
   <div><span class="dot" style="background:rgba(255,215,0,0.15)"></span> Sound propagation</div>
+  <div><span class="dot" style="background:#22c55e"></span> Audio level</div>
+  <div><span class="dot" style="background:#666"></span> Muted tile</div>
+  <div style="margin-top:8px;font-size:11px;color:#aaa">
+    Controls: VR (3D spatial) + 2D (per-card)<br>
+    Volume · Mute · Record per instance
+  </div>
 </div>
 
 <div id="controls">
@@ -227,6 +235,27 @@ function draw() {
     const barH = vol * 20;
     ctx.fillStyle = isActive ? 'rgba(255,215,0,0.8)' : 'rgba(255,255,255,0.3)';
     ctx.fillRect(tp.x + boxW / 2 + 4, tp.y + boxH / 2 - barH, 4, barH);
+
+    // Simulated audio level meter (sinusoidal activity based on volume + time)
+    const audioLevel = vol * (0.3 + 0.7 * Math.abs(Math.sin(playbackMs / 300 + i * 0.7)));
+    const meterW = audioLevel * 30;
+    const meterColor = audioLevel > 0.75 ? '#ef4444' : audioLevel > 0.4 ? '#eab308' : '#22c55e';
+    ctx.fillStyle = meterColor;
+    ctx.fillRect(tp.x - boxW / 2, tp.y + boxH / 2 + 4, meterW, 3);
+    // Meter background
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(tp.x - boxW / 2 + meterW, tp.y + boxH / 2 + 4, 30 - meterW, 3);
+
+    // Mute indicator (simulate muting tile 5 and 7)
+    const isMuted = (i === 4 || i === 6) && playbackMs > 1500;
+    if (isMuted) {
+      ctx.fillStyle = 'rgba(100,100,100,0.6)';
+      ctx.fillRect(tp.x - boxW / 2, tp.y - boxH / 2, boxW, boxH);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🔇', tp.x, tp.y + 5);
+    }
   });
 
   // Draw listener
@@ -292,6 +321,11 @@ function draw() {
   document.getElementById('hLatency').className = latMs > 5 ? 'warn' : 'val';
   document.getElementById('hMode').textContent = sample.mono ? '🔈 Mono' : '🎧 3D HRTF';
   document.getElementById('hCtx').textContent = 'running';
+  document.getElementById('hView').textContent = 'VR (spatial) + 2D (per-card)';
+  // Count simulated muted tiles
+  const mutedCount = playbackMs > 1500 ? 2 : 0;
+  document.getElementById('hMuted').textContent = mutedCount;
+  document.getElementById('hMuted').className = mutedCount > 0 ? 'warn' : 'val';
 }
 
 // ── Animation loop ──
