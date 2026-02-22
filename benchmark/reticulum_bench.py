@@ -72,6 +72,8 @@ def _simulate_decrypt(blob: bytes) -> bytes:
     key_stream = hashlib.sha256(_SIM_KEY + iv).digest()
     padded = bytes(b ^ key_stream[i % len(key_stream)] for i, b in enumerate(ct))
     pad_len = padded[-1]
+    if not (1 <= pad_len <= 16):
+        raise ValueError("Invalid padding")
     return padded[:-pad_len]
 
 
@@ -358,7 +360,7 @@ def _rtt_stats(rtts):
         "mean": round(statistics.mean(s), 3),
         "median": round(statistics.median(s), 3),
         "stdev": round(statistics.stdev(s), 3) if len(s) > 1 else 0.0,
-        "p95": round(s[int(len(s) * 0.95)], 3),
+        "p95": round(s[min(int(len(s) * 0.95), len(s) - 1)], 3),
         "p99": round(s[min(int(len(s) * 0.99), len(s) - 1)], 3),
     }
 
