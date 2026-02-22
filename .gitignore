@@ -11,6 +11,5 @@ images/*.tar.gz
 images/*
 compose/*.tar
 talosctl
-benchmark/*_results.csv
 k8s-tests/logs/
 
