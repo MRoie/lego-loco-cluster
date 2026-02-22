@@ -13,3 +13,4 @@ compose/*.tar
 talosctl
 k8s-tests/logs/
 
+__pycache__/
