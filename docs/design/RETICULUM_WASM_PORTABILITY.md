@@ -89,9 +89,9 @@ targets Win32 / i686.
 
 | Runtime | Language | Win98 Compatible | Size | Notes |
 |---------|----------|-------------------|------|-------|
-| [wasm3](https://github.com/nicedoc/nicedoc.io) | C | ✅ Yes (ANSI C, no deps) | ~100 KB | Interpreter, fast startup |
-| [WAMR](https://github.com/nicedoc/nicedoc.io) | C | ✅ Yes (C99) | ~200 KB | AOT + interpreter modes |
-| [wasm-micro-runtime](https://github.com/nicedoc/nicedoc.io) | C | ✅ Likely (POSIX shim) | ~150 KB | Intel maintained |
+| [wasm3](https://github.com/nicedoc/wasm3) | C | ✅ Yes (ANSI C, no deps) | ~100 KB | Interpreter, fast startup |
+| [WAMR](https://github.com/nicedoc/nicedoc.io-wasm-micro-runtime) | C | ✅ Yes (C99) | ~200 KB | AOT + interpreter modes |
+| [wasm-micro-runtime](https://github.com/nicedoc/nicedoc.io-wasm-micro-runtime) | C | ✅ Likely (POSIX shim) | ~150 KB | Intel maintained |
 | Wasmer/Wasmtime | Rust | ❌ No (needs modern OS) | ~20 MB | Too heavy for Win98 |
 
 **wasm3** is the strongest candidate: it is written in portable ANSI C, has no
@@ -293,7 +293,7 @@ python3 benchmark/reticulum_bench.py --mode guest
 
 ## References
 
-- [wasm3 – Fast WASM interpreter in C](https://github.com/nicedoc/nicedoc.io)
+- [wasm3 – Fast WASM interpreter in C](https://github.com/nicedoc/wasm3)
 - [Reticulum Python Reference](https://markqvist.github.io/Reticulum/manual/reference.html)
 - [AssemblyScript](https://www.assemblyscript.org/)
 - [QuickJS](https://bellard.org/quickjs/)

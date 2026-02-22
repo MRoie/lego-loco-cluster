@@ -25,7 +25,7 @@ import subprocess
 import sys
 import time
 
-RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "benchmark")
+RESULTS_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PORT = 29716
 MAGIC = b"RNSB"  # Reticulum benchmark magic header
 
