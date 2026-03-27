@@ -103,6 +103,15 @@ spec:
         image: {{ include "loco.image" (dict "root" . "image" .Values.emulator.image "tag" .Values.emulator.tag) }}
         imagePullPolicy: {{ .Values.emulator.imagePullPolicy }}
         env:
+        # Pod identity from downward API — entrypoint derives INSTANCE_INDEX, GUEST_IP, GUEST_MAC, TAP_IF, GUEST_HOSTNAME
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         {{- if .Values.emulator.env }}
         {{- range $key, $value := .Values.emulator.env }}
         - name: {{ $key }}

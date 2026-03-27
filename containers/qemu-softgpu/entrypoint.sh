@@ -270,21 +270,32 @@ fi
 
 # === STEP 5: QEMU Startup ===
 log_info "Starting QEMU emulator..."
-log_info "QEMU command: qemu-system-i386 -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
+
+# Auto-detect KVM or fall back to TCG
+ACCEL_FLAG="-accel tcg"
+if [ -e /dev/kvm ] && [ -w /dev/kvm ]; then
+  ACCEL_FLAG="-accel kvm"
+  log_info "KVM acceleration available — using KVM"
+else
+  log_info "KVM not available — using TCG (software emulation)"
+fi
+
+log_info "QEMU command: qemu-system-i386 $ACCEL_FLAG -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
 
 # Add debugging to see what we're actually booting from
 log_info "Checking disk image contents..."
 qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
 
 qemu-system-i386 \
+  $ACCEL_FLAG \
   -M pc -cpu pentium2 \
   -m 512 -hda "$SNAPSHOT_NAME" \
   -net nic,model=ne2k_pci -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
-  -vga std -display vnc=0.0.0.0:1 \
+  -vga vmware -display vnc=0.0.0.0:1 \
   -audiodev pa,id=snd0 \
   -rtc base=localtime \
-  -boot order=dc,menu=on,splash-time=5000 \
+  -boot order=c,menu=on \
   -no-shutdown \
   -no-reboot \
   -monitor none &

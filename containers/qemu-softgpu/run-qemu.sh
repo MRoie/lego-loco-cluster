@@ -9,9 +9,10 @@ qemu-system-i386 \
   -drive file=/vm/softgpu.iso,media=cdrom \
   -boot c \
   -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
-  -device rtl8139,netdev=net0 \
-  -vga std \
-  -soundhw sb16 \
+  -device ne2k_pci,netdev=net0 \
+  -vga vmware \
+  -device sb16,audiodev=snd0 \
+  -audiodev pa,id=snd0 \
   -vnc :0 &
 
 websockify --web=/usr/share/novnc/ 6080 localhost:5900

@@ -1,4 +1,4 @@
-replicas: 1
+replicas: 9
 namespace: loco
 
 #imageRepo: "ghcr.io/mroie"
@@ -76,8 +76,7 @@ registryConfig:
     server: ""  # e.g., "your-company.jfrog.io"
 
 emulator:
-  # Emulator replicas and instance configuration
-  replicas: 4
+  # NOTE: replica count is set at top-level 'replicas' field (used by StatefulSet template)
   
   # Image configuration
   image: qemu-loco
@@ -146,10 +145,13 @@ emulator:
   # Additional environment variables
   env:
     BRIDGE: "loco-br"
-    TAP_IF: "tap0"
     DISK: "/images/win98.qcow2"
     DISPLAY_NUM: "99"
     USE_PREBUILT_SNAPSHOT: "false"
+    # Per-instance network identity (derived from INSTANCE_INDEX in entrypoint)
+    GUEST_GATEWAY: "192.168.10.1"
+    GUEST_NETMASK: "255.255.255.0"
+    WORKGROUP: "LOCOLAND"
 
 backend:
   image: lego-loco-backend

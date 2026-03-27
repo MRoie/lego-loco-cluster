@@ -36,6 +36,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: EMULATOR_SERVICE_NAME
+          value: "{{ include "loco.fullname" . }}-emulator"
+        - name: DISCOVERY_MODE
+          value: "kubernetes-endpoints"
         {{- if .Values.backend.env }}
         {{- range $key, $value := .Values.backend.env }}
         - name: {{ $key }}

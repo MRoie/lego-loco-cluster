@@ -213,16 +213,16 @@ log_info "=== Starting QEMU emulator ==="
 # QEMU command with comprehensive options
 QEMU_CMD="qemu-system-i386 \
   -M pc \
-  -cpu pentium3 \
+  -cpu pentium2 \
   -m 512 \
   -drive file=$DISK,format=qcow2,if=ide \
   -netdev tap,id=net0,ifname=$TAP_IF,script=no,downscript=no \
   -device ne2k_pci,netdev=net0 \
   -device sb16 \
   -vga std \
-  -display vnc=:2 \
+  -display vnc=:1 \
   -rtc base=localtime \
-  -boot order=cd,menu=on,splash-time=5000 \
+  -boot order=c,menu=on \
   -no-shutdown \
   -no-reboot \
   -monitor none"

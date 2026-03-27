@@ -54,9 +54,9 @@ class KubernetesDiscovery {
         this.namespace = fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace', 'utf8').trim();
         logger.info("Using namespace from service account", { namespace: this.namespace });
       } else {
-        // In CI environments, use default namespace
-        this.namespace = 'default';
-        logger.info("Using default namespace", { namespace: this.namespace });
+        // Fall back to Helm chart default namespace 'loco'
+        this.namespace = 'loco';
+        logger.info("Using Helm chart default namespace", { namespace: this.namespace });
       }
 
       // Validate namespace is not empty
@@ -146,17 +146,21 @@ class KubernetesDiscovery {
         this.k8sAppsApi.listNamespacedStatefulSet({ namespace, labelSelector })
       ]);
 
-      if (!podsResponse || !podsResponse.body) {
-        logger.warn("No pods response or body from Kubernetes API");
+      // Handle both old (response.body) and new (response directly) client-node formats
+      const podsBody = podsResponse?.body || podsResponse;
+      const stsBody = statefulSetsResponse?.body || statefulSetsResponse;
+
+      if (!podsBody || !podsBody.items) {
+        logger.warn("No pods response or items from Kubernetes API");
         return [];
       }
 
-      if (!statefulSetsResponse || !statefulSetsResponse.body) {
-        console.log('⚠️ No StatefulSets response or body from Kubernetes API');
+      if (!stsBody || !stsBody.items) {
+        console.log('⚠️ No StatefulSets response or items from Kubernetes API');
       }
 
-      const pods = podsResponse.body.items || [];
-      const statefulSets = statefulSetsResponse.body.items || [];
+      const pods = podsBody.items || [];
+      const statefulSets = stsBody?.items || [];
 
       console.log(`✅ Kubernetes API responses received - found ${pods.length} pods and ${statefulSets.length} StatefulSets`);
 
@@ -294,16 +298,19 @@ class KubernetesDiscovery {
 
       const servicesResponse = await this.k8sApi.listNamespacedService(listServicesParams);
 
-      if (!servicesResponse || !servicesResponse.body) {
-        logger.warn("No services response or body from Kubernetes API");
+      // Handle both old (response.body) and new (response directly) client-node formats
+      const body = servicesResponse?.body || servicesResponse;
+
+      if (!body || !body.items) {
+        logger.warn("No services response or items from Kubernetes API");
         return {};
       }
 
-      console.log(`✅ Found ${servicesResponse.body.items?.length || 0} services`);
+      console.log(`✅ Found ${body.items?.length || 0} services`);
 
       const services = {};
 
-      for (const service of servicesResponse.body.items || []) {
+      for (const service of body.items || []) {
         services[service.metadata.name] = {
           name: service.metadata.name,
           type: service.spec.type,
@@ -428,16 +435,19 @@ class KubernetesDiscovery {
 
       const statefulSetsResponse = await this.k8sAppsApi.listNamespacedStatefulSet(listStatefulSetsParams);
 
-      if (!statefulSetsResponse || !statefulSetsResponse.body) {
-        console.log('⚠️ No StatefulSets response or body from Kubernetes API');
+      // Handle both old (response.body) and new (response directly) client-node formats
+      const body = statefulSetsResponse?.body || statefulSetsResponse;
+
+      if (!body || !body.items) {
+        console.log('⚠️ No StatefulSets response or items from Kubernetes API');
         return {};
       }
 
-      console.log(`✅ Found ${statefulSetsResponse.body.items?.length || 0} StatefulSets`);
+      console.log(`✅ Found ${body.items?.length || 0} StatefulSets`);
 
       const statefulSets = {};
 
-      for (const sts of statefulSetsResponse.body.items || []) {
+      for (const sts of body.items || []) {
         statefulSets[sts.metadata.name] = {
           name: sts.metadata.name,
           replicas: sts.spec.replicas,
@@ -457,6 +467,13 @@ class KubernetesDiscovery {
       console.error('❌ Failed to get StatefulSets info:', error.message);
       return {};
     }
+  }
+
+  /**
+   * Alias for discoverEmulatorInstances — used by InstanceManager's unified discovery interface.
+   */
+  async discoverInstances() {
+    return this.discoverEmulatorInstances();
   }
 
   isAvailable() {
