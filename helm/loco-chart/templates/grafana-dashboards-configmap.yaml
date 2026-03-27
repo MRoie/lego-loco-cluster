@@ -1,0 +1,368 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.grafana.dashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "loco.fullname" . }}-grafana-dashboards
+  namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: lego-loco-cluster
+    grafana_dashboard: "1"
+data:
+  qemu-health.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "title": "QEMU Healthy Instances",
+          "type": "stat",
+          "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "sum(qemu_healthy == 1)",
+              "legendFormat": "Healthy"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "steps": [
+                  { "color": "#C4281C", "value": null },
+                  { "color": "#FFD700", "value": 5 },
+                  { "color": "#00A651", "value": {{ .Values.replicas }} }
+                ]
+              },
+              "unit": "short",
+              "mappings": []
+            }
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
+        },
+        {
+          "title": "QEMU Health per Instance",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 16, "x": 8, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "qemu_healthy",
+              "legendFormat": "{{`{{ pod }}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineInterpolation": "stepAfter",
+                "fillOpacity": 20,
+                "pointSize": 5
+              },
+              "color": { "mode": "palette-classic" },
+              "min": 0,
+              "max": 1,
+              "thresholds": {
+                "steps": [
+                  { "color": "#C4281C", "value": null },
+                  { "color": "#00A651", "value": 1 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Instance Uptime",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "time() - kube_pod_start_time{pod=~\".*emulator.*\"}",
+              "legendFormat": "{{`{{ pod }}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "line", "fillOpacity": 10 }
+            }
+          }
+        },
+        {
+          "title": "Pod Restart Count",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "kube_pod_container_status_restarts_total{container=~\".*emulator.*\"}",
+              "legendFormat": "{{`{{ pod }}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "bars", "fillOpacity": 50 },
+              "thresholds": {
+                "steps": [
+                  { "color": "#00A651", "value": null },
+                  { "color": "#FFD700", "value": 2 },
+                  { "color": "#C4281C", "value": 5 }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 39,
+      "tags": ["lego-loco", "qemu", "emulator"],
+      "templating": {
+        "list": [
+          {
+            "name": "DS_PROMETHEUS",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": { "text": "Prometheus", "value": "Prometheus" }
+          }
+        ]
+      },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "Lego Loco — QEMU Health",
+      "uid": "loco-qemu-health"
+    }
+  stream-quality.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "title": "Bandwidth per Instance (inbound)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "rate(vnc_bytes_transferred_total{direction=\"rx\"}[5m])",
+              "legendFormat": "{{`{{ instance_id }}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps",
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "line", "fillOpacity": 15 }
+            }
+          }
+        },
+        {
+          "title": "Bandwidth per Instance (outbound)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "rate(vnc_bytes_transferred_total{direction=\"tx\"}[5m])",
+              "legendFormat": "{{`{{ instance_id }}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps",
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "line", "fillOpacity": 15 }
+            }
+          }
+        },
+        {
+          "title": "Packet Loss Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "rate(stream_packets_lost_total[5m]) / (rate(stream_packets_received_total[5m]) + rate(stream_packets_lost_total[5m])) * 100",
+              "legendFormat": "{{`{{ instance_id }}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "line", "fillOpacity": 10 },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "#00A651", "value": null },
+                  { "color": "#FFD700", "value": 2 },
+                  { "color": "#C4281C", "value": 5 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Latency per Instance",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "stream_rtt_seconds * 1000",
+              "legendFormat": "{{`{{ instance_id }}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "line", "fillOpacity": 10 },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "#00A651", "value": null },
+                  { "color": "#FFD700", "value": 50 },
+                  { "color": "#C4281C", "value": 150 }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 39,
+      "tags": ["lego-loco", "stream", "quality"],
+      "templating": {
+        "list": [
+          {
+            "name": "DS_PROMETHEUS",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": { "text": "Prometheus", "value": "Prometheus" }
+          }
+        ]
+      },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "Lego Loco — Stream Quality",
+      "uid": "loco-stream-quality"
+    }
+  discovery.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "title": "Discovered Instance Count",
+          "type": "stat",
+          "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "loco_discovered_instances",
+              "legendFormat": "Instances"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "steps": [
+                  { "color": "#C4281C", "value": null },
+                  { "color": "#FFD700", "value": 1 },
+                  { "color": "#00A651", "value": {{ .Values.replicas }} }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"] },
+            "colorMode": "background",
+            "graphMode": "area"
+          }
+        },
+        {
+          "title": "Discovery Refresh Latency",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 16, "x": 8, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "rate(loco_discovery_duration_seconds_sum[5m]) / rate(loco_discovery_duration_seconds_count[5m])",
+              "legendFormat": "avg latency"
+            },
+            {
+              "expr": "histogram_quantile(0.99, rate(loco_discovery_duration_seconds_bucket[5m]))",
+              "legendFormat": "p99 latency"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "line", "fillOpacity": 10 },
+              "thresholds": {
+                "steps": [
+                  { "color": "#00A651", "value": null },
+                  { "color": "#FFD700", "value": 1 },
+                  { "color": "#C4281C", "value": 5 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Pod Age (seconds since start)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "targets": [
+            {
+              "expr": "time() - kube_pod_start_time{pod=~\".*emulator.*\"}",
+              "legendFormat": "{{`{{ pod }}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "line", "fillOpacity": 10 }
+            }
+          }
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 39,
+      "tags": ["lego-loco", "discovery", "backend"],
+      "templating": {
+        "list": [
+          {
+            "name": "DS_PROMETHEUS",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": { "text": "Prometheus", "value": "Prometheus" }
+          }
+        ]
+      },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "Lego Loco — Discovery",
+      "uid": "loco-discovery"
+    }
+{{- end }}

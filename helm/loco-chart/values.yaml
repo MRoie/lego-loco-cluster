@@ -227,6 +227,29 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     
+# NetworkPolicy for game ports (DirectPlay, NetBIOS between emulator pods)
+networkPolicy:
+  enabled: true
+  gamePorts:
+    directPlay: 2300          # TCP/UDP — DirectPlay game traffic
+    directPlayDiscovery: 47624 # TCP — DirectPlay session discovery
+    netbios:
+      enabled: true
+      ports:
+        - 137
+        - 138
+        - 139
+
+# Prometheus monitoring integration (requires Prometheus Operator CRDs)
+monitoring:
+  enabled: false                # Set to true after deploying kube-prometheus-stack
+  prometheusRelease: "kube-prometheus"  # Must match the Helm release name of the Prometheus Operator
+  scrapeInterval: "15s"
+  scrapeTimeout: "10s"
+  grafana:
+    dashboards:
+      enabled: false            # Set to true to deploy Grafana dashboard ConfigMaps (requires sidecar)
+
 stunner:
   enabled: false  # Disabled for minikube
 

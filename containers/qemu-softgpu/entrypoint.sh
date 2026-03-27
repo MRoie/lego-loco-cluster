@@ -24,13 +24,31 @@ log_warning() {
 
 # Configuration with defaults
 BRIDGE=${BRIDGE:-loco-br}
-TAP_IF=${TAP_IF:-tap0}
+
+# --- Instance Identity Derivation (K2 contract: POD_NAME via downward API) ---
+# Priority: POD_NAME ordinal > INSTANCE_INDEX env > default 0
+if [ -n "${POD_NAME:-}" ]; then
+  INSTANCE_INDEX=${POD_NAME##*-}
+fi
+INSTANCE_INDEX=${INSTANCE_INDEX:-0}
+GUEST_HOSTNAME=${GUEST_HOSTNAME:-LOCO-0${INSTANCE_INDEX}}
+GUEST_IP=${GUEST_IP:-192.168.10.$((10 + INSTANCE_INDEX))}
+GUEST_MAC=${GUEST_MAC:-52:54:00:10:00:0${INSTANCE_INDEX}}
+TAP_IF=${TAP_IF:-tap${INSTANCE_INDEX}}
+GUEST_GATEWAY=${GUEST_GATEWAY:-192.168.10.1}
+GUEST_NETMASK=${GUEST_NETMASK:-255.255.255.0}
+WORKGROUP=${WORKGROUP:-LOCOLAND}
+
 DISK=${DISK:-/images/win98.qcow2}
 SNAPSHOT_REGISTRY=${SNAPSHOT_REGISTRY:-ghcr.io/mroie/qemu-snapshots}
 SNAPSHOT_TAG=${SNAPSHOT_TAG:-win98-base}
 USE_PREBUILT_SNAPSHOT=${USE_PREBUILT_SNAPSHOT:-true}
 
 log_info "Starting QEMU emulator container with configuration:"
+log_info "  INSTANCE_INDEX=$INSTANCE_INDEX (from POD_NAME=${POD_NAME:-<unset>})"
+log_info "  GUEST_HOSTNAME=$GUEST_HOSTNAME"
+log_info "  GUEST_IP=$GUEST_IP"
+log_info "  GUEST_MAC=$GUEST_MAC"
 log_info "  BRIDGE=$BRIDGE"
 log_info "  TAP_IF=$TAP_IF"
 log_info "  DISK=$DISK"
@@ -290,7 +308,7 @@ qemu-system-i386 \
   $ACCEL_FLAG \
   -M pc -cpu pentium2 \
   -m 512 -hda "$SNAPSHOT_NAME" \
-  -net nic,model=ne2k_pci -net tap,ifname=$TAP_IF,script=no,downscript=no \
+  -net nic,model=ne2k_pci,macaddr=$GUEST_MAC -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
   -vga vmware -display vnc=0.0.0.0:1 \
   -audiodev pa,id=snd0 \
@@ -342,8 +360,21 @@ log_info "Starting GStreamer audio stream (PulseAudio → Opus → RTP)..."
 AUDIO_DEST_HOST=${AUDIO_DEST_HOST:-${VIDEO_DEST_HOST:-127.0.0.1}}
 AUDIO_DEST_PORT=${AUDIO_DEST_PORT:-5001}
 
-# Wait a moment for PulseAudio to have a sink from QEMU
-sleep 2
+# Wait for PulseAudio to have a source (QEMU sb16 sink creates a monitor source)
+AUDIO_WAIT=0
+AUDIO_WAIT_MAX=30
+log_info "Waiting for PulseAudio source from QEMU (max ${AUDIO_WAIT_MAX}s)..."
+while [ $AUDIO_WAIT -lt $AUDIO_WAIT_MAX ]; do
+  if pactl list sources short 2>/dev/null | grep -qE 'RUNNING|IDLE|SUSPENDED'; then
+    log_success "PulseAudio source detected after ${AUDIO_WAIT}s"
+    break
+  fi
+  AUDIO_WAIT=$((AUDIO_WAIT + 2))
+  sleep 2
+done
+if [ $AUDIO_WAIT -ge $AUDIO_WAIT_MAX ]; then
+  log_warning "No PulseAudio source detected after ${AUDIO_WAIT_MAX}s — audio pipeline may produce silence"
+fi
 
 gst-launch-1.0 -v \
   pulsesrc ! \

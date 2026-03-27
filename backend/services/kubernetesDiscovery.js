@@ -11,6 +11,12 @@ class KubernetesDiscovery {
     this.namespace = 'loco'; // Default namespace aligned with Helm chart values.yaml
     this.initialized = false;
 
+    // Discovery strategy: 'endpoints' | 'pods' | 'auto'
+    // 'auto' tries endpoints first, falls back to pods
+    this.discoveryStrategy = process.env.DISCOVERY_STRATEGY || 'auto';
+    this.serviceName = process.env.EMULATOR_SERVICE_NAME || 'loco-loco-emulator';
+    this.endpointsWatchRequest = null;
+
     // Initialize asynchronously
     this.init().catch(error => {
       logger.warn("Failed to initialize KubernetesDiscovery", { error });
@@ -470,9 +476,219 @@ class KubernetesDiscovery {
   }
 
   /**
-   * Alias for discoverEmulatorInstances — used by InstanceManager's unified discovery interface.
+   * Discover instances via the Kubernetes Endpoints API.
+   * Queries the Endpoints resource for the emulator headless service.
+   * Each subset address represents a ready (or not-ready) pod with its IP.
+   *
+   * @returns {Promise<Array>} Array of instance objects, or null on failure
+   */
+  async discoverViaEndpoints() {
+    if (!this.initialized) {
+      logger.warn('Cannot discover via Endpoints: not initialized');
+      return null;
+    }
+
+    try {
+      logger.info('Discovering instances via Endpoints API', {
+        namespace: this.namespace,
+        serviceName: this.serviceName
+      });
+
+      const namespace = String(this.namespace).trim();
+      const response = await this.k8sApi.readNamespacedEndpoints({
+        name: this.serviceName,
+        namespace: namespace
+      });
+
+      const body = response?.body || response;
+
+      if (!body || !body.subsets) {
+        logger.warn('No subsets in Endpoints response', {
+          serviceName: this.serviceName,
+          namespace
+        });
+        return [];
+      }
+
+      const instances = [];
+
+      for (const subset of body.subsets) {
+        const ports = this._mapEndpointPorts(subset.ports);
+
+        // Ready addresses
+        if (subset.addresses) {
+          for (const address of subset.addresses) {
+            instances.push(this._buildEndpointInstance(address, ports, true));
+          }
+        }
+
+        // Not-ready addresses (included for monitoring)
+        if (subset.notReadyAddresses) {
+          for (const address of subset.notReadyAddresses) {
+            instances.push(this._buildEndpointInstance(address, ports, false));
+          }
+        }
+      }
+
+      instances.sort((a, b) => {
+        const aNum = parseInt(a.id.split('-')[1]);
+        const bNum = parseInt(b.id.split('-')[1]);
+        return aNum - bNum;
+      });
+
+      logger.info('Discovered instances via Endpoints', {
+        count: instances.length,
+        ready: instances.filter(i => i.status === 'ready').length
+      });
+
+      return instances;
+    } catch (error) {
+      logger.error('Endpoints discovery failed', {
+        error: error.message,
+        serviceName: this.serviceName,
+        namespace: this.namespace
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Build an instance object from an Endpoints address.
+   */
+  _buildEndpointInstance(address, ports, ready) {
+    const podName = address.targetRef?.name || 'unknown';
+    const instanceMatch = podName.match(/-(\d+)$/);
+    const instanceNumber = instanceMatch ? parseInt(instanceMatch[1]) : 0;
+    const vncPort = ports.vnc || 5901;
+    const healthPort = ports.health || 8080;
+    const dnsName = `${podName}.${this.serviceName}.${this.namespace}.svc.cluster.local`;
+
+    return {
+      id: `instance-${instanceNumber}`,
+      name: `Windows 98 - ${instanceNumber === 0 ? 'Game Server' : `Client ${instanceNumber}`}`,
+      description: instanceNumber === 0
+        ? 'Primary gaming instance with full Lego Loco installation'
+        : 'Player client instance',
+      podName: podName,
+      podIP: address.ip,
+      addresses: {
+        podIP: address.ip,
+        hostname: address.hostname || podName,
+        dnsName: dnsName
+      },
+      ports: ports,
+      streamUrl: `http://localhost:${6080 + instanceNumber}/vnc${instanceNumber}`,
+      vncUrl: `${dnsName}:${vncPort}`,
+      healthUrl: `http://${address.ip}:${healthPort}`,
+      provisioned: true,
+      ready: ready,
+      status: ready ? 'ready' : 'not-ready',
+      health: {
+        ready: ready,
+        lastTransition: new Date().toISOString()
+      },
+      discoveredAt: new Date().toISOString(),
+      kubernetes: {
+        namespace: this.namespace,
+        nodeName: address.nodeName,
+        targetRef: address.targetRef
+      }
+    };
+  }
+
+  /**
+   * Map Endpoints port array to a name->number object.
+   */
+  _mapEndpointPorts(ports) {
+    const portMap = {};
+    if (!ports) return portMap;
+    for (const port of ports) {
+      if (port.name) portMap[port.name] = port.port;
+    }
+    return portMap;
+  }
+
+  /**
+   * Watch Endpoints changes for the emulator headless service.
+   * @param {Function} callback - called with (type, endpointObject)
+   * @returns {Promise<Object|null>} watch request handle
+   */
+  async watchEndpointsChanges(callback) {
+    if (!this.initialized) {
+      logger.warn('Cannot watch Endpoints: not initialized');
+      return null;
+    }
+
+    try {
+      const watch = new this.k8s.Watch(this.kc);
+      const namespace = String(this.namespace).trim();
+
+      logger.info('Starting Endpoints watch', {
+        namespace,
+        serviceName: this.serviceName
+      });
+
+      this.endpointsWatchRequest = await watch.watch(
+        `/api/v1/namespaces/${namespace}/endpoints`,
+        { fieldSelector: `metadata.name=${this.serviceName}` },
+        (type, endpoint) => {
+          logger.debug('Endpoints change detected', {
+            type,
+            service: this.serviceName
+          });
+          if (callback && typeof callback === 'function') {
+            try {
+              callback(type, endpoint);
+            } catch (err) {
+              logger.error('Endpoints watch callback error', { error: err.message });
+            }
+          }
+        },
+        (err) => {
+          if (err && err.code !== 'ECONNRESET') {
+            logger.error('Endpoints watch error', {
+              error: err.message,
+              code: err.code
+            });
+          }
+        }
+      );
+
+      return this.endpointsWatchRequest;
+    } catch (error) {
+      logger.error('Failed to start Endpoints watch', { error: error.message });
+      if (process.env.CI || process.env.NODE_ENV === 'test') {
+        return null;
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Unified discovery entry-point used by InstanceManager.
+   * Respects the configured strategy:
+   *   'endpoints' — only Endpoints API
+   *   'pods'      — only pod-based list
+   *   'auto'      — try Endpoints first, fall back to pods
    */
   async discoverInstances() {
+    if (this.discoveryStrategy === 'pods') {
+      return this.discoverEmulatorInstances();
+    }
+
+    if (this.discoveryStrategy === 'endpoints') {
+      const result = await this.discoverViaEndpoints();
+      return result !== null ? result : [];
+    }
+
+    // 'auto' — try endpoints first, fall back to pods
+    const endpointResult = await this.discoverViaEndpoints();
+    if (endpointResult !== null) {
+      logger.debug('Auto strategy: Endpoints discovery succeeded');
+      return endpointResult;
+    }
+
+    logger.warn('Auto strategy: Endpoints failed, falling back to pod-based discovery');
     return this.discoverEmulatorInstances();
   }
 

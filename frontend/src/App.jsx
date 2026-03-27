@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense, lazy } from "react";
 import { useActive } from "./ActiveContext";
 import { motion, AnimatePresence } from "framer-motion";
-import VRScene from "./VRScene";
 import InstanceCard from "./components/InstanceCard";
 import DiscoveryStatus from "./components/DiscoveryStatus";
 import { fetchLiveInstances } from "./api/discovery";
+
+const VRScene = lazy(() => import(/* webpackChunkName: "vr" */ "./VRScene"));
+const QualityDashboard = lazy(() => import(/* webpackChunkName: "dashboard" */ "./components/QualityDashboard"));
 
 
 // Main dashboard component showing the 3×3 grid of instances
@@ -251,7 +253,13 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <VRScene onExit={() => setVrMode(false)} />
+            <Suspense fallback={
+              <div className="flex items-center justify-center h-screen bg-black">
+                <div className="text-white text-lg" style={{ color: '#0055BF' }}>Loading VR Scene…</div>
+              </div>
+            }>
+              <VRScene onExit={() => setVrMode(false)} />
+            </Suspense>
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,0 +1,90 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "loco.fullname" . }}-game-ports
+  namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/part-of: loco-cluster
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: emulator
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # DirectPlay game traffic — TCP & UDP 2300
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.gamePorts.directPlay }}
+        - protocol: UDP
+          port: {{ .Values.networkPolicy.gamePorts.directPlay }}
+
+    # DirectPlay session discovery — TCP 47624
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.gamePorts.directPlayDiscovery }}
+
+    {{- if .Values.networkPolicy.gamePorts.netbios.enabled }}
+    # NetBIOS name resolution — UDP/TCP 137-139
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        {{- range .Values.networkPolicy.gamePorts.netbios.ports }}
+        - protocol: UDP
+          port: {{ . }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    {{- end }}
+
+  egress:
+    # DirectPlay game traffic — TCP & UDP 2300
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.gamePorts.directPlay }}
+        - protocol: UDP
+          port: {{ .Values.networkPolicy.gamePorts.directPlay }}
+
+    # DirectPlay session discovery — TCP 47624
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.gamePorts.directPlayDiscovery }}
+
+    {{- if .Values.networkPolicy.gamePorts.netbios.enabled }}
+    # NetBIOS name resolution — UDP/TCP 137-139
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        {{- range .Values.networkPolicy.gamePorts.netbios.ports }}
+        - protocol: UDP
+          port: {{ . }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+    {{- end }}
+{{- end }}
