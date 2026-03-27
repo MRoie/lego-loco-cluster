@@ -195,7 +195,7 @@ class KubernetesDiscovery {
             description: instanceNumber === 0 ? 'Primary gaming instance with full Lego Loco installation' : 'Player client instance',
             podName: pod.metadata.name,
             podIP: pod.status.podIP,
-            streamUrl: `http://localhost:${6080 + instanceNumber}/vnc${instanceNumber}`,
+            streamUrl: `/proxy/vnc/instance-${instanceNumber}`,
             vncUrl: `${pod.metadata.name}:5901`,
             healthUrl: `http://${pod.metadata.name}:8080`,
             provisioned: true,
@@ -577,7 +577,7 @@ class KubernetesDiscovery {
         dnsName: dnsName
       },
       ports: ports,
-      streamUrl: `http://localhost:${6080 + instanceNumber}/vnc${instanceNumber}`,
+      streamUrl: `/proxy/vnc/instance-${instanceNumber}`,
       vncUrl: `${dnsName}:${vncPort}`,
       healthUrl: `http://${address.ip}:${healthPort}`,
       provisioned: true,

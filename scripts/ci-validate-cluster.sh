@@ -50,9 +50,9 @@ else
   GREEN=''; RED=''; YELLOW=''; NC=''; BOLD=''
 fi
 
-pass()  { ((PASS++)); ((TOTAL++)); DETAILS+="  ✅ $1\n"; echo -e "  ${GREEN}✅ PASS${NC}: $1"; }
-fail()  { ((FAIL++)); ((TOTAL++)); DETAILS+="  ❌ $1\n"; echo -e "  ${RED}❌ FAIL${NC}: $1"; }
-warn()  { ((WARN++)); DETAILS+="  ⚠️  $1\n"; echo -e "  ${YELLOW}⚠️  WARN${NC}: $1"; }
+pass()  { PASS=$((PASS+1)); TOTAL=$((TOTAL+1)); DETAILS+="  ✅ $1\n"; echo -e "  ${GREEN}✅ PASS${NC}: $1"; }
+fail()  { FAIL=$((FAIL+1)); TOTAL=$((TOTAL+1)); DETAILS+="  ❌ $1\n"; echo -e "  ${RED}❌ FAIL${NC}: $1"; }
+warn()  { WARN=$((WARN+1)); DETAILS+="  ⚠️  $1\n"; echo -e "  ${YELLOW}⚠️  WARN${NC}: $1"; }
 header(){ echo -e "\n${BOLD}── $1 ──${NC}"; }
 
 # ── Pre-flight: kubectl available ─────────────────────────────────────────────
@@ -101,62 +101,55 @@ else
 fi
 
 # ── Check: Application Pods ──────────────────────────────────────────────────
-header "Application Pods (default namespace)"
-APP_PODS=$(kubectl get pods --no-headers 2>/dev/null | wc -l)
-RUNNING_APP=$(kubectl get pods --no-headers 2>/dev/null | grep -c 'Running' || true)
+APP_NS="loco"
+header "Application Pods (namespace: $APP_NS)"
+APP_PODS=$(kubectl get pods -n "$APP_NS" --no-headers 2>/dev/null | grep -v 'Completed' | wc -l)
+RUNNING_APP=$(kubectl get pods -n "$APP_NS" --no-headers 2>/dev/null | grep -c 'Running' || true)
 
 if [[ "$APP_PODS" -eq 0 ]]; then
-  warn "No application pods in default namespace (may be expected for bare cluster)"
-elif [[ "$RUNNING_APP" -eq "$APP_PODS" ]]; then
-  pass "All $APP_PODS application pod(s) Running"
+  warn "No application pods in $APP_NS namespace (may be expected for bare cluster)"
+elif [[ "$RUNNING_APP" -ge "$APP_PODS" ]]; then
+  pass "All $APP_PODS application pod(s) Running in $APP_NS"
 else
   NOT_RUNNING=$((APP_PODS - RUNNING_APP))
-  fail "$NOT_RUNNING application pod(s) not Running"
-  kubectl get pods --no-headers 2>/dev/null | grep -v 'Running' || true
+  fail "$NOT_RUNNING application pod(s) not Running in $APP_NS"
+  kubectl get pods -n "$APP_NS" --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true
 fi
 
 # ── Check: Services ──────────────────────────────────────────────────────────
 header "Services"
-SERVICES=$(kubectl get services --no-headers 2>/dev/null | wc -l)
+SERVICES=$(kubectl get services -n "$APP_NS" --no-headers 2>/dev/null | wc -l)
 
-if [[ "$SERVICES" -le 1 ]]; then
-  warn "Only kubernetes default service found (no application services)"
+if [[ "$SERVICES" -eq 0 ]]; then
+  warn "No services found in $APP_NS namespace"
 else
-  pass "$SERVICES service(s) found"
+  pass "$SERVICES service(s) found in $APP_NS"
 fi
 
 # Check for key loco-cluster services
-for svc in backend frontend; do
-  if kubectl get service "$svc" --no-headers &>/dev/null; then
-    pass "Service '$svc' exists"
+for svc in backend frontend emulator; do
+  FOUND=$(kubectl get services -n "$APP_NS" --no-headers 2>/dev/null | grep -i "$svc" | head -1 || true)
+  if [[ -n "$FOUND" ]]; then
+    pass "Service matching '$svc' found: $(echo "$FOUND" | awk '{print $1}')"
   else
-    # Try common naming patterns
-    FOUND=$(kubectl get services --no-headers 2>/dev/null | grep -i "$svc" | head -1 || true)
-    if [[ -n "$FOUND" ]]; then
-      pass "Service matching '$svc' found: $(echo "$FOUND" | awk '{print $1}')"
-    else
-      warn "Service '$svc' not found (may not be deployed yet)"
-    fi
+    warn "Service '$svc' not found in $APP_NS"
   fi
 done
 
 # ── Check: Endpoints Populated ────────────────────────────────────────────────
 header "Endpoints"
-ENDPOINTS=$(kubectl get endpoints --no-headers 2>/dev/null | wc -l)
-EMPTY_EP=$(kubectl get endpoints --no-headers 2>/dev/null | awk '{if ($2 == "<none>") print $1}' || true)
+ENDPOINTS=$(kubectl get endpoints -n "$APP_NS" --no-headers 2>/dev/null | wc -l)
+EMPTY_EP=$(kubectl get endpoints -n "$APP_NS" --no-headers 2>/dev/null | awk '{if ($2 == "<none>") print $1}' || true)
 
-if [[ "$ENDPOINTS" -le 1 ]]; then
-  warn "Only default endpoints found"
+if [[ "$ENDPOINTS" -eq 0 ]]; then
+  warn "No endpoints found in $APP_NS"
 else
-  pass "$ENDPOINTS endpoint(s) found"
+  pass "$ENDPOINTS endpoint(s) found in $APP_NS"
 fi
 
 if [[ -n "$EMPTY_EP" ]]; then
   for ep in $EMPTY_EP; do
-    # kubernetes endpoint is always empty in KIND
-    if [[ "$ep" != "kubernetes" ]]; then
-      warn "Endpoint '$ep' has no addresses"
-    fi
+    warn "Endpoint '$ep' has no addresses in $APP_NS"
   done
 fi
 
@@ -185,11 +178,11 @@ fi
 
 # ── Check: NetworkPolicies ────────────────────────────────────────────────────
 header "Network Policies"
-NETPOL=$(kubectl get networkpolicies --no-headers 2>/dev/null | wc -l)
+NETPOL=$(kubectl get networkpolicies -n "$APP_NS" --no-headers 2>/dev/null | wc -l)
 if [[ "$NETPOL" -gt 0 ]]; then
-  pass "$NETPOL NetworkPolicy(ies) configured"
+  pass "$NETPOL NetworkPolicy(ies) configured in $APP_NS"
 else
-  warn "No NetworkPolicies found (open network)"
+  warn "No NetworkPolicies found in $APP_NS (open network)"
 fi
 
 # ── Check: RBAC (ClusterRoleBindings) ─────────────────────────────────────────
@@ -209,7 +202,7 @@ if command -v helm &>/dev/null; then
     pass "$RELEASES Helm release(s) deployed"
     helm list --all-namespaces --no-headers 2>/dev/null | while read -r line; do
       NAME=$(echo "$line" | awk '{print $1}')
-      STATUS=$(echo "$line" | awk '{print $4}')
+      STATUS=$(echo "$line" | awk '{for(i=1;i<=NF;i++) if($i=="deployed"||$i=="failed"||$i=="pending-upgrade"||$i=="superseded") print $i}')
       if [[ "$STATUS" == "deployed" ]]; then
         pass "Helm release '$NAME' status: deployed"
       else
