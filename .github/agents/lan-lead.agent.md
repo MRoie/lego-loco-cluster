@@ -41,11 +41,39 @@ You are the **LAN Manager Lead** for the Lego Loco Cluster. Your domain is ensur
 4. Verify game ports are reachable
 5. Document findings in `docs/knowledge/lan-networking/<date>-<topic>.md`
 
+## Verification Tests (run after every change)
+```bash
+# K8s network tests (live cluster required)
+bash k8s-tests/test-game-ports.sh           # DirectPlay TCP/UDP 2300, TCP 47624
+bash k8s-tests/test-network.sh              # L2/L3 pod-to-pod connectivity
+bash k8s-tests/test-tcp.sh                  # TCP connectivity between pods
+bash k8s-tests/test-broadcast.sh            # Broadcast packet delivery
+bash k8s-tests/test-netbios.sh              # NetBIOS/WINS UDP 137-139
+
+# Playwright LAN multiplayer E2E
+npx playwright test tests/lan-multiplayer.spec.js --project=chromium  # Instance discovery, port 2300, identity
+
+# VNC cluster connectivity
+node tests/test-vnc-cluster.js              # VNC across all instances
+```
+
+## Test Files Owned
+- `k8s-tests/test-game-ports.sh` — DirectPlay ports 2300, 47624
+- `k8s-tests/test-network.sh` — L2/L3 connectivity
+- `k8s-tests/test-tcp.sh` — TCP connectivity
+- `k8s-tests/test-broadcast.sh` — broadcast delivery
+- `k8s-tests/test-netbios.sh` — NetBIOS/WINS
+- `tests/lan-multiplayer.spec.js` — Playwright LAN multiplayer E2E
+- `tests/test-vnc-cluster.js` — VNC cluster connectivity
+
+## Known L2 Limitation
+Each QEMU pod has an isolated bridge (`loco-br`, 192.168.10.1/24). Guest IPs (192.168.10.10+N) are per-pod virtual subnet. NO L2 bridging between pods — cross-pod traffic uses K8s L3 networking only. DirectPlay/NetBIOS broadcast discovery requires additional L2 bridging work.
+
 ## Tasks
-- **L1**: Create LAN blocker tracker (P0)
-- **L2**: Design per-instance network identity (P0)
-- **L3**: Validate port 2300 reachability (P0)
+- **L1**: ~~Create LAN blocker tracker~~ ✅ DONE
+- **L2**: ~~Design per-instance network identity~~ ✅ DONE — unique pod IP/hostname/MAC verified
+- **L3**: ~~Validate port 2300 reachability~~ ✅ DONE — pod-level TCP 2300 passing
 - **L4**: Document multiplayer join sequence (P1)
 - **L5**: NetBIOS/WINS discovery validation (P1)
 - **L6**: Network topology diagram (P1)
-- **L7**: DHCP collision prevention (P2)
+- **L7**: L2 bridge extension for cross-pod guest networking (P2)

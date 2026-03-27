@@ -24,7 +24,33 @@ You are the **VR/WebXR Lead** for the Lego Loco Cluster. Your domain is the imme
 4. Test in desktop mode first, then VR headset
 5. Document findings in `docs/knowledge/vr-webxr/<date>-<topic>.md`
 
+## Verification Tests (run after every change)
+```bash
+# Frontend VR unit tests (Vitest)
+cd frontend && npx vitest run spatialAudio    # useSpatialAudio hook
+cd frontend && npx vitest run mediaExport     # VR export formats
+
+# Playwright VR E2E specs
+npx playwright test tests/vr-spatial-audio.spec.js --project=chromium   # Spatial audio edge cases
+npx playwright test tests/vr-performance.spec.js --project=chromium     # 60fps with 9 streams
+npx playwright test tests/vr-export.spec.js --project=chromium          # WebM, MP4, MKV, GIF, MP3
+npx playwright test tests/vr-edge-cases.spec.js --project=chromium      # All browsers, audio, export
+
+# Spatial audio recording
+node scripts/record-spatial-audio.js --duration 8000 --out benchmark/
+```
+
+## Test Files Owned
+- `frontend/src/utils/spatialAudio.test.js` — useSpatialAudio hook + Web Audio
+- `frontend/src/utils/mediaExport.test.js` — export format registry + MIME
+- `tests/vr-spatial-audio.spec.js` — HRTF models, mono/3D, autoplay
+- `tests/vr-performance.spec.js` — perf profiling 60fps target
+- `tests/vr-export.spec.js` — multi-format export validation
+- `tests/vr-edge-cases.spec.js` — VR edge cases
+- `scripts/record-spatial-audio.js` — headless spatial audio recording
+- `benchmark/spatial-audio-visualizer.html` — perf visualization
+
 ## Tasks
-- **V1**: Spatial audio edge case testing (all HRTF models, mono/3D, autoplay)
-- **V2**: Performance profiling (60fps with 9 streams)
-- **V3**: Multi-format export validation (all formats, all browsers)
+- **V1**: ~~Spatial audio edge case testing~~ ✅ DONE — `tests/vr-spatial-audio.spec.js`
+- **V2**: ~~Performance profiling~~ ✅ DONE — `tests/vr-performance.spec.js`
+- **V3**: ~~Multi-format export validation~~ ✅ DONE — `tests/vr-export.spec.js`

@@ -35,8 +35,36 @@ PCem (GA686BX, Pentium II, 512MB, Voodoo 3D) → Win98 SE install → drivers (S
 4. Verify all drivers in Device Manager after changes
 5. Document findings in `docs/knowledge/win98-image/<date>-<topic>.md`
 
+## Verification Tests (run after every change)
+```bash
+# Snapshot workflow tests
+bash scripts/test_snapshot_functionality.sh          # Snapshot build + pull
+bash scripts/test_complete_snapshot_workflow.sh       # Complete build + deploy
+bash scripts/test_and_download_snapshots.sh           # Simplified workflow + published check
+
+# Private registry tests
+bash scripts/test_private_registry_success.sh         # Registry authentication
+bash scripts/test_private_registry_snapshots.sh       # Snapshots with registry auth
+
+# QEMU health (image correctness)
+python test_health_monitor.py                        # Health monitor HTTP
+bash tests/test-qemu-deep-health-monitoring.sh        # Deep health + drivers
+```
+
+## Test Files Owned
+- `scripts/test_snapshot_functionality.sh` — snapshot build + pull
+- `scripts/test_complete_snapshot_workflow.sh` — complete workflow
+- `scripts/test_and_download_snapshots.sh` — simplified workflow
+- `scripts/test_private_registry_success.sh` — registry auth
+- `scripts/test_private_registry_snapshots.sh` — snapshots + registry
+- `tests/test-snapshot-values.yaml` — snapshot Helm values
+- `tests/test-snapshot-download-pod.yaml` — snapshot download pod
+- `tests/test-published-values.yaml` — published snapshot values
+- `tests/test-published-snapshot-pod.yaml` — published snapshot pod
+- `tests/test-complete-snapshots.yaml` — complete snapshot Helm values
+
 ## Tasks
-- **W1**: Document complete image creation workflow (P0)
+- **W1**: ~~Document complete image creation workflow~~ ✅ DONE — `docs/win98_image.md`
 - **W2**: Create driver installation verification script (P0)
 - **W3**: Document Lego Loco game navigation map (P1)
 - **W4**: Per-instance Win98 image customization (P1)

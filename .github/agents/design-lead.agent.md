@@ -34,6 +34,26 @@ You are the **Design Lead** for the Lego Loco Cluster. You are responsible for i
 4. Audit accessibility compliance
 5. Document findings in `docs/knowledge/design/<date>-<topic>.md`
 
+## Verification Tests (run after every change)
+```bash
+# Frontend build (catches CSS/theme errors)
+cd frontend && npm run build
+
+# Visual regression (Playwright with screenshots)
+npx playwright test tests/playwright/visual-proof.spec.js --project=chromium   # Dashboard screenshots
+npx playwright test tests/regression.spec.js --project=chromium                # Load <3s, memory leak
+
+# Frontend unit tests (observability)
+cd frontend && npx vitest run osiVerification   # OSI verification
+cd frontend && npx vitest run observability      # Observability utils
+```
+
+## Test Files Referenced
+- `tests/playwright/visual-proof.spec.js` — dashboard layout screenshots
+- `tests/regression.spec.js` — frontend load time (<3s)
+- `frontend/src/utils/osiVerification.test.js` — OSI verification
+- `frontend/src/utils/observability.test.js` — observability
+
 ## Tasks
 - **D1**: Lego design system document — colors, typography, spacing, card states
 - **D2**: Accessibility audit — WCAG 2.1 AA compliance

@@ -118,12 +118,33 @@ After making changes, **ALWAYS** run these validation steps:
 
 ### Test Scripts
 ```bash
-# Test backend connectivity (requires backend running)
-./k8s-tests/test-websocket.sh  # Takes ~0.2 seconds, tests API and WebSocket
+# === FAST (no cluster needed) ===
+cd backend && npm test && cd ..               # Backend Jest (7 suites)
+cd frontend && npx vitest run && cd ..        # Frontend Vitest (4 suites)
+
+# === LIVE CLUSTER (KIND/minikube with port-forwards) ===
+bash scripts/ci-validate-cluster.sh           # CI validation, 14 checks
+bash k8s-tests/test-websocket.sh              # WebSocket + discovery + VNC proxy
+bash k8s-tests/test-game-ports.sh             # DirectPlay ports 2300, 47624
+python tests/e2e/live-cluster-validation.test.py  # 29 prod-grade assertions
+python tests/e2e/backend_api_contract.test.py     # API contract (6 endpoints)
+
+# === PLAYWRIGHT E2E (needs frontend:3000 + backend:3001) ===
+npx playwright test tests/playwright/visual-proof.spec.js --project=chromium
+npx playwright test tests/regression.spec.js --project=chromium
+
+# === SRE PROBES ===
+bash tests/test-emulator-probes.sh            # SLO: startup 95%, liveness 500ms
+
+# === RECORDING ===
+node scripts/record-fullscreen-instance.js --url http://localhost:3000 --duration 10000
 
 # Test development environment
 ./tests/test-dev-environment.sh  # Comprehensive environment test
 ```
+
+### Agent Test Ownership
+Every agent has specific tests mapped in `.github/agents/<name>.agent.md`. See the **Verification Tests** section in each agent file. Agents MUST run their owned tests after changes.
 
 ## Kubernetes and Cluster Testing
 

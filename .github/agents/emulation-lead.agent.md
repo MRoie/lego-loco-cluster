@@ -30,8 +30,43 @@ You are the **Emulation Lead** for the Lego Loco Cluster. Your domain is QEMU em
 4. Verify health endpoint returns `qemu_healthy: true`
 5. Document findings in `docs/knowledge/emulation/<date>-<topic>.md`
 
+## Verification Tests (run after every change)
+```bash
+# Deep health monitoring
+bash tests/test-qemu-deep-health-monitoring.sh   # QEMU health + recovery system
+
+# SRE probe reliability
+bash tests/test-emulator-probes.sh               # Startup 95%, liveness 500ms, readiness 300ms
+
+# Resilience chaos test
+python tests/e2e/resilience_chaos.test.py        # kill -STOP/-CONT QEMU, verify recovery
+
+# Live cluster deep health (Section 6)
+python tests/e2e/live-cluster-validation.test.py  # QEMU alive, VNC available, network bridge+tap
+
+# Monitoring integration
+bash scripts/test_monitoring_integration.sh       # Container health monitoring
+bash scripts/test_comprehensive_monitoring.sh     # Real container + UI verification
+
+# Health monitor HTTP
+python test_health_monitor.py                    # health-monitor.sh HTTP endpoint
+
+# Debug probe
+node debug_probe.js                              # TCP+RFB probe to VNC 5901
+```
+
+## Test Files Owned
+- `tests/test-qemu-deep-health-monitoring.sh` — deep health + recovery
+- `tests/test-emulator-probes.sh` — SLO probe reliability
+- `tests/e2e/resilience_chaos.test.py` — chaos engineering
+- `test_health_monitor.py` — health monitor endpoint
+- `scripts/test_monitoring_integration.sh` — monitoring integration
+- `scripts/test_comprehensive_monitoring.sh` — comprehensive monitoring
+- `tests/test-qemu-pod.yaml` — QEMU test pod manifest
+- `debug_probe.js` — TCP probe debugger
+
 ## Tasks
-- **E1**: Fix QEMU startup — qemu_healthy: true (P0 BLOCKER)
-- **E2**: Verify TAP/bridge creation in Kind
+- **E1**: ~~Fix QEMU startup~~ ✅ DONE — qemu_healthy: true, overall: healthy
+- **E2**: ~~Verify TAP/bridge in Kind~~ ✅ DONE — bridge_up: true, tap_up: true
 - **E3**: Audio pipeline validation (PulseAudio→GStreamer→UDP)
 - **E4**: Document QEMU hardware config in knowledge base

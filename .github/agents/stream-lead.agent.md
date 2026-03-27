@@ -24,7 +24,54 @@ You are the **Stream Quality Lead** for the Lego Loco Cluster. Your domain is vi
 3. Implement changes with proper codec/bandwidth testing
 4. Document findings in `docs/knowledge/stream-quality/<date>-<topic>.md`
 
+## Verification Tests (run after every change)
+```bash
+# Backend quality monitor unit test
+cd backend && npx jest streamQualityMonitor.test      # Quality monitoring service
+
+# Stream quality Playwright E2E
+npx playwright test tests/stream-quality.spec.js --project=chromium
+
+# VNC connectivity tests
+node tests/test-vnc-simple.js               # Simple VNC WebSocket
+node tests/test-vnc-connection.js            # Structured VNC connection
+node tests/test-vnc-cluster.js              # VNC across cluster instances
+node tests/test-complete-vnc-handshake.js   # Full RFB handshake protocol
+node tests/test-frontend-websocket.js       # Frontend WebSocket proxy
+
+# Quality monitoring integration
+node tests/test-stream-quality-monitoring.js # StreamQualityMonitor integration
+
+# 1024x768 resolution testing
+bash scripts/test-1024x768-streams.sh       # Real-time stream at 1024x768
+
+# Recording / capture
+node scripts/record-fullscreen-instance.js --url http://localhost:3000 --duration 10000
+node scripts/playwright-vnc-capture-test.js  # VNC capture with Playwright
+node scripts/playwright-vnc-web-test.js      # VNC web app test
+bash scripts/run-playwright-vnc-test.sh      # VNC test wrapper
+```
+
+## Test Files Owned
+- `backend/tests/streamQualityMonitor.test.js` — quality monitoring unit
+- `backend/tests/vnc-connection.test.js` — VNC connection counting
+- `tests/stream-quality.spec.js` — Playwright stream quality E2E
+- `tests/test-vnc-simple.js` — basic VNC WebSocket
+- `tests/test-vnc-connection.js` — structured VNC
+- `tests/test-vnc-cluster.js` — cluster VNC
+- `tests/test-vnc-minikube.js` — minikube VNC
+- `tests/test-complete-vnc-handshake.js` — RFB handshake
+- `tests/test-frontend-websocket.js` — frontend WS proxy
+- `tests/test-stream-quality-monitoring.js` — quality integration
+- `scripts/test-1024x768-streams.sh` — resolution test
+- `scripts/record-fullscreen-instance.js` — WebRTC capture recording
+- `scripts/record-spatial-audio.js` — spatial audio recording
+- `scripts/record-cluster-audio.js` — cluster audio recording
+- `scripts/playwright-vnc-capture-test.js` — VNC capture
+- `scripts/playwright-vnc-web-test.js` — VNC web test
+- `tests/vnc-test.html` — browser-based VNC test page
+
 ## Tasks
 - **S1**: WebRTC statistics integration — RTCStats in useWebRTC hook
 - **S2**: Quality-adaptive streaming — auto-reduce on packet loss
-- **S3**: Stream quality test suite — degraded network, multi-load
+- **S3**: ~~Stream quality test suite~~ ✅ DONE — `tests/stream-quality.spec.js`
