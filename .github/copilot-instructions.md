@@ -261,4 +261,40 @@ The repository includes GitHub Actions workflows in `.github/workflows/`:
 - `docker-compose.yml` - Docker Compose builds
 - `win98-softgpu.yml` - Windows 98 image builds
 
+---
+
+## Agent Teams
+
+This project uses **11 specialized agent teams**. Each has a dedicated VS Code Copilot agent (`.github/agents/`) and skill (`.github/skills/`). Invoke them from Copilot Chat:
+
+```
+@vr-lead         VR/WebXR, spatial audio, media export
+@k8s-lead        Kubernetes, Helm, service discovery
+@stream-lead     WebRTC, VNC, codecs, quality
+@frontend-lead   React, Vite, Tailwind, dashboard
+@backend-lead    Express, WebSocket, API, services
+@sre-lead        Prometheus, health, alerting
+@qa-lead         Playwright, Jest, E2E, CI
+@emulation-lead  QEMU, containers, drivers
+@design-lead     Lego design system, accessibility
+@win98-lead      Win98 image building, game navigation
+@lan-lead        LAN networking, multiplayer, port 2300
+```
+
+### Knowledge Protocol
+All agents write findings to `docs/knowledge/<domain>/`. Before starting work on any domain, check its knowledge directory for prior findings. After completing work, document what you learned. See [docs/knowledge/README.md](docs/knowledge/README.md).
+
+### Task Reference
+See [TEAM.md](TEAM.md) for the full task table with IDs, dependencies, and acceptance criteria. Priority P0 tasks (blockers): E1, K1, B1, W1, W2, L1, L2, L3.
+
+### File-Specific Instructions
+Instructions auto-load when editing files in these directories:
+- `frontend/**` → frontend conventions, Lego colors, React patterns
+- `backend/**` → Express patterns, service architecture
+- `containers/**` → QEMU flags, TAP networking, Dockerfiles
+- `helm/**` → Helm conventions, K8s labels, resource limits
+- `scripts/**` → Shell conventions, image creation
+- `tests/**`, `k8s-tests/**` → test patterns, CI timing
+- `docs/knowledge/**` → knowledge entry format
+
 Tests run automatically on pushes to `run_ci` branch.

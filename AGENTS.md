@@ -185,3 +185,37 @@ node scripts/record-spatial-audio.js --duration 8000 --out benchmark/
 Supported export formats in the VR scene UI: **WebM**, **MP4**, **MKV**,
 **GIF**, **MP3**. See `frontend/src/utils/mediaExport.js` for the format
 registry and MIME negotiation logic.
+
+---
+
+## Agent Team System
+
+This project is organized into **11 specialized agent teams**, each with a pi.dev skill and a VS Code Copilot agent. See [TEAM.md](TEAM.md) for the full roster, task assignments, and dependency graph.
+
+### Team Roster
+| Lead | pi.dev | VS Code | Domain |
+|------|--------|---------|--------|
+| VR/WebXR | `/skill:vr-webxr` | `@vr-lead` | A-Frame, spatial audio, WebXR |
+| Infrastructure | `/skill:k8s-infra` | `@k8s-lead` | Kubernetes, Helm, Docker |
+| Stream Quality | `/skill:stream-quality` | `@stream-lead` | WebRTC, VNC, codecs |
+| Frontend | `/skill:frontend-react` | `@frontend-lead` | React 19, Vite, Tailwind |
+| Backend | `/skill:backend-express` | `@backend-lead` | Express, WebSocket, API |
+| SRE/Monitoring | `/skill:sre-monitoring` | `@sre-lead` | Prometheus, health, recovery |
+| QA/Testing | `/skill:qa-testing` | `@qa-lead` | Playwright, Jest, E2E |
+| Emulation | `/skill:qemu-emulation` | `@emulation-lead` | QEMU, SoftGPU, PulseAudio |
+| Design | `/skill:lego-design` | `@design-lead` | Lego design, UI/UX, a11y |
+| Win98 Computer Use | `/skill:win98-computer-use` | `@win98-lead` | Image building, drivers, game nav |
+| LAN Manager | `/skill:lan-manager` | `@lan-lead` | Network, multiplayer, ports |
+
+### Knowledge System
+All agents write findings to `docs/knowledge/<domain>/`. See [docs/knowledge/README.md](docs/knowledge/README.md) for the Knowledge Protocol.
+
+### Pi.dev Quick Start
+```bash
+npm install -g @mariozechner/pi-coding-agent
+pi                        # Start in project root
+/team                     # List all leads
+/skill:lan-manager        # Load LAN networking skill
+/blockers                 # Show known blockers
+/knowledge emulation      # Show emulation findings
+```
