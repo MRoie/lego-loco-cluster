@@ -35,9 +35,31 @@ GUEST_HOSTNAME=${GUEST_HOSTNAME:-LOCO-0${INSTANCE_INDEX}}
 GUEST_IP=${GUEST_IP:-192.168.10.$((10 + INSTANCE_INDEX))}
 GUEST_MAC=${GUEST_MAC:-52:54:00:10:00:0${INSTANCE_INDEX}}
 TAP_IF=${TAP_IF:-tap${INSTANCE_INDEX}}
-GUEST_GATEWAY=${GUEST_GATEWAY:-192.168.10.1}
+BRIDGE_IP=${BRIDGE_IP:-192.168.10.$((200 + INSTANCE_INDEX))}
+GUEST_GATEWAY=${GUEST_GATEWAY:-$BRIDGE_IP}
 GUEST_NETMASK=${GUEST_NETMASK:-255.255.255.0}
 WORKGROUP=${WORKGROUP:-LOCOLAND}
+POD_NAMESPACE=${POD_NAMESPACE:-loco}
+EMULATOR_SERVICE_NAME=${EMULATOR_SERVICE_NAME:-loco-loco-emulator}
+EMULATOR_REPLICAS=${EMULATOR_REPLICAS:-1}
+ENABLE_GUEST_L2_MESH=${ENABLE_GUEST_L2_MESH:-true}
+ENABLE_IDENTITY_FLOPPY=${ENABLE_IDENTITY_FLOPPY:-true}
+ENABLE_IDENTITY_CD=${ENABLE_IDENTITY_CD:-false}
+ENABLE_GUEST_DHCP=${ENABLE_GUEST_DHCP:-true}
+DHCP_SERVER_INDEX=${DHCP_SERVER_INDEX:-0}
+VXLAN_ID=${VXLAN_ID:-42}
+VXLAN_PORT=${VXLAN_PORT:-4789}
+VXLAN_IF=${VXLAN_IF:-vxlan${INSTANCE_INDEX}}
+MESH_RECONCILE_INTERVAL=${MESH_RECONCILE_INTERVAL:-5}
+MESH_RECONCILE_STEADY_INTERVAL=${MESH_RECONCILE_STEADY_INTERVAL:-30}
+QEMU_CPU=${QEMU_CPU:-qemu32,+sse3,+ssse3,+sse4.1}
+QEMU_ACCEL=${QEMU_ACCEL:-auto}
+QEMU_TCG_OPTS=${QEMU_TCG_OPTS:-thread=multi,tb-size=1024}
+QEMU_KVM_OPTS=${QEMU_KVM_OPTS:-}
+QEMU_MEMORY=${QEMU_MEMORY:-512}
+QEMU_SMP=${QEMU_SMP:-1}
+QEMU_EXTRA_ARGS=${QEMU_EXTRA_ARGS:-}
+CDROM_MODE=${CDROM_MODE:-softgpu}
 
 DISK=${DISK:-/images/win98.qcow2}
 SNAPSHOT_REGISTRY=${SNAPSHOT_REGISTRY:-ghcr.io/mroie/qemu-snapshots}
@@ -50,11 +72,249 @@ log_info "  GUEST_HOSTNAME=$GUEST_HOSTNAME"
 log_info "  GUEST_IP=$GUEST_IP"
 log_info "  GUEST_MAC=$GUEST_MAC"
 log_info "  BRIDGE=$BRIDGE"
+log_info "  BRIDGE_IP=$BRIDGE_IP"
 log_info "  TAP_IF=$TAP_IF"
+log_info "  POD_IP=${POD_IP:-<unset>}"
+log_info "  POD_NAMESPACE=$POD_NAMESPACE"
+log_info "  EMULATOR_SERVICE_NAME=$EMULATOR_SERVICE_NAME"
+log_info "  EMULATOR_REPLICAS=$EMULATOR_REPLICAS"
+log_info "  QEMU_CPU=$QEMU_CPU"
+log_info "  QEMU_ACCEL=$QEMU_ACCEL"
+log_info "  QEMU_TCG_OPTS=$QEMU_TCG_OPTS"
+log_info "  QEMU_KVM_OPTS=$QEMU_KVM_OPTS"
+log_info "  QEMU_MEMORY=$QEMU_MEMORY"
+log_info "  QEMU_SMP=$QEMU_SMP"
+log_info "  CDROM_MODE=$CDROM_MODE"
 log_info "  DISK=$DISK"
 log_info "  USE_PREBUILT_SNAPSHOT=$USE_PREBUILT_SNAPSHOT"
 log_info "  SNAPSHOT_REGISTRY=$SNAPSHOT_REGISTRY"
 log_info "  SNAPSHOT_TAG=$SNAPSHOT_TAG"
+
+disable_bridge_netfilter() {
+  if [ -w /proc/sys/net/bridge/bridge-nf-call-iptables ]; then
+    echo 0 > /proc/sys/net/bridge/bridge-nf-call-iptables || true
+  fi
+  if [ -w /proc/sys/net/bridge/bridge-nf-call-ip6tables ]; then
+    echo 0 > /proc/sys/net/bridge/bridge-nf-call-ip6tables || true
+  fi
+}
+
+reconcile_guest_l2_mesh_peers() {
+  local missing=0
+  local added=0
+  local desired_peer_ips=""
+
+  for peer_index in $(seq 0 $((EMULATOR_REPLICAS - 1))); do
+    if [ "$peer_index" = "$INSTANCE_INDEX" ]; then
+      continue
+    fi
+
+    local peer_host="${EMULATOR_SERVICE_NAME}-${peer_index}.${EMULATOR_SERVICE_NAME}.${POD_NAMESPACE}.svc.cluster.local"
+    local peer_ip
+    peer_ip=$(getent hosts "$peer_host" | awk 'NR==1 { print $1 }')
+    if [ -z "$peer_ip" ]; then
+      missing=$((missing + 1))
+      log_warning "Unable to resolve peer $peer_host for guest mesh"
+      continue
+    fi
+
+    desired_peer_ips="${desired_peer_ips} ${peer_ip}"
+
+    if bridge fdb show dev "$VXLAN_IF" | grep -q "00:00:00:00:00:00 dst $peer_ip"; then
+      continue
+    fi
+
+    if bridge fdb append 00:00:00:00:00:00 dev "$VXLAN_IF" dst "$peer_ip" 2>/dev/null; then
+      added=$((added + 1))
+      log_info "Guest mesh peer added: $peer_host -> $peer_ip"
+    else
+      missing=$((missing + 1))
+      log_warning "Failed to add guest mesh peer: $peer_host -> $peer_ip"
+    fi
+  done
+
+  bridge fdb show dev "$VXLAN_IF" | awk '/00:00:00:00:00:00 dst/ {
+    for (i = 1; i <= NF; i++) {
+      if ($i == "dst") {
+        print $(i + 1)
+      }
+    }
+  }' | while read -r existing_peer_ip; do
+    case " ${desired_peer_ips} " in
+      *" ${existing_peer_ip} "*) ;;
+      *)
+        if bridge fdb del 00:00:00:00:00:00 dev "$VXLAN_IF" dst "$existing_peer_ip" 2>/dev/null; then
+          log_info "Pruned stale guest mesh peer: $existing_peer_ip"
+        fi
+        ;;
+    esac
+  done
+
+  if [ "$added" -gt 0 ] || [ "$missing" -gt 0 ]; then
+    log_info "Guest mesh reconcile result: added=$added missing=$missing"
+  fi
+
+  [ "$missing" -eq 0 ]
+}
+
+setup_guest_l2_mesh() {
+  if [ "$ENABLE_GUEST_L2_MESH" != "true" ]; then
+    log_info "Guest L2 mesh disabled"
+    return
+  fi
+
+  if [ -z "${POD_IP:-}" ]; then
+    log_warning "POD_IP not set; skipping guest L2 mesh setup"
+    return
+  fi
+
+  if [ "$EMULATOR_REPLICAS" -le 1 ] 2>/dev/null; then
+    log_info "Single emulator replica; no guest L2 mesh needed"
+    return
+  fi
+
+  log_info "Setting up VXLAN guest mesh on $VXLAN_IF"
+  ip link delete "$VXLAN_IF" 2>/dev/null || true
+  if ! ip link add "$VXLAN_IF" type vxlan id "$VXLAN_ID" dstport "$VXLAN_PORT" local "$POD_IP"; then
+    log_warning "Failed to create VXLAN interface $VXLAN_IF (kernel module missing?); skipping guest L2 mesh"
+    return
+  fi
+  ip link set "$VXLAN_IF" master "$BRIDGE" 2>/dev/null || log_warning "Failed to add $VXLAN_IF to bridge $BRIDGE"
+  ip link set "$VXLAN_IF" up 2>/dev/null || log_warning "Failed to bring up $VXLAN_IF"
+
+  (
+    set +e
+    while true; do
+      if reconcile_guest_l2_mesh_peers; then
+        sleep "$MESH_RECONCILE_STEADY_INTERVAL"
+      else
+        sleep "$MESH_RECONCILE_INTERVAL"
+      fi
+    done
+  ) &
+  MESH_PID=$!
+  log_success "Guest L2 mesh reconciler started (PID: $MESH_PID)"
+}
+
+start_guest_dhcp() {
+  if [ "$ENABLE_GUEST_DHCP" != "true" ]; then
+    log_info "Guest DHCP disabled"
+    return
+  fi
+
+  if [ "$INSTANCE_INDEX" != "$DHCP_SERVER_INDEX" ]; then
+    log_info "Guest DHCP server runs on instance $DHCP_SERVER_INDEX; skipping on $INSTANCE_INDEX"
+    return
+  fi
+
+  log_info "Starting guest DHCP server on $BRIDGE"
+  DHCP_SERVER_IP="$BRIDGE_IP" /usr/local/bin/mini_dhcp.py "$BRIDGE" &
+  DHCP_PID=$!
+  log_success "Guest DHCP server started (PID: $DHCP_PID)"
+}
+
+create_identity_floppy() {
+  FLOPPY_OPT=""
+  IDENTITY_CD_OPT=""
+
+  if [ "$ENABLE_IDENTITY_FLOPPY" != "true" ]; then
+    log_info "Identity floppy disabled"
+    return
+  fi
+
+  if ! command -v mkfs.fat >/dev/null 2>&1 || ! command -v mcopy >/dev/null 2>&1; then
+    log_warning "mkfs.fat or mcopy missing; skipping identity floppy generation"
+    return
+  fi
+
+  local identity_dir="/tmp/identity-${INSTANCE_INDEX}"
+  local identity_img="/tmp/identity-${INSTANCE_INDEX}.img"
+  local identity_iso="/tmp/identity-${INSTANCE_INDEX}.iso"
+  rm -rf "$identity_dir"
+  mkdir -p "$identity_dir"
+
+  /usr/local/bin/customize-win98-instance.sh "$INSTANCE_INDEX" "$identity_dir"
+
+  dd if=/dev/zero of="$identity_img" bs=1024 count=1440 status=none
+  mkfs.fat -F 12 "$identity_img" >/dev/null 2>&1
+  mcopy -i "$identity_img" -o "$identity_dir/LOCO-ID.REG" ::LOCO-ID.REG
+  mcopy -i "$identity_img" -o "$identity_dir/LOCO-ID.BAT" ::LOCO-ID.BAT
+  mcopy -i "$identity_img" -o "$identity_dir/LMHOSTS" ::LMHOSTS
+  mcopy -i "$identity_img" -o "$identity_dir/AUTORUN.INF" ::AUTORUN.INF
+
+  FLOPPY_OPT="-drive file=$identity_img,format=raw,if=floppy,index=0"
+  log_success "Created Win98 identity floppy for $GUEST_HOSTNAME at $identity_img"
+
+  if [ "$ENABLE_IDENTITY_CD" != "true" ]; then
+    log_info "Identity CD-ROM disabled; keeping primary CD-ROM available for SoftGPU"
+  elif command -v genisoimage >/dev/null 2>&1; then
+    genisoimage -quiet -J -r -V "LOCOID${INSTANCE_INDEX}" -o "$identity_iso" "$identity_dir"
+    IDENTITY_CD_OPT="-drive file=$identity_iso,format=raw,media=cdrom,readonly=on,if=ide,index=2"
+    log_success "Created Win98 identity CD-ROM for $GUEST_HOSTNAME at $identity_iso"
+  else
+    log_warning "genisoimage missing; skipping identity CD-ROM generation"
+  fi
+}
+
+create_mmx_patch_iso() {
+  if [ ! -f /opt/softgpu.iso ]; then
+    log_warning "SoftGPU ISO missing; cannot create MMX patch ISO"
+    return 1
+  fi
+
+  local patch_dir="/tmp/mmxpatch"
+  local patch_iso="/tmp/mmxpatch.iso"
+  rm -rf "$patch_dir"
+  mkdir -p "$patch_dir"
+
+  extract_mmx_file() {
+    isoinfo -R -i /opt/softgpu.iso -x "/$1" > "$patch_dir/$2"
+  }
+
+  extract_mmx_file driver/mmx-w95/wined3d.dll WINED3D.DLL
+  extract_mmx_file driver/mmx-w95/wined8.dll WINED8.DLL
+  extract_mmx_file driver/mmx-w95/wined9.dll WINED9.DLL
+  extract_mmx_file driver/mmx-w95/winedd.dll WINEDD.DLL
+  extract_mmx_file extras/wine/mmx/d3d8_98.dll D3D8.DLL
+  extract_mmx_file extras/wine/mmx/d3d9_98.dll D3D9.DLL
+  extract_mmx_file extras/wine/mmx/ddraw_95.dll DD95.DLL
+  extract_mmx_file extras/wine/mmx/ddraw_98.dll DD98.DLL
+  extract_mmx_file extras/wine/mmx/ddraw_98.dll DDRAW.DLL
+  extract_mmx_file extras/wine/mmx/ddraw_98.dll DDRAWM.DLL
+  extract_mmx_file extras/wine/mmx/ddraw_xp.dll DDXP.DLL
+
+  cp "$patch_dir/WINEDD.DLL" "$patch_dir/DDSYS.DLL"
+  cp "$patch_dir/WINED8.DLL" "$patch_dir/MSD3D8.DLL"
+  cp "$patch_dir/WINED9.DLL" "$patch_dir/MSD3D9.DLL"
+  cp "$patch_dir/WINEDD.DLL" "$patch_dir/MSDDRAW.DLL"
+  cp "$patch_dir/WINEDD.DLL" "$patch_dir/MSDDSYS.DLL"
+
+  cat > "$patch_dir/PATCH.BAT" <<'EOF'
+@ECHO OFF
+ECHO Applying Loco MMX WineD3D patch > C:\MMXPATCH.LOG
+COPY /Y D:\WINED3D.DLL C:\WINDOWS\SYSTEM\WINED3D.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\WINED8.DLL C:\WINDOWS\SYSTEM\WINED8.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\WINED9.DLL C:\WINDOWS\SYSTEM\WINED9.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\WINEDD.DLL C:\WINDOWS\SYSTEM\WINEDD.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\D3D8.DLL C:\WINDOWS\SYSTEM\D3D8.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\D3D9.DLL C:\WINDOWS\SYSTEM\D3D9.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\DDRAW.DLL C:\WINDOWS\SYSTEM\DDRAW.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\DDRAWM.DLL C:\WINDOWS\SYSTEM\DDRAWM.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\DD95.DLL C:\WINDOWS\SYSTEM\DD95.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\DD98.DLL C:\WINDOWS\SYSTEM\DD98.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\DDXP.DLL C:\WINDOWS\SYSTEM\DDXP.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\DDSYS.DLL C:\WINDOWS\SYSTEM\DDSYS.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\MSD3D8.DLL C:\WINDOWS\SYSTEM\MSD3D8.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\MSD3D9.DLL C:\WINDOWS\SYSTEM\MSD3D9.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\MSDDRAW.DLL C:\WINDOWS\SYSTEM\MSDDRAW.DLL >> C:\MMXPATCH.LOG
+COPY /Y D:\MSDDSYS.DLL C:\WINDOWS\SYSTEM\MSDDSYS.DLL >> C:\MMXPATCH.LOG
+ECHO OK > C:\MMXPATCH.OK
+EOF
+
+  sed -i 's/$/\r/' "$patch_dir/PATCH.BAT"
+  genisoimage -quiet -J -r -V MMXPATCH -o "$patch_iso" "$patch_dir"
+  log_success "Created MMX WineD3D patch ISO at $patch_iso"
+}
 
 # === STEP 1: Virtual Display Setup ===
 log_info "Setting up virtual display..."
@@ -138,7 +398,7 @@ else
   exit 1
 fi
 
-if ip addr add 192.168.10.1/24 dev "$BRIDGE"; then
+if ip addr add "$BRIDGE_IP/24" dev "$BRIDGE"; then
   log_success "IP address assigned to bridge $BRIDGE"
 else
   log_error "Failed to assign IP to bridge $BRIDGE"
@@ -151,6 +411,8 @@ else
   log_error "Failed to bring up bridge $BRIDGE"
   exit 1
 fi
+
+disable_bridge_netfilter
 
 # Create TAP interface
 log_info "Creating TAP interface: $TAP_IF"
@@ -176,11 +438,20 @@ else
 fi
 
 log_success "Network setup complete - Bridge: $BRIDGE, TAP: $TAP_IF"
+setup_guest_l2_mesh
+start_guest_dhcp
 
 # === STEP 4: Disk Image Setup ===
-# Create a unique snapshot for this instance to avoid file locking issues
-SNAPSHOT_NAME="/tmp/win98_$(date +%s)_$$.qcow2"
+# Use a persistent per-instance snapshot on PVC to preserve guest state across restarts
+SNAPSHOT_NAME="/images/win98_instance_${INSTANCE_INDEX}.qcow2"
 SKIP_SNAPSHOT_CREATION=false
+
+# Reuse existing persistent snapshot if present
+if [ -f "$SNAPSHOT_NAME" ]; then
+  log_success "Reusing persistent snapshot: $SNAPSHOT_NAME"
+  log_info "Snapshot details: $(ls -lh "$SNAPSHOT_NAME")"
+  SKIP_SNAPSHOT_CREATION=true
+fi
 
 log_info "Preparing disk image: $SNAPSHOT_NAME"
 
@@ -298,7 +569,62 @@ else
   log_info "KVM not available — using TCG (software emulation)"
 fi
 
-log_info "QEMU command: qemu-system-i386 $ACCEL_FLAG -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
+# Honor QEMU_ACCEL after the basic probe above. KVM is the difference between
+# "survives" and "smooth" for SoftGPU; tuned TCG is only the fallback.
+if [ -e /dev/kvm ] && [ -w /dev/kvm ]; then
+  KVM_AVAILABLE=true
+else
+  KVM_AVAILABLE=false
+fi
+
+case "$QEMU_ACCEL" in
+  kvm)
+    if [ "$KVM_AVAILABLE" != "true" ]; then
+      log_error "QEMU_ACCEL=kvm requested, but /dev/kvm is not available in this pod"
+      exit 1
+    fi
+    ACCEL_FLAG="-accel kvm${QEMU_KVM_OPTS:+,$QEMU_KVM_OPTS}"
+    log_info "KVM acceleration requested and available"
+    ;;
+  tcg)
+    ACCEL_FLAG="-accel tcg${QEMU_TCG_OPTS:+,$QEMU_TCG_OPTS}"
+    log_info "TCG software emulation requested with opts: ${QEMU_TCG_OPTS:-<none>}"
+    ;;
+  auto)
+    if [ "$KVM_AVAILABLE" = "true" ]; then
+      ACCEL_FLAG="-accel kvm${QEMU_KVM_OPTS:+,$QEMU_KVM_OPTS}"
+      log_info "KVM acceleration available; using KVM"
+    else
+      ACCEL_FLAG="-accel tcg${QEMU_TCG_OPTS:+,$QEMU_TCG_OPTS}"
+      log_warning "KVM not available; using tuned TCG software emulation"
+    fi
+    ;;
+  *)
+    log_error "Unsupported QEMU_ACCEL=$QEMU_ACCEL (expected auto, kvm, or tcg)"
+    exit 1
+    ;;
+esac
+
+# Determine CD-ROM option (SoftGPU ISO for VMware SVGA driver)
+SOFTGPU_CD_OPT=""
+if [ "$CDROM_MODE" = "mmxpatch" ]; then
+  if create_mmx_patch_iso; then
+    SOFTGPU_CD_OPT="-cdrom /tmp/mmxpatch.iso"
+    log_info "MMX patch ISO mounted as CD-ROM"
+  fi
+elif [ -f /opt/softgpu.iso ]; then
+  SOFTGPU_CD_OPT="-cdrom /opt/softgpu.iso"
+  log_info "SoftGPU ISO found, mounting as CD-ROM"
+fi
+
+create_identity_floppy
+
+if [ -n "${IDENTITY_CD_OPT:-}" ] && [ -f /opt/softgpu.iso ]; then
+  SOFTGPU_CD_OPT="-drive file=/opt/softgpu.iso,format=raw,media=cdrom,readonly=on,if=ide,index=3"
+  log_info "Identity CD-ROM is primary; SoftGPU ISO moved to secondary CD-ROM"
+fi
+
+log_info "QEMU command: qemu-system-i386 $ACCEL_FLAG -M pc -cpu $QEMU_CPU -m $QEMU_MEMORY -smp $QEMU_SMP -hda $SNAPSHOT_NAME -vga vmware -qmp unix:/tmp/qemu-qmp.sock ..."
 
 # Add debugging to see what we're actually booting from
 log_info "Checking disk image contents..."
@@ -306,17 +632,21 @@ qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
 
 qemu-system-i386 \
   $ACCEL_FLAG \
-  -M pc -cpu pentium2 \
-  -m 512 -hda "$SNAPSHOT_NAME" \
+  -M pc -cpu "$QEMU_CPU" \
+  -m "$QEMU_MEMORY" -smp "$QEMU_SMP" -hda "$SNAPSHOT_NAME" \
   -net nic,model=ne2k_pci,macaddr=$GUEST_MAC -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
   -vga vmware -display vnc=0.0.0.0:1 \
+  $FLOPPY_OPT \
+  $IDENTITY_CD_OPT \
+  $SOFTGPU_CD_OPT \
   -audiodev pa,id=snd0 \
   -rtc base=localtime \
-  -boot order=c,menu=on \
-  -no-shutdown \
   -no-reboot \
-  -monitor none &
+  -boot order=c,menu=on \
+  -qmp unix:/tmp/qemu-qmp.sock,server,nowait \
+  -monitor none \
+  $QEMU_EXTRA_ARGS &
 
 EMU_PID=$!
 log_info "QEMU started with PID: $EMU_PID"
@@ -466,6 +796,9 @@ log_info "  - GStreamer Audio PID: $GSTREAMER_AUDIO_PID (Opus stream)"
 if [ -n "${HEALTH_PID:-}" ]; then
   log_info "  - Health monitor PID: $HEALTH_PID"
 fi
+if [ -n "${DHCP_PID:-}" ]; then
+  log_info "  - Guest DHCP PID: $DHCP_PID"
+fi
 
 # Cleanup function
 cleanup() {
@@ -500,11 +833,22 @@ cleanup() {
     log_info "Stopping art watcher (PID: $WATCHER_PID)"
     kill $WATCHER_PID 2>/dev/null || true
   fi
-  
-  if [ -f "$SNAPSHOT_NAME" ]; then
-    log_info "Removing snapshot file: $SNAPSHOT_NAME"
-    rm -f "$SNAPSHOT_NAME" 2>/dev/null || true
+
+  if [ -n "${MESH_PID:-}" ]; then
+    log_info "Stopping guest L2 mesh reconciler (PID: $MESH_PID)"
+    kill $MESH_PID 2>/dev/null || true
   fi
+
+  if [ -n "${DHCP_PID:-}" ]; then
+    log_info "Stopping guest DHCP server (PID: $DHCP_PID)"
+    kill $DHCP_PID 2>/dev/null || true
+  fi
+  
+  # Persistent snapshot: do NOT delete — preserves guest state across restarts
+  # if [ -f "$SNAPSHOT_NAME" ]; then
+  #   log_info "Removing snapshot file: $SNAPSHOT_NAME"
+  #   rm -f "$SNAPSHOT_NAME" 2>/dev/null || true
+  # fi
   
   log_success "Cleanup complete"
   exit 0

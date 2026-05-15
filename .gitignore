@@ -12,3 +12,25 @@ images/*
 compose/*.tar
 talosctl
 
+# Large local emulator artifacts
+containers/qemu-softgpu/softgpu.iso
+
+# Local VNC/QMP proof captures
+vnc_*.png
+qdump*.png
+
+# Local emulator/debug captures
+/*.png
+/*.ppm
+/tools/*.png
+/tools/*.ppm
+/docs/proof/
+
+# Local generated/debug files
+__pycache__/
+**/__pycache__/
+/logs/*-audit.json
+/--port
+/nul
+/CUsersroieAppDataLocalTemploco-id-test/
+

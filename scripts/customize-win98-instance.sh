@@ -58,7 +58,7 @@ COMPUTER_NAME="LOCO-0${N}"
 WORKGROUP="LOCOLAND"
 IP_ADDRESS="192.168.10.$((10 + N))"
 SUBNET_MASK="255.255.255.0"
-GATEWAY="192.168.10.1"
+GATEWAY="${GUEST_GATEWAY:-192.168.10.$((200 + N))}"
 MAC_ADDRESS="52:54:00:10:00:0${N}"
 DESCRIPTION="Lego Loco Instance ${N}"
 
@@ -79,8 +79,13 @@ REG_CONTENT="REGEDIT4
 \"Workgroup\"=\"${WORKGROUP}\"
 \"Comment\"=\"${DESCRIPTION}\"
 
-; --- TCP/IP static configuration (NE2000 adapter) ---
+; --- TCP/IP static configuration (both transport bindings) ---
 [HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\Class\\NetTrans\\0000]
+\"IPAddress\"=\"${IP_ADDRESS}\"
+\"IPMask\"=\"${SUBNET_MASK}\"
+\"DefaultGateway\"=\"${GATEWAY}\"
+
+[HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\Class\\NetTrans\\0001]
 \"IPAddress\"=\"${IP_ADDRESS}\"
 \"IPMask\"=\"${SUBNET_MASK}\"
 \"DefaultGateway\"=\"${GATEWAY}\"

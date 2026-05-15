@@ -69,6 +69,15 @@ spec:
         {{- end }}
     {{- end }}
 
+    # VXLAN overlay tunnel between emulator pods (guest L2 mesh)
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: UDP
+          port: 4789
+
   egress:
     # Allow DNS resolution
     - ports:
@@ -87,6 +96,24 @@ spec:
           port: 5000
         - protocol: UDP
           port: 5001
+
+    # Allow TCP connections to backend API (port 3001)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 3001
+
+    # VXLAN overlay tunnel between emulator pods (UDP 4789)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: UDP
+          port: 4789
 
     # DirectPlay game traffic — TCP & UDP 2300
     - to:

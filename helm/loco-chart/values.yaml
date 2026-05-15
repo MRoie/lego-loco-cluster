@@ -1,4 +1,4 @@
-replicas: 9
+replicas: 2
 namespace: loco
 
 #imageRepo: "ghcr.io/mroie"
@@ -79,8 +79,8 @@ emulator:
   # NOTE: replica count is set at top-level 'replicas' field (used by StatefulSet template)
   
   # Image configuration
-  image: qemu-loco
-  tag: latest
+  image: qemu-loco-softgpu
+  tag: v27-softgpu-perf
   imagePullPolicy: Never  # Use local images for minikube
   serviceType: ClusterIP
   servicePort: 5901
@@ -138,24 +138,38 @@ emulator:
   # CPU resources for emulator pods
   resources:
     limits:
-      cpu: "1"
+      cpu: "4"
+      memory: "2Gi"
     requests:
-      cpu: "0.25"
+      cpu: "1"
+      memory: "1Gi"
+
+  # Hardware acceleration. Keep disabled for Docker Desktop/kind nodes that do
+  # not expose /dev/kvm; enable this on a Linux/WSL2 node with KVM available.
+  kvm:
+    enabled: false
+    hostPath: /dev/kvm
   
   # Additional environment variables
   env:
     BRIDGE: "loco-br"
+    CDROM_MODE: "softgpu"
     DISK: "/images/win98.qcow2"
     DISPLAY_NUM: "99"
+    QEMU_ACCEL: "auto"
+    QEMU_TCG_OPTS: "thread=multi,tb-size=1024"
+    QEMU_MEMORY: "512"
+    QEMU_SMP: "1"
     USE_PREBUILT_SNAPSHOT: "false"
     # Per-instance network identity (derived from INSTANCE_INDEX in entrypoint)
-    GUEST_GATEWAY: "192.168.10.1"
+    # BRIDGE_IP/GUEST_GATEWAY default to 192.168.10.(200 + INSTANCE_INDEX)
+    # to avoid duplicate bridge IPs on the shared VXLAN LAN.
     GUEST_NETMASK: "255.255.255.0"
     WORKGROUP: "LOCOLAND"
 
 backend:
   image: lego-loco-backend
-  tag: dns-fix-v1
+  tag: v15-agents
   imagePullPolicy: Never  # Use local images
   servicePort: 3001
   resources:

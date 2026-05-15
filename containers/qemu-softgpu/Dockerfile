@@ -14,18 +14,25 @@ RUN apt-get update && \
     gstreamer1.0-plugins-base gstreamer1.0-pulseaudio libopus-dev \
     x11-utils xdotool iproute2 xvfb net-tools \
     curl wget skopeo git inotify-tools nfs-common rsync \
-    netcat-openbsd procps alsa-utils && \
+    iputils-ping tcpdump genisoimage \
+    netcat-openbsd procps alsa-utils dosfstools mtools \
+    libhivex-bin python3-hivex && \
     rm -rf /var/lib/apt/lists/*
 
 # ---- Create images directory and copy win98 image at build time ----
 RUN mkdir -p /images /opt/builtin-images
 COPY --from=win98-extractor /opt/builtin-images/win98.qcow2.builtin /opt/builtin-images/win98.qcow2.builtin
 
+# ---- Copy SoftGPU ISO for VMware SVGA driver installation ----
+COPY softgpu.iso /opt/softgpu.iso
+
 # ---- Copy entrypoint and scripts ----
 COPY entrypoint.sh /entrypoint.sh
+COPY customize-win98-instance.sh /usr/local/bin/customize-win98-instance.sh
+COPY mini_dhcp.py /usr/local/bin/mini_dhcp.py
 COPY watch_art_res.sh /usr/local/bin/watch_art_res.sh
 COPY health-monitor.sh /usr/local/bin/health-monitor.sh
-RUN chmod +x /entrypoint.sh /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh
+RUN chmod +x /entrypoint.sh /usr/local/bin/customize-win98-instance.sh /usr/local/bin/mini_dhcp.py /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh
 
 # ---- Verify the disk image is available ----
 RUN ls -la /opt/builtin-images/ && \
