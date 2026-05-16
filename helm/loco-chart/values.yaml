@@ -134,6 +134,14 @@ emulator:
   usePrebuiltSnapshot: false
   snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
   snapshotTag: "win98-base"
+  # Optional named branch for modular overlays, e.g. base-install,
+  # lego-loco, multiplayer-ready, loco-menu, or lobby-ready.
+  # Empty keeps the legacy /images/win98_instance_N.qcow2 path.
+  snapshotBranch: ""
+  snapshotDir: "/images/snapshots"
+  snapshotMode: "persistent" # persistent or ephemeral
+  snapshotReset: false
+  qemuLoadVm: "" # optional internal VM-state snapshot to load at QEMU start
 
   # CPU resources for emulator pods
   resources:
@@ -149,6 +157,14 @@ emulator:
   kvm:
     enabled: false
     hostPath: /dev/kvm
+  dri:
+    enabled: false
+    hostPath: /dev/dri
+  nodeSelector: {}
+    # loco.dev/kvm: "true"
+    # loco.dev/gpu-dri: "true"
+  tolerations: []
+  affinity: {}
   
   # Additional environment variables
   env:

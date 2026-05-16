@@ -85,9 +85,10 @@ COPY --from=qemu3dfx-builder /opt/qemu-3dfx /opt/qemu-3dfx
 COPY entrypoint.sh /entrypoint.sh
 COPY customize-win98-instance.sh /usr/local/bin/customize-win98-instance.sh
 COPY mini_dhcp.py /usr/local/bin/mini_dhcp.py
+COPY qmp-control.py /usr/local/bin/qmp-control.py
 COPY watch_art_res.sh /usr/local/bin/watch_art_res.sh
 COPY health-monitor.sh /usr/local/bin/health-monitor.sh
-RUN chmod +x /entrypoint.sh /usr/local/bin/customize-win98-instance.sh /usr/local/bin/mini_dhcp.py /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh
+RUN chmod +x /entrypoint.sh /usr/local/bin/customize-win98-instance.sh /usr/local/bin/mini_dhcp.py /usr/local/bin/qmp-control.py /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh
 
 # ---- Verify the disk image is available ----
 RUN ls -la /opt/builtin-images/ && \

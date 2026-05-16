@@ -66,12 +66,19 @@ QEMU_BINARY=${QEMU_BINARY:-}
 QEMU_DISPLAY_OPTS=${QEMU_DISPLAY_OPTS:-}
 QEMU_FULLSCREEN=${QEMU_FULLSCREEN:-false}
 QEMU_3DFX_REV_FILE=${QEMU_3DFX_REV_FILE:-/opt/qemu-3dfx/REV_QEMU3DFX}
+QEMU_LOADVM=${QEMU_LOADVM:-}
+QEMU_SAVEVM_ON_EXIT=${QEMU_SAVEVM_ON_EXIT:-}
 CDROM_MODE=${CDROM_MODE:-softgpu}
 
 DISK=${DISK:-/images/win98.qcow2}
 SNAPSHOT_REGISTRY=${SNAPSHOT_REGISTRY:-ghcr.io/mroie/qemu-snapshots}
 SNAPSHOT_TAG=${SNAPSHOT_TAG:-win98-base}
 USE_PREBUILT_SNAPSHOT=${USE_PREBUILT_SNAPSHOT:-true}
+SNAPSHOT_BRANCH=${SNAPSHOT_BRANCH:-}
+SNAPSHOT_DIR=${SNAPSHOT_DIR:-/images/snapshots}
+SNAPSHOT_MODE=${SNAPSHOT_MODE:-persistent}
+SNAPSHOT_RESET=${SNAPSHOT_RESET:-false}
+SNAPSHOT_PARENT_DISK=${SNAPSHOT_PARENT_DISK:-}
 
 export INSTANCE_INDEX GUEST_HOSTNAME GUEST_IP GUEST_MAC TAP_IF
 export BRIDGE BRIDGE_IP GUEST_GATEWAY GUEST_NETMASK WORKGROUP
@@ -104,6 +111,11 @@ log_info "  DISK=$DISK"
 log_info "  USE_PREBUILT_SNAPSHOT=$USE_PREBUILT_SNAPSHOT"
 log_info "  SNAPSHOT_REGISTRY=$SNAPSHOT_REGISTRY"
 log_info "  SNAPSHOT_TAG=$SNAPSHOT_TAG"
+log_info "  SNAPSHOT_BRANCH=${SNAPSHOT_BRANCH:-<legacy>}"
+log_info "  SNAPSHOT_DIR=$SNAPSHOT_DIR"
+log_info "  SNAPSHOT_MODE=$SNAPSHOT_MODE"
+log_info "  SNAPSHOT_RESET=$SNAPSHOT_RESET"
+log_info "  QEMU_LOADVM=${QEMU_LOADVM:-<none>}"
 
 disable_bridge_netfilter() {
   if [ -w /proc/sys/net/bridge/bridge-nf-call-iptables ]; then
@@ -579,119 +591,165 @@ setup_guest_l2_mesh
 start_guest_dhcp
 
 # === STEP 4: Disk Image Setup ===
-# Use a persistent per-instance snapshot on PVC to preserve guest state across restarts
-SNAPSHOT_NAME="/images/win98_instance_${INSTANCE_INDEX}.qcow2"
-SKIP_SNAPSHOT_CREATION=false
+# Default path keeps existing deployments compatible. When SNAPSHOT_BRANCH is
+# set, the branch owns a shared parent disk and each pod gets a writable child.
+download_prebuilt_snapshot() {
+  local target="$1"
+  local snapshot_url="${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG}"
+  local tmp_dir="/tmp/snapshot-download-${INSTANCE_INDEX}-$$"
+  local extracted_qcow2=""
 
-# Reuse existing persistent snapshot if present
+  rm -rf "$tmp_dir"
+  mkdir -p "$tmp_dir/layer" "$(dirname "$target")"
+
+  log_info "Attempting to download pre-built snapshot: $snapshot_url"
+
+  if command -v skopeo >/dev/null 2>&1; then
+    log_info "Using skopeo to download snapshot"
+    if skopeo copy "docker://${snapshot_url}" "oci-archive:${tmp_dir}/snapshot.tar" 2>/dev/null; then
+      tar -xf "${tmp_dir}/snapshot.tar" -C "$tmp_dir" 2>/dev/null || true
+      local layer_tar
+      layer_tar=$(find "$tmp_dir" -name "layer.tar" -type f | head -1)
+      if [ -n "$layer_tar" ]; then
+        tar -xf "$layer_tar" -C "$tmp_dir/layer" 2>/dev/null || true
+        extracted_qcow2=$(find "$tmp_dir/layer" -name "*.qcow2" -type f | head -1)
+      fi
+    else
+      log_warning "Failed to download snapshot with skopeo"
+    fi
+  elif command -v crane >/dev/null 2>&1; then
+    log_info "Using crane to download snapshot"
+    if crane export "$snapshot_url" - | tar -x -C "$tmp_dir/layer" 2>/dev/null; then
+      extracted_qcow2=$(find "$tmp_dir/layer" -name "*.qcow2" -type f | head -1)
+    else
+      log_warning "Failed to download snapshot with crane"
+    fi
+  else
+    log_info "No container registry tools (skopeo/crane) available"
+  fi
+
+  if [ -n "$extracted_qcow2" ]; then
+    cp "$extracted_qcow2" "$target"
+    rm -rf "$tmp_dir"
+    log_success "Pre-built snapshot available at $target"
+    return 0
+  fi
+
+  rm -rf "$tmp_dir"
+  return 1
+}
+
+case "$SNAPSHOT_MODE" in
+  persistent)
+    SNAPSHOT_ROOT="${SNAPSHOT_DIR%/}"
+    ;;
+  ephemeral)
+    SNAPSHOT_ROOT="/tmp/loco-snapshots"
+    ;;
+  *)
+    log_error "Unsupported SNAPSHOT_MODE=$SNAPSHOT_MODE (expected persistent or ephemeral)"
+    exit 1
+    ;;
+esac
+
+SNAPSHOT_BRANCH_BASE=""
+if [ -n "$SNAPSHOT_BRANCH" ]; then
+  SNAPSHOT_SAFE_BRANCH=$(printf '%s' "$SNAPSHOT_BRANCH" | tr -c 'A-Za-z0-9_.-' '_')
+  SNAPSHOT_BRANCH_DIR="${SNAPSHOT_ROOT}/${SNAPSHOT_SAFE_BRANCH}"
+  SNAPSHOT_BRANCH_BASE="${SNAPSHOT_BRANCH_DIR}/base.qcow2"
+  SNAPSHOT_NAME="${SNAPSHOT_BRANCH_DIR}/win98_instance_${INSTANCE_INDEX}.qcow2"
+else
+  SNAPSHOT_BRANCH_DIR="/images"
+  SNAPSHOT_NAME="/images/win98_instance_${INSTANCE_INDEX}.qcow2"
+fi
+
+mkdir -p "$SNAPSHOT_BRANCH_DIR"
+
+if [ "$SNAPSHOT_RESET" = "true" ] && [ -f "$SNAPSHOT_NAME" ]; then
+  log_warning "SNAPSHOT_RESET=true; removing existing writable overlay: $SNAPSHOT_NAME"
+  rm -f "$SNAPSHOT_NAME"
+fi
+
+SKIP_SNAPSHOT_CREATION=false
 if [ -f "$SNAPSHOT_NAME" ]; then
-  log_success "Reusing persistent snapshot: $SNAPSHOT_NAME"
+  log_success "Reusing writable snapshot overlay: $SNAPSHOT_NAME"
   log_info "Snapshot details: $(ls -lh "$SNAPSHOT_NAME")"
   SKIP_SNAPSHOT_CREATION=true
 fi
 
 log_info "Preparing disk image: $SNAPSHOT_NAME"
 
-# Pre-built snapshot strategy
-if [ "$USE_PREBUILT_SNAPSHOT" = "true" ]; then
-  log_info "Attempting to download pre-built snapshot..."
-  SNAPSHOT_URL="${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG}"
-  log_info "Snapshot URL: $SNAPSHOT_URL"
-  
-  # Try to download pre-built snapshot using skopeo/crane
-  if command -v skopeo >/dev/null 2>&1; then
-    log_info "Using skopeo to download snapshot"
-    if skopeo copy "docker://${SNAPSHOT_URL}" "oci-archive:${SNAPSHOT_NAME}.tar" 2>/dev/null; then
-      log_info "Successfully downloaded snapshot archive"
-      # Extract the actual qcow2 file from the OCI archive
-      if tar -xf "${SNAPSHOT_NAME}.tar" -C /tmp/ --wildcards "*/layer.tar" 2>/dev/null; then
-        # Find and extract the qcow2 from the layer
-        LAYER_TAR=$(find /tmp -name "layer.tar" | head -1)
-        if [ -n "$LAYER_TAR" ] && tar -tf "$LAYER_TAR" | grep -q "\.qcow2$"; then
-          tar -xf "$LAYER_TAR" -C /tmp/ --wildcards "*.qcow2"
-          EXTRACTED_QCOW2=$(find /tmp -name "*.qcow2" -not -path "*/tmp/win98_*" | head -1)
-          if [ -n "$EXTRACTED_QCOW2" ]; then
-            cp "$EXTRACTED_QCOW2" "$SNAPSHOT_NAME"
-            log_success "Successfully downloaded and extracted pre-built snapshot"
-            rm -f "${SNAPSHOT_NAME}.tar" "$LAYER_TAR" "$EXTRACTED_QCOW2"
-            SKIP_SNAPSHOT_CREATION=true
-          fi
+if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
+  PARENT_DISK="${SNAPSHOT_PARENT_DISK:-}"
+  DISK_SOURCE=""
+
+  if [ -n "$SNAPSHOT_BRANCH_BASE" ] && [ -f "$SNAPSHOT_BRANCH_BASE" ]; then
+    PARENT_DISK="$SNAPSHOT_BRANCH_BASE"
+    DISK_SOURCE="snapshot-branch"
+    log_success "Using existing branch parent: $SNAPSHOT_BRANCH_BASE"
+  elif [ "$USE_PREBUILT_SNAPSHOT" = "true" ]; then
+    if [ -n "$SNAPSHOT_BRANCH_BASE" ]; then
+      if download_prebuilt_snapshot "$SNAPSHOT_BRANCH_BASE"; then
+        PARENT_DISK="$SNAPSHOT_BRANCH_BASE"
+        DISK_SOURCE="prebuilt-branch"
+      else
+        log_info "Failed to download pre-built branch parent; falling back to local base image"
+      fi
+    else
+      if download_prebuilt_snapshot "$SNAPSHOT_NAME"; then
+        SKIP_SNAPSHOT_CREATION=true
+      else
+        log_info "Failed to download pre-built snapshot; falling back to local base image"
+      fi
+    fi
+  fi
+
+  if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
+    if [ -z "$PARENT_DISK" ]; then
+      if [ -f "$DISK" ]; then
+        PARENT_DISK="$DISK"
+        DISK_SOURCE="PVC"
+        log_success "PVC-mounted disk image found: $DISK"
+        log_info "File details: $(ls -lh "$DISK")"
+      else
+        log_warning "PVC-mounted disk image not found: $DISK"
+        log_info "Available files in /images:"
+        ls -la /images/ 2>/dev/null || log_error "/images directory not accessible"
+
+        BUILTIN_DISK="/opt/builtin-images/win98.qcow2.builtin"
+        if [ -f "$BUILTIN_DISK" ]; then
+          PARENT_DISK="$BUILTIN_DISK"
+          DISK_SOURCE="builtin"
+          log_success "Built-in disk image found: $BUILTIN_DISK"
+          log_info "File details: $(ls -lh "$BUILTIN_DISK")"
+        else
+          log_error "Neither PVC-mounted nor built-in disk image found"
+          log_info "Available files in /images:"
+          ls -la /images/ 2>/dev/null || log_error "/images directory not accessible"
+          log_info "Available files in /tmp:"
+          ls -la /tmp/ 2>/dev/null || log_error "/tmp directory not accessible"
+          exit 1
         fi
       fi
+    elif [ -f "$PARENT_DISK" ]; then
+      DISK_SOURCE="${DISK_SOURCE:-explicit-parent}"
+      log_success "Using explicit parent disk: $PARENT_DISK"
     else
-      log_error "Failed to download snapshot with skopeo"
-    fi
-  elif command -v crane >/dev/null 2>&1; then
-    log_info "Using crane to download snapshot"
-    if crane export "$SNAPSHOT_URL" - | tar -x -C /tmp/ --wildcards "*.qcow2" 2>/dev/null; then
-      EXTRACTED_QCOW2=$(find /tmp -name "*.qcow2" -not -path "*/tmp/win98_*" | head -1)
-      if [ -n "$EXTRACTED_QCOW2" ]; then
-        cp "$EXTRACTED_QCOW2" "$SNAPSHOT_NAME"
-        log_success "Successfully downloaded and extracted pre-built snapshot"
-        rm -f "$EXTRACTED_QCOW2"
-        SKIP_SNAPSHOT_CREATION=true
-      fi
-    else
-      log_error "Failed to download snapshot with crane"
-    fi
-  else
-    log_info "No container registry tools (skopeo/crane) available, falling back to base image"
-  fi
-  
-  if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
-    log_info "Failed to download pre-built snapshot, falling back to creating from base image"
-  fi
-fi
-
-if [ "$SKIP_SNAPSHOT_CREATION" != "true" ]; then
-  log_info "Creating snapshot from base image: $DISK"
-  
-  # PVC-first strategy: Check for disk image in PVC-mounted directory first
-  DISK_FOUND=false
-  DISK_SOURCE=""
-  
-  # Check if PVC-mounted disk image exists
-  if [ -f "$DISK" ]; then
-    log_success "✅ PVC-mounted disk image found: $DISK"
-    log_info "File details: $(ls -lh "$DISK")"
-    DISK_FOUND=true
-    DISK_SOURCE="PVC"
-  else
-    log_warning "⚠️  PVC-mounted disk image not found: $DISK"
-    log_info "Available files in /images:"
-    ls -la /images/ 2>/dev/null || log_error "/images directory not accessible"
-    
-    # Fallback to built-in disk image
-    BUILTIN_DISK="/opt/builtin-images/win98.qcow2.builtin"
-    if [ -f "$BUILTIN_DISK" ]; then
-      log_success "✅ Built-in disk image found: $BUILTIN_DISK"
-      log_info "File details: $(ls -lh "$BUILTIN_DISK")"
-      DISK_FOUND=true
-      DISK_SOURCE="builtin"
-      DISK="$BUILTIN_DISK"
-    else
-      log_error "❌ Neither PVC-mounted nor built-in disk image found"
-      log_info "Available files in /images:"
-      ls -la /images/ 2>/dev/null || log_error "/images directory not accessible"
-      log_info "Available files in /tmp:"
-      ls -la /tmp/ 2>/dev/null || log_error "/tmp directory not accessible"
+      log_error "SNAPSHOT_PARENT_DISK does not exist: $PARENT_DISK"
       exit 1
     fi
-  fi
-  
-  if [ "$DISK_FOUND" = true ]; then
-    log_info "Creating QCOW2 snapshot from $DISK_SOURCE disk image: $DISK"
-    if qemu-img create -f qcow2 -b "$DISK" -F qcow2 "$SNAPSHOT_NAME"; then
-      log_success "✅ Snapshot created successfully from $DISK_SOURCE disk"
+
+    log_info "Creating QCOW2 writable overlay from $DISK_SOURCE disk image: $PARENT_DISK"
+    if qemu-img create -f qcow2 -b "$PARENT_DISK" -F qcow2 "$SNAPSHOT_NAME"; then
+      log_success "Snapshot overlay created successfully"
       log_info "Snapshot details: $(ls -lh "$SNAPSHOT_NAME")"
     else
-      log_error "❌ Failed to create snapshot from $DISK_SOURCE disk"
+      log_error "Failed to create snapshot overlay from $PARENT_DISK"
       exit 1
     fi
   fi
 else
-  log_success "Using pre-built snapshot: $SNAPSHOT_NAME"
-  log_info "Snapshot details: $(ls -lh "$SNAPSHOT_NAME")"
+  log_success "Using existing snapshot overlay: $SNAPSHOT_NAME"
 fi
 
 # === STEP 5: QEMU Startup ===
@@ -844,7 +902,17 @@ if [ -n "${IDENTITY_CD_OPT:-}" ] && [ -n "$SOFTGPU_CD_OPT" ]; then
   fi
 fi
 
-log_info "QEMU command: $QEMU_BINARY $ACCEL_FLAG -M pc -cpu $QEMU_CPU -m $QEMU_MEMORY -smp $QEMU_SMP -hda $SNAPSHOT_NAME $QEMU_VGA_ARGS $QEMU_DISPLAY_ARGS -qmp unix:/tmp/qemu-qmp.sock ..."
+QEMU_LOADVM_ARGS=""
+if [ -n "$QEMU_LOADVM" ]; then
+  if qemu-img snapshot -l "$SNAPSHOT_NAME" 2>/dev/null | awk 'NR > 2 { print $2 }' | grep -Fxq "$QEMU_LOADVM"; then
+    QEMU_LOADVM_ARGS="-loadvm $QEMU_LOADVM"
+    log_success "QEMU will hot-load VM snapshot: $QEMU_LOADVM"
+  else
+    log_warning "QEMU_LOADVM=$QEMU_LOADVM requested, but no matching internal snapshot exists in $SNAPSHOT_NAME"
+  fi
+fi
+
+log_info "QEMU command: $QEMU_BINARY $ACCEL_FLAG -M pc -cpu $QEMU_CPU -m $QEMU_MEMORY -smp $QEMU_SMP -hda $SNAPSHOT_NAME $QEMU_LOADVM_ARGS $QEMU_VGA_ARGS $QEMU_DISPLAY_ARGS -qmp unix:/tmp/qemu-qmp.sock ..."
 
 # Add debugging to see what we're actually booting from
 log_info "Checking disk image contents..."
@@ -854,6 +922,7 @@ qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
   $ACCEL_FLAG \
   -M pc -cpu "$QEMU_CPU" \
   -m "$QEMU_MEMORY" -smp "$QEMU_SMP" -hda "$SNAPSHOT_NAME" \
+  $QEMU_LOADVM_ARGS \
   -net nic,model=ne2k_pci,macaddr=$GUEST_MAC -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
   $QEMU_VGA_ARGS $QEMU_DISPLAY_ARGS $QEMU_FULLSCREEN_ARGS \
@@ -1077,6 +1146,11 @@ cleanup() {
   fi
   
   if [ -n "${EMU_PID:-}" ]; then
+    if [ -n "$QEMU_SAVEVM_ON_EXIT" ] && [ -S /tmp/qemu-qmp.sock ]; then
+      log_info "Saving VM snapshot before exit: $QEMU_SAVEVM_ON_EXIT"
+      /usr/local/bin/qmp-control.py savevm "$QEMU_SAVEVM_ON_EXIT" >/tmp/qemu-savevm-on-exit.log 2>&1 || \
+        log_warning "Failed to save VM snapshot before exit; see /tmp/qemu-savevm-on-exit.log"
+    fi
     log_info "Stopping QEMU (PID: $EMU_PID)"
     kill $EMU_PID 2>/dev/null || true
   fi

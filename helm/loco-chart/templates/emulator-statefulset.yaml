@@ -25,6 +25,18 @@ spec:
         - name: {{ . }}
       {{- end }}
       {{- end }}
+      {{- with .Values.emulator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.emulator.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.emulator.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       
       # Init containers for storage and disk image initialization
       initContainers:
@@ -144,6 +156,16 @@ spec:
         - name: SNAPSHOT_TAG
           value: {{ .Values.emulator.snapshotTag | quote }}
         {{- end }}
+        - name: SNAPSHOT_BRANCH
+          value: {{ .Values.emulator.snapshotBranch | default "" | quote }}
+        - name: SNAPSHOT_DIR
+          value: {{ .Values.emulator.snapshotDir | default "/images/snapshots" | quote }}
+        - name: SNAPSHOT_MODE
+          value: {{ .Values.emulator.snapshotMode | default "persistent" | quote }}
+        - name: SNAPSHOT_RESET
+          value: {{ ternary "true" "false" (.Values.emulator.snapshotReset | default false) | quote }}
+        - name: QEMU_LOADVM
+          value: {{ .Values.emulator.qemuLoadVm | default "" | quote }}
         - name: VIDEO_DEST_HOST
           value: "{{ include "loco.fullname" . }}-backend"
         - name: VIDEO_DEST_PORT
@@ -208,6 +230,10 @@ spec:
         - name: dev-kvm
           mountPath: /dev/kvm
         {{- end }}
+        {{- if .Values.emulator.dri.enabled }}
+        - name: dev-dri
+          mountPath: /dev/dri
+        {{- end }}
         
         {{- if .Values.storage.strategy.hostPath.enabled }}
         # Option 1: HostPath Direct Mounts
@@ -264,6 +290,12 @@ spec:
         hostPath:
           path: {{ .Values.emulator.kvm.hostPath | default "/dev/kvm" }}
           type: CharDevice
+      {{- end }}
+      {{- if .Values.emulator.dri.enabled }}
+      - name: dev-dri
+        hostPath:
+          path: {{ .Values.emulator.dri.hostPath | default "/dev/dri" }}
+          type: Directory
       {{- end }}
       
       {{- if .Values.storage.strategy.hostPath.enabled }}
