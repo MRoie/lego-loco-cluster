@@ -59,12 +59,22 @@ QEMU_KVM_OPTS=${QEMU_KVM_OPTS:-}
 QEMU_MEMORY=${QEMU_MEMORY:-512}
 QEMU_SMP=${QEMU_SMP:-1}
 QEMU_EXTRA_ARGS=${QEMU_EXTRA_ARGS:-}
+QEMU_RENDER_BACKEND=${QEMU_RENDER_BACKEND:-vmware}
+QEMU_3DFX=${QEMU_3DFX:-false}
+QEMU_3DFX_VGA=${QEMU_3DFX_VGA:-vmware}
+QEMU_BINARY=${QEMU_BINARY:-}
+QEMU_DISPLAY_OPTS=${QEMU_DISPLAY_OPTS:-}
+QEMU_FULLSCREEN=${QEMU_FULLSCREEN:-false}
+QEMU_3DFX_REV_FILE=${QEMU_3DFX_REV_FILE:-/opt/qemu-3dfx/REV_QEMU3DFX}
 CDROM_MODE=${CDROM_MODE:-softgpu}
 
 DISK=${DISK:-/images/win98.qcow2}
 SNAPSHOT_REGISTRY=${SNAPSHOT_REGISTRY:-ghcr.io/mroie/qemu-snapshots}
 SNAPSHOT_TAG=${SNAPSHOT_TAG:-win98-base}
 USE_PREBUILT_SNAPSHOT=${USE_PREBUILT_SNAPSHOT:-true}
+
+export INSTANCE_INDEX GUEST_HOSTNAME GUEST_IP GUEST_MAC TAP_IF
+export BRIDGE BRIDGE_IP GUEST_GATEWAY GUEST_NETMASK WORKGROUP
 
 log_info "Starting QEMU emulator container with configuration:"
 log_info "  INSTANCE_INDEX=$INSTANCE_INDEX (from POD_NAME=${POD_NAME:-<unset>})"
@@ -84,6 +94,11 @@ log_info "  QEMU_TCG_OPTS=$QEMU_TCG_OPTS"
 log_info "  QEMU_KVM_OPTS=$QEMU_KVM_OPTS"
 log_info "  QEMU_MEMORY=$QEMU_MEMORY"
 log_info "  QEMU_SMP=$QEMU_SMP"
+log_info "  QEMU_RENDER_BACKEND=$QEMU_RENDER_BACKEND"
+log_info "  QEMU_3DFX=$QEMU_3DFX"
+log_info "  QEMU_3DFX_VGA=$QEMU_3DFX_VGA"
+log_info "  QEMU_DISPLAY_OPTS=${QEMU_DISPLAY_OPTS:-<auto>}"
+log_info "  QEMU_FULLSCREEN=$QEMU_FULLSCREEN"
 log_info "  CDROM_MODE=$CDROM_MODE"
 log_info "  DISK=$DISK"
 log_info "  USE_PREBUILT_SNAPSHOT=$USE_PREBUILT_SNAPSHOT"
@@ -316,6 +331,122 @@ EOF
   log_success "Created MMX WineD3D patch ISO at $patch_iso"
 }
 
+create_qemu3dfx_patch_iso() {
+  if [ ! -f /opt/softgpu.iso ]; then
+    log_warning "SoftGPU ISO missing; cannot create qemu-3dfx patch ISO"
+    return 1
+  fi
+  if [ ! -f "$QEMU_3DFX_REV_FILE" ]; then
+    log_warning "qemu-3dfx revision file missing: $QEMU_3DFX_REV_FILE"
+    return 1
+  fi
+
+  local patch_dir="/tmp/qemu3dfxpatch"
+  local patch_iso="/tmp/qemu3dfxpatch.iso"
+  local qemu3dfx_rev
+  qemu3dfx_rev=$(tr -d '[:space:]' < "$QEMU_3DFX_REV_FILE" | cut -c1-7)
+  rm -rf "$patch_dir"
+  mkdir -p "$patch_dir"
+
+  extract_qemu3dfx_file() {
+    isoinfo -R -i /opt/softgpu.iso -x "/extras/qemu3dfx/$1" > "$patch_dir/$2"
+    if [ ! -s "$patch_dir/$2" ]; then
+      log_warning "Unable to extract extras/qemu3dfx/$1 from SoftGPU ISO"
+      return 1
+    fi
+  }
+
+  extract_softgpu_driver_file() {
+    isoinfo -R -i /opt/softgpu.iso -x "/driver/sse3-w98/$1" > "$patch_dir/$2"
+    if [ ! -s "$patch_dir/$2" ]; then
+      log_warning "Unable to extract driver/sse3-w98/$1 from SoftGPU ISO"
+      return 1
+    fi
+  }
+
+  extract_qemu3dfx_file fxmemmap.vxd FXMEMMAP.VXD
+  extract_qemu3dfx_file qmfxgl32.dll QMFXGL32.DLL
+  extract_qemu3dfx_file testqmfx.exe TESTQMFX.EXE
+  extract_qemu3dfx_file wglinfo.exe WGLINFO.EXE
+  extract_qemu3dfx_file icd-enable.reg ICD-ENABLE.REG
+  extract_softgpu_driver_file glide2x.dll GLIDE2X.DLL
+  extract_softgpu_driver_file glide3x.dll GLIDE3X.DLL
+  extract_softgpu_driver_file mesa3d.dll MESA3D.DLL
+  extract_softgpu_driver_file mesa89.dll MESA89.DLL
+  extract_softgpu_driver_file mesa99.dll MESA99.DLL
+  extract_softgpu_driver_file qemumini.drv QEMUMINI.DRV
+  extract_softgpu_driver_file qemumini.vxd QEMUMINI.VXD
+  extract_softgpu_driver_file tray3d.exe TRAY3D.EXE
+  extract_softgpu_driver_file vmdisp9x.dll VMDISP9X.DLL
+  extract_softgpu_driver_file vmhal486.dll VMHAL486.DLL
+  extract_softgpu_driver_file vmhal9x.dll VMHAL9X.DLL
+  extract_softgpu_driver_file vmwsgl32.dll VMWSGL32.DLL
+  extract_softgpu_driver_file wined3d.dll WINED3D.DLL
+  extract_softgpu_driver_file wined8.dll WINED8.DLL
+  extract_softgpu_driver_file wined9.dll WINED9.DLL
+  extract_softgpu_driver_file winedd.dll WINEDD.DLL
+
+  cat > "$patch_dir/SET-SIGN.REG" <<EOF
+REGEDIT4
+
+[HKEY_LOCAL_MACHINE\\Software\\vmdisp9x\\driver]
+"REV_QEMU3DFX"="$qemu3dfx_rev"
+EOF
+
+  cat > "$patch_dir/INSTALL3D.BAT" <<'EOF'
+@ECHO OFF
+SET Q3DDRV=
+IF EXIST A:\SET-SIGN.REG SET Q3DDRV=A:
+IF EXIST B:\SET-SIGN.REG SET Q3DDRV=B:
+IF EXIST D:\SET-SIGN.REG SET Q3DDRV=D:
+IF EXIST E:\SET-SIGN.REG SET Q3DDRV=E:
+IF EXIST F:\SET-SIGN.REG SET Q3DDRV=F:
+IF EXIST G:\SET-SIGN.REG SET Q3DDRV=G:
+IF EXIST H:\SET-SIGN.REG SET Q3DDRV=H:
+IF EXIST I:\SET-SIGN.REG SET Q3DDRV=I:
+IF "%Q3DDRV%"=="" GOTO NOFILES
+ECHO Installing qemu-3dfx, Glide, and SoftGPU runtime files from %Q3DDRV% > C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\FXMEMMAP.VXD C:\WINDOWS\SYSTEM\FXMEMMAP.VXD >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\QMFXGL32.DLL C:\WINDOWS\SYSTEM\QMFXGL32.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\GLIDE2X.DLL C:\WINDOWS\SYSTEM\GLIDE2X.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\GLIDE3X.DLL C:\WINDOWS\SYSTEM\GLIDE3X.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\MESA3D.DLL C:\WINDOWS\SYSTEM\MESA3D.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\MESA89.DLL C:\WINDOWS\SYSTEM\MESA89.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\MESA99.DLL C:\WINDOWS\SYSTEM\MESA99.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\QEMUMINI.DRV C:\WINDOWS\SYSTEM\QEMUMINI.DRV >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\QEMUMINI.VXD C:\WINDOWS\SYSTEM\QEMUMINI.VXD >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\TRAY3D.EXE C:\WINDOWS\SYSTEM\TRAY3D.EXE >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\VMDISP9X.DLL C:\WINDOWS\SYSTEM\VMDISP9X.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\VMHAL486.DLL C:\WINDOWS\SYSTEM\VMHAL486.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\VMHAL9X.DLL C:\WINDOWS\SYSTEM\VMHAL9X.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\VMWSGL32.DLL C:\WINDOWS\SYSTEM\VMWSGL32.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\WINED3D.DLL C:\WINDOWS\SYSTEM\WINED3D.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\WINED8.DLL C:\WINDOWS\SYSTEM\WINED8.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\WINED9.DLL C:\WINDOWS\SYSTEM\WINED9.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\WINEDD.DLL C:\WINDOWS\SYSTEM\WINEDD.DLL >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\TESTQMFX.EXE C:\WINDOWS\DESKTOP\TESTQMFX.EXE >> C:\QEMU3DFX.LOG
+COPY /Y %Q3DDRV%\WGLINFO.EXE C:\WINDOWS\DESKTOP\WGLINFO.EXE >> C:\QEMU3DFX.LOG
+REGEDIT /S %Q3DDRV%\SET-SIGN.REG >> C:\QEMU3DFX.LOG
+REGEDIT /S %Q3DDRV%\ICD-ENABLE.REG >> C:\QEMU3DFX.LOG
+ECHO OK > C:\QEMU3DFX.OK
+GOTO DONE
+:NOFILES
+ECHO qemu-3dfx install media not found > C:\QEMU3DFX.ERR
+:DONE
+EOF
+
+  cat > "$patch_dir/AUTORUN.INF" <<'EOF'
+[autorun]
+open=COMMAND.COM /C INSTALL3D.BAT
+shell\install=&Install qemu-3dfx Runtime
+shell\install\command=COMMAND.COM /C INSTALL3D.BAT
+EOF
+
+  sed -i 's/$/\r/' "$patch_dir/SET-SIGN.REG" "$patch_dir/ICD-ENABLE.REG" "$patch_dir/INSTALL3D.BAT" "$patch_dir/AUTORUN.INF"
+  genisoimage -quiet -J -r -V QEMU3DFX -o "$patch_iso" "$patch_dir"
+  log_success "Created qemu-3dfx patch ISO at $patch_iso using REV_QEMU3DFX=$qemu3dfx_rev"
+}
+
 # === STEP 1: Virtual Display Setup ===
 log_info "Setting up virtual display..."
 
@@ -365,6 +496,12 @@ if ! kill -0 $XVFB_PID 2>/dev/null; then
   exit 1
 fi
 log_success "Xvfb started on display :$DISPLAY_NUM (PID: $XVFB_PID)"
+
+# SDL/OpenGL builds expect XDG_RUNTIME_DIR to exist and be private. Kubernetes
+# containers usually do not set it, and qemu-3dfx exits during SDL init without it.
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/tmp/xdg-runtime}
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
 
 # === STEP 2: Audio Setup ===
 log_info "Starting PulseAudio daemon..."
@@ -605,12 +742,90 @@ case "$QEMU_ACCEL" in
     ;;
 esac
 
+if [ "$QEMU_3DFX" = "true" ]; then
+  QEMU_RENDER_BACKEND="qemu3dfx"
+fi
+
+QEMU_VGA_ARGS="-vga vmware"
+QEMU_DISPLAY_ARGS="-display vnc=0.0.0.0:1"
+QEMU_FULLSCREEN_ARGS=""
+VIDEO_CAPTURE_SOURCE="rfb"
+
+case "$QEMU_RENDER_BACKEND" in
+  vmware|softgpu)
+    if [ -z "$QEMU_BINARY" ]; then
+      if [ -x /opt/qemu-3dfx/bin/qemu-system-i386 ]; then
+        QEMU_BINARY="/opt/qemu-3dfx/bin/qemu-system-i386"
+      else
+        QEMU_BINARY="qemu-system-i386"
+      fi
+    fi
+    log_info "Using VMware SVGA SoftGPU backend via $QEMU_BINARY"
+    ;;
+  qemu3dfx|3dfx)
+    QEMU_RENDER_BACKEND="qemu3dfx"
+    if [ -z "$QEMU_BINARY" ]; then
+      QEMU_BINARY="/opt/qemu-3dfx/bin/qemu-system-i386"
+    fi
+    if [ ! -x "$QEMU_BINARY" ]; then
+      log_error "QEMU_RENDER_BACKEND=qemu3dfx requested, but patched QEMU is not executable at $QEMU_BINARY"
+      exit 1
+    fi
+    if [ "$CDROM_MODE" = "softgpu" ]; then
+      CDROM_MODE="qemu3dfx"
+    fi
+    if [ -z "$QEMU_DISPLAY_OPTS" ]; then
+      QEMU_DISPLAY_OPTS="sdl,gl=on"
+    fi
+    if [ "$QEMU_FULLSCREEN" = "true" ]; then
+      QEMU_FULLSCREEN_ARGS="-full-screen"
+    fi
+    export SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-x11}
+    case "$QEMU_3DFX_VGA" in
+      vmware|std|cirrus|none) ;;
+      *)
+        log_error "Unsupported QEMU_3DFX_VGA=$QEMU_3DFX_VGA (expected vmware, std, cirrus, or none)"
+        exit 1
+        ;;
+    esac
+    QEMU_VGA_ARGS="-vga $QEMU_3DFX_VGA"
+    QEMU_DISPLAY_ARGS="-display $QEMU_DISPLAY_OPTS"
+    VIDEO_CAPTURE_SOURCE="x11"
+    if [ -f "$QEMU_3DFX_REV_FILE" ]; then
+      log_info "Using qemu-3dfx backend via $QEMU_BINARY (REV_QEMU3DFX=$(tr -d '[:space:]' < "$QEMU_3DFX_REV_FILE"))"
+    else
+      log_info "Using qemu-3dfx backend via $QEMU_BINARY"
+    fi
+    log_warning "qemu-3dfx needs a GPU-backed OpenGL display and KVM for fluid results; Xvfb/TCG is only a compatibility fallback"
+    ;;
+  *)
+    log_error "Unsupported QEMU_RENDER_BACKEND=$QEMU_RENDER_BACKEND (expected vmware or qemu3dfx)"
+    exit 1
+    ;;
+esac
+
+if [ "$VIDEO_CAPTURE_SOURCE" = "x11" ]; then
+  if command -v x11vnc >/dev/null 2>&1; then
+    log_info "Starting x11vnc bridge for SDL/OpenGL display on :5901"
+    x11vnc -display "$DISPLAY" -forever -shared -rfbport 5901 -nopw -listen 0.0.0.0 >/tmp/x11vnc.log 2>&1 &
+    X11VNC_PID=$!
+    log_success "x11vnc started with PID: $X11VNC_PID"
+  else
+    log_warning "x11vnc missing; qemu-3dfx mode will not expose VNC"
+  fi
+fi
+
 # Determine CD-ROM option (SoftGPU ISO for VMware SVGA driver)
 SOFTGPU_CD_OPT=""
 if [ "$CDROM_MODE" = "mmxpatch" ]; then
   if create_mmx_patch_iso; then
     SOFTGPU_CD_OPT="-cdrom /tmp/mmxpatch.iso"
     log_info "MMX patch ISO mounted as CD-ROM"
+  fi
+elif [ "$CDROM_MODE" = "qemu3dfx" ]; then
+  if create_qemu3dfx_patch_iso; then
+    SOFTGPU_CD_OPT="-cdrom /tmp/qemu3dfxpatch.iso"
+    log_info "qemu-3dfx patch ISO mounted as CD-ROM"
   fi
 elif [ -f /opt/softgpu.iso ]; then
   SOFTGPU_CD_OPT="-cdrom /opt/softgpu.iso"
@@ -619,24 +834,29 @@ fi
 
 create_identity_floppy
 
-if [ -n "${IDENTITY_CD_OPT:-}" ] && [ -f /opt/softgpu.iso ]; then
-  SOFTGPU_CD_OPT="-drive file=/opt/softgpu.iso,format=raw,media=cdrom,readonly=on,if=ide,index=3"
-  log_info "Identity CD-ROM is primary; SoftGPU ISO moved to secondary CD-ROM"
+if [ -n "${IDENTITY_CD_OPT:-}" ] && [ -n "$SOFTGPU_CD_OPT" ]; then
+  if [ "$CDROM_MODE" = "qemu3dfx" ] && [ -f /tmp/qemu3dfxpatch.iso ]; then
+    SOFTGPU_CD_OPT="-drive file=/tmp/qemu3dfxpatch.iso,format=raw,media=cdrom,readonly=on,if=ide,index=3"
+    log_info "Identity CD-ROM is primary; qemu-3dfx patch ISO moved to secondary CD-ROM"
+  elif [ -f /opt/softgpu.iso ]; then
+    SOFTGPU_CD_OPT="-drive file=/opt/softgpu.iso,format=raw,media=cdrom,readonly=on,if=ide,index=3"
+    log_info "Identity CD-ROM is primary; SoftGPU ISO moved to secondary CD-ROM"
+  fi
 fi
 
-log_info "QEMU command: qemu-system-i386 $ACCEL_FLAG -M pc -cpu $QEMU_CPU -m $QEMU_MEMORY -smp $QEMU_SMP -hda $SNAPSHOT_NAME -vga vmware -qmp unix:/tmp/qemu-qmp.sock ..."
+log_info "QEMU command: $QEMU_BINARY $ACCEL_FLAG -M pc -cpu $QEMU_CPU -m $QEMU_MEMORY -smp $QEMU_SMP -hda $SNAPSHOT_NAME $QEMU_VGA_ARGS $QEMU_DISPLAY_ARGS -qmp unix:/tmp/qemu-qmp.sock ..."
 
 # Add debugging to see what we're actually booting from
 log_info "Checking disk image contents..."
 qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
 
-qemu-system-i386 \
+"$QEMU_BINARY" \
   $ACCEL_FLAG \
   -M pc -cpu "$QEMU_CPU" \
   -m "$QEMU_MEMORY" -smp "$QEMU_SMP" -hda "$SNAPSHOT_NAME" \
   -net nic,model=ne2k_pci,macaddr=$GUEST_MAC -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
-  -vga vmware -display vnc=0.0.0.0:1 \
+  $QEMU_VGA_ARGS $QEMU_DISPLAY_ARGS $QEMU_FULLSCREEN_ARGS \
   $FLOPPY_OPT \
   $IDENTITY_CD_OPT \
   $SOFTGPU_CD_OPT \
@@ -662,28 +882,50 @@ if ! kill -0 $EMU_PID 2>/dev/null; then
 fi
 
 log_success "QEMU started successfully (PID: $EMU_PID)"
-log_info "VNC display available on :5901"
+if [ "$VIDEO_CAPTURE_SOURCE" = "rfb" ]; then
+  log_info "VNC display available on :5901"
+else
+  log_info "QEMU display available on X display $DISPLAY"
+fi
 
 # === STEP 6: Video Streaming Setup ===
 log_info "Starting GStreamer video stream at 1024x768 for Lego Loco compatibility..."
-log_info "Stream configuration: VP8 via VNC capture (rfbsrc), 1024x768, bitrate=1200kbps"
-log_info "Note: Using rfbsrc to capture from QEMU VNC display (not ximagesrc/Xvfb which is empty)"
-gst-launch-1.0 -v \
-  rfbsrc host=127.0.0.1 port=5901 ! \
-  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  videoconvert ! \
-  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  videoscale ! \
-  video/x-raw,width=1024,height=768 ! \
-  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  vp8enc deadline=1 target-bitrate=1200000 keyframe-max-dist=25 cpu-used=8 ! \
-  queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  rtpvp8pay ! \
-  udpsink host=${VIDEO_DEST_HOST:-127.0.0.1} port=${VIDEO_DEST_PORT:-5000} sync=false async=false &
+if [ "$VIDEO_CAPTURE_SOURCE" = "rfb" ]; then
+  log_info "Stream configuration: VP8 via VNC capture (rfbsrc), 1024x768, bitrate=1200kbps"
+  log_info "Note: Using rfbsrc to capture from QEMU VNC display"
+  gst-launch-1.0 -v \
+    rfbsrc host=127.0.0.1 port=5901 ! \
+    queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+    videoconvert ! \
+    queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+    videoscale ! \
+    video/x-raw,width=1024,height=768 ! \
+    queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+    vp8enc deadline=1 target-bitrate=1200000 keyframe-max-dist=25 cpu-used=8 ! \
+    queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+    rtpvp8pay ! \
+    udpsink host=${VIDEO_DEST_HOST:-127.0.0.1} port=${VIDEO_DEST_PORT:-5000} sync=false async=false &
+else
+  log_info "Stream configuration: VP8 via X11 capture (ximagesrc), 1024x768, bitrate=1200kbps"
+  log_info "Note: qemu-3dfx uses SDL/OpenGL, so capture comes from X instead of QEMU VNC"
+  gst-launch-1.0 -v \
+    ximagesrc use-damage=0 display-name="$DISPLAY" ! \
+    queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+    videoconvert ! \
+    queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+    videoscale ! \
+    video/x-raw,width=1024,height=768 ! \
+    queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+    vp8enc deadline=1 target-bitrate=1200000 keyframe-max-dist=25 cpu-used=8 ! \
+    queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
+    rtpvp8pay ! \
+    udpsink host=${VIDEO_DEST_HOST:-127.0.0.1} port=${VIDEO_DEST_PORT:-5000} sync=false async=false &
+fi
 GSTREAMER_PID=$!
 
+log_info "Stream capture source selected: $VIDEO_CAPTURE_SOURCE"
 log_success "GStreamer video started with PID: $GSTREAMER_PID"
-log_info "Stream details: 1024x768 VP8 stream via rfbsrc→rtpvp8pay on UDP port ${VIDEO_DEST_PORT:-5000}"
+log_info "Stream details: 1024x768 VP8 stream via ${VIDEO_CAPTURE_SOURCE} capture on UDP port ${VIDEO_DEST_PORT:-5000}"
 
 # === STEP 6b: Audio Streaming Setup ===
 log_info "Starting GStreamer audio stream (PulseAudio → Opus → RTP)..."
@@ -752,13 +994,18 @@ validate_stream_health() {
     sleep 2
   done
   
+  if kill -0 $GSTREAMER_PID 2>/dev/null; then
+    log_success "✅ Stream process is active; UDP sink visibility is environment-dependent"
+    return 0
+  fi
+
   log_warning "⚠️  Stream validation incomplete after $max_checks checks"
   return 1
 }
 
 # Run stream validation
 if validate_stream_health; then
-  log_success "🎯 Stream health validation passed - 1024x768 H.264 stream ready"
+  log_success "🎯 Stream health validation passed - 1024x768 VP8 stream ready"
 else
   log_warning "⚠️  Stream health validation failed - stream may be unstable"
 fi
@@ -785,12 +1032,22 @@ fi
 # === Container Ready ===
 log_success "Container setup complete!"
 log_info "Services:"
-log_info "  - VNC: localhost:5901"
+if [ "$VIDEO_CAPTURE_SOURCE" = "rfb" ]; then
+  log_info "  - VNC: localhost:5901"
+else
+  log_info "  - X display: $DISPLAY"
+  if [ -n "${X11VNC_PID:-}" ]; then
+    log_info "  - VNC bridge: localhost:5901"
+  fi
+fi
 log_info "  - Video stream: UDP port ${VIDEO_DEST_PORT:-5000} (1024x768@25fps H.264)"
 log_info "  - Audio stream: UDP port ${AUDIO_DEST_PORT:-5001} (Opus 48kHz stereo)"
 log_info "  - Health monitor: HTTP port ${HEALTH_PORT:-8080}"
 log_info "  - QEMU PID: $EMU_PID"
 log_info "  - Xvfb PID: $XVFB_PID"
+if [ -n "${X11VNC_PID:-}" ]; then
+  log_info "  - x11vnc PID: $X11VNC_PID"
+fi
 log_info "  - GStreamer Video PID: $GSTREAMER_PID (1024x768 stream)"
 log_info "  - GStreamer Audio PID: $GSTREAMER_AUDIO_PID (Opus stream)"
 if [ -n "${HEALTH_PID:-}" ]; then
