@@ -270,7 +270,7 @@ fi
 
 # === STEP 5: QEMU Startup ===
 log_info "Starting QEMU emulator..."
-log_info "QEMU command: qemu-system-i386 -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
+log_info "QEMU command: qemu-system-i386 -M pc -cpu pentium2 -m 1024 -hda $SNAPSHOT_NAME ..."
 
 # Add debugging to see what we're actually booting from
 log_info "Checking disk image contents..."
@@ -278,10 +278,10 @@ qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
 
 qemu-system-i386 \
   -M pc -cpu pentium2 \
-  -m 512 -hda "$SNAPSHOT_NAME" \
+  -m 1024 -hda "$SNAPSHOT_NAME" \
   -net nic,model=ne2k_pci -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
-  -vga std -display vnc=0.0.0.0:1 \
+  -vga vmware -display vnc=0.0.0.0:$DISPLAY_NUM \
   -audiodev pa,id=snd0 \
   -rtc base=localtime \
   -boot order=dc,menu=on,splash-time=5000 \
