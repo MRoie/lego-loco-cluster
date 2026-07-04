@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-02-20T13:54:28.941Z",
+  "dashboard": "http://localhost:3000",
+  "duration": 20000,
+  "recording": {
+    "error": "No srcObject on video"
+  },
+  "screenshots": [
+    "instance-before.png",
+    "instance-quarter.png",
+    "instance-mid.png",
+    "instance-threequarter.png",
+    "instance-after.png"
+  ]
+}

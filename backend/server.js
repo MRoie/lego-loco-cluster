@@ -31,6 +31,12 @@ const udpToWebrtc = require('./services/udpToWebrtc');
 const client = require('prom-client');
 const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
+const rateLimit = require("./utils/rateLimit");
+const validate = require("./utils/validate");
+
+// Rate limiters
+const writeRateLimit = rateLimit({ windowMs: 60_000, max: 30 });   // 30 req/min for general POST
+const criticalRateLimit = rateLimit({ windowMs: 60_000, max: 5 });  // 5 req/min for recovery/restart
 
 const app = express();
 const server = http.createServer(app);
@@ -339,7 +345,9 @@ app.get("/metrics", async (req, res) => {
  * 
  * @route POST /api/logs/frontend
  */
-app.post("/api/logs/frontend", (req, res) => {
+app.post("/api/logs/frontend", writeRateLimit, validate({
+  body: { level: { type: 'string' }, message: { type: 'string' } }
+}), (req, res) => {
   try {
     const { level, message, ...context } = req.body;
 
@@ -376,7 +384,7 @@ app.post("/api/logs/frontend", (req, res) => {
  * 
  * @route POST /api/metrics/frontend
  */
-app.post("/api/metrics/frontend", (req, res) => {
+app.post("/api/metrics/frontend", writeRateLimit, (req, res) => {
   try {
     const metricsData = req.body;
 
@@ -562,7 +570,7 @@ app.get("/api/instances/discovery-info", async (req, res) => {
 });
 
 // New endpoint to refresh instance discovery
-app.post("/api/instances/refresh", async (req, res) => {
+app.post("/api/instances/refresh", criticalRateLimit, async (req, res) => {
   try {
     logger.info("Manual instance discovery refresh requested", {
       userAgent: req.get('User-Agent'),
@@ -700,7 +708,9 @@ app.get("/api/quality/deep-health/:instanceId", (req, res) => {
 });
 
 // Trigger recovery for a specific instance
-app.post("/api/quality/recover/:instanceId", (req, res) => {
+app.post("/api/quality/recover/:instanceId", criticalRateLimit, validate({
+  body: { forceRecovery: { type: 'boolean' } }
+}), (req, res) => {
   try {
     const instanceId = req.params.instanceId;
     const { forceRecovery = false } = req.body;
@@ -777,7 +787,7 @@ app.get('/api/config/vnc', (req, res) => {
 });
 
 // Start/stop quality monitoring
-app.post("/api/quality/monitor/:action", (req, res) => {
+app.post("/api/quality/monitor/:action", criticalRateLimit, (req, res) => {
   try {
     const { action } = req.params;
 
@@ -834,7 +844,9 @@ app.get("/api/active", (req, res) => {
   res.json({ active: readActive() });
 });
 
-app.post("/api/active", (req, res) => {
+app.post("/api/active", writeRateLimit, validate({
+  body: { ids: { type: 'array' }, id: { type: 'string' } }
+}), (req, res) => {
   const ids = req.body.ids || req.body.active || req.body.id;
   if (!ids) return res.status(400).json({ error: "id required" });
   writeActive(ids);
@@ -1144,79 +1156,131 @@ signalWss.on("error", (err) => {
 // Active peer connections keyed by ID for WebRTC signaling
 const peers = new Map();
 
+// ---------- WebSocket heartbeat (server-side) ----------
+// Responds to application-level __ping with __pong so clients can detect
+// stale connections even through proxies that eat native WS pings.
+// Also sends native WS pings; clients that don't respond are terminated.
+const WS_HEARTBEAT_INTERVAL = 30000; // 30s
+
+function setupWsHeartbeat(wss, label) {
+  const interval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      if (ws.isAlive === false) {
+        logger.warn(`Terminating stale ${label} WebSocket (no pong)`);
+        return ws.terminate();
+      }
+      ws.isAlive = false;
+      ws.ping(); // native WS ping
+    });
+  }, WS_HEARTBEAT_INTERVAL);
+
+  wss.on('close', () => clearInterval(interval));
+}
+
+function initWsAlive(ws) {
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
+}
+
+/** Handle application-level __ping messages from the client. Returns true if handled. */
+function handleAppPing(ws, data) {
+  if (data && data.type === '__ping') {
+    ws.send(JSON.stringify({ type: '__pong', ts: data.ts }));
+    return true;
+  }
+  return false;
+}
+
+setupWsHeartbeat(activeWss, 'active');
+setupWsHeartbeat(signalWss, 'signal');
+
 // Handle incoming signal websocket connections for SDP exchange
-signalWss.on("connection", async (ws, req) => {
+signalWss.on("connection", (ws, req) => {
+  initWsAlive(ws);
   logger.info("Signal WebSocket client connected", { url: req.url });
 
   let id = null;
   let pc = null;
+  // Queue to serialize async message processing (prevents race conditions
+  // when register + offer arrive in the same TCP payload)
+  let msgQueue = Promise.resolve();
 
   ws.on("error", (err) => {
     logger.error("Signal WebSocket client error", { error: err.message });
   });
 
-  ws.on("message", async (msg) => {
-    let data;
-    try {
-      data = JSON.parse(msg);
-    } catch (e) {
-      logger.error("Invalid JSON in signal message", { error: e.message });
-      return;
-    }
-
-    // Handle registration
-    if (data.type === "register") {
-      id = data.id || Math.random().toString(36).slice(2);
-      ws.send(JSON.stringify({ type: "registered", id }));
-      logger.info("Signal WebSocket client registered", { id });
-
-      // Initialize PeerConnection
+  ws.on("message", (msg) => {
+    // Chain each message handler to ensure serial processing
+    msgQueue = msgQueue.then(async () => {
+      let data;
       try {
-        const iceServers = []; // Fetch from config if needed
-        pc = await udpToWebrtc.createConnection(iceServers);
-
-        // Handle ICE candidates from Backend -> Frontend
-        pc.onicecandidate = (e) => {
-          if (e.candidate) {
-            ws.send(JSON.stringify({
-              type: "signal",
-              data: { candidate: e.candidate.toJSON() }
-            }));
-          }
-        };
-
-        logger.info("Initialized WebRTC PeerConnection for client", { id });
-      } catch (err) {
-        logger.error("Failed to create PeerConnection", { error: err.message });
+        data = JSON.parse(msg);
+      } catch (e) {
+        logger.error("Invalid JSON in signal message", { error: e.message });
+        return;
       }
-      return;
-    }
 
-    // Handle signaling
-    if (data.type === "signal" && data.data && pc) {
-      const signal = data.data;
+      // Respond to application-level pings
+      if (handleAppPing(ws, data)) return;
 
-      try {
-        if (signal.sdp) {
-          logger.info("Received SDP", { type: signal.type, id });
-          await pc.setRemoteDescription(signal);
-          if (signal.type === 'offer') {
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
+      // Handle registration
+      if (data.type === "register") {
+        id = data.id || Math.random().toString(36).slice(2);
+        ws.send(JSON.stringify({ type: "registered", id }));
+        logger.info("Signal WebSocket client registered", { id });
+
+        // Initialize PeerConnection (synchronous - no await needed)
+        try {
+          const iceServers = []; // Fetch from config if needed
+          pc = udpToWebrtc.createConnection(iceServers);
+
+          // Handle ICE candidates from Backend -> Frontend
+          // NOTE: werift uses pc.onIceCandidate.subscribe() not pc.onicecandidate
+          pc.onIceCandidate.subscribe((candidate) => {
+            const candidateJson = candidate.toJSON ? candidate.toJSON() : candidate;
             ws.send(JSON.stringify({
               type: "signal",
-              data: pc.localDescription
+              data: candidateJson
             }));
-            logger.info("Sent SDP Answer", { id });
-          }
-        } else if (signal.candidate) {
-          logger.info("Received ICE Candidate", { id });
-          await pc.addIceCandidate(signal.candidate);
+            logger.debug("Sent ICE candidate to client", { id, sdpMid: candidateJson.sdpMid });
+          });
+
+          logger.info("Initialized WebRTC PeerConnection for client", { id });
+        } catch (err) {
+          logger.error("Failed to create PeerConnection", { error: err.message });
         }
-      } catch (err) {
-        logger.error("Signaling error", { error: err.message, id });
+        return;
       }
-    }
+
+      // Handle signaling
+      if (data.type === "signal" && data.data && pc) {
+        const signal = data.data;
+
+        try {
+          if (signal.sdp) {
+            logger.info("Received SDP", { type: signal.type, id });
+            await pc.setRemoteDescription(signal);
+            if (signal.type === 'offer') {
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              ws.send(JSON.stringify({
+                type: "signal",
+                data: pc.localDescription
+              }));
+              logger.info("Sent SDP Answer", { id });
+            }
+          } else if (signal.candidate) {
+            logger.info("Received ICE Candidate", { id });
+            // Pass the full candidate object (with sdpMid, sdpMLineIndex) to werift
+            await pc.addIceCandidate(signal);
+          }
+        } catch (err) {
+          logger.error("Signaling error", { error: err.message, id });
+        }
+      }
+    }).catch(err => {
+      logger.error("Message processing error", { error: err.message, id });
+    });
   });
 
   ws.on("close", () => {
@@ -1229,6 +1293,7 @@ signalWss.on("connection", async (ws, req) => {
 });
 
 activeWss.on("connection", (ws) => {
+  initWsAlive(ws);
   activeClients.add(ws);
   activeWsConnections++;
   activeConnections.labels('websocket').set(activeVncConnections + activeWsConnections);
@@ -1247,6 +1312,8 @@ activeWss.on("connection", (ws) => {
   ws.on("message", (msg) => {
     try {
       const data = JSON.parse(msg);
+      // Respond to application-level pings
+      if (handleAppPing(ws, data)) return;
       const ids = data.ids || data.id || data.active;
       if (ids) {
         writeActive(ids);

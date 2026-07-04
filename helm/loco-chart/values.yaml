@@ -1,4 +1,4 @@
-replicas: 1
+replicas: 2
 namespace: loco
 
 #imageRepo: "ghcr.io/mroie"
@@ -76,12 +76,11 @@ registryConfig:
     server: ""  # e.g., "your-company.jfrog.io"
 
 emulator:
-  # Emulator replicas and instance configuration
-  replicas: 4
+  # NOTE: replica count is set at top-level 'replicas' field (used by StatefulSet template)
   
   # Image configuration
-  image: qemu-loco
-  tag: latest
+  image: qemu-loco-softgpu
+  tag: v28-qemu3dfx
   imagePullPolicy: Never  # Use local images for minikube
   serviceType: ClusterIP
   servicePort: 5901
@@ -135,25 +134,62 @@ emulator:
   usePrebuiltSnapshot: false
   snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
   snapshotTag: "win98-base"
+  # Optional named branch for modular overlays, e.g. base-install,
+  # lego-loco, multiplayer-ready, loco-menu, or lobby-ready.
+  # Empty keeps the legacy /images/win98_instance_N.qcow2 path.
+  snapshotBranch: ""
+  snapshotDir: "/images/snapshots"
+  snapshotMode: "persistent" # persistent or ephemeral
+  snapshotReset: false
+  qemuLoadVm: "" # optional internal VM-state snapshot to load at QEMU start
 
   # CPU resources for emulator pods
   resources:
     limits:
-      cpu: "1"
+      cpu: "4"
+      memory: "2Gi"
     requests:
-      cpu: "0.25"
+      cpu: "1"
+      memory: "1Gi"
+
+  # Hardware acceleration. Keep disabled for Docker Desktop/kind nodes that do
+  # not expose /dev/kvm; enable this on a Linux/WSL2 node with KVM available.
+  kvm:
+    enabled: false
+    hostPath: /dev/kvm
+  dri:
+    enabled: false
+    hostPath: /dev/dri
+  nodeSelector: {}
+    # loco.dev/kvm: "true"
+    # loco.dev/gpu-dri: "true"
+  tolerations: []
+  affinity: {}
   
   # Additional environment variables
   env:
     BRIDGE: "loco-br"
-    TAP_IF: "tap0"
+    CDROM_MODE: "qemu3dfx"
     DISK: "/images/win98.qcow2"
     DISPLAY_NUM: "99"
+    QEMU_ACCEL: "auto"
+    QEMU_TCG_OPTS: "thread=multi,tb-size=1024"
+    QEMU_MEMORY: "512"
+    QEMU_SMP: "1"
+    QEMU_RENDER_BACKEND: "qemu3dfx"
+    QEMU_3DFX_VGA: "vmware"
+    QEMU_DISPLAY_OPTS: "sdl,gl=on"
+    QEMU_FULLSCREEN: "true"
     USE_PREBUILT_SNAPSHOT: "false"
+    # Per-instance network identity (derived from INSTANCE_INDEX in entrypoint)
+    # BRIDGE_IP/GUEST_GATEWAY default to 192.168.10.(200 + INSTANCE_INDEX)
+    # to avoid duplicate bridge IPs on the shared VXLAN LAN.
+    GUEST_NETMASK: "255.255.255.0"
+    WORKGROUP: "LOCOLAND"
 
 backend:
   image: lego-loco-backend
-  tag: dns-fix-v1
+  tag: v15-agents
   imagePullPolicy: Never  # Use local images
   servicePort: 3001
   resources:
@@ -225,6 +261,29 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     
+# NetworkPolicy for game ports (DirectPlay, NetBIOS between emulator pods)
+networkPolicy:
+  enabled: true
+  gamePorts:
+    directPlay: 2300          # TCP/UDP — DirectPlay game traffic
+    directPlayDiscovery: 47624 # TCP — DirectPlay session discovery
+    netbios:
+      enabled: true
+      ports:
+        - 137
+        - 138
+        - 139
+
+# Prometheus monitoring integration (requires Prometheus Operator CRDs)
+monitoring:
+  enabled: false                # Set to true after deploying kube-prometheus-stack
+  prometheusRelease: "kube-prometheus"  # Must match the Helm release name of the Prometheus Operator
+  scrapeInterval: "15s"
+  scrapeTimeout: "10s"
+  grafana:
+    dashboards:
+      enabled: false            # Set to true to deploy Grafana dashboard ConfigMaps (requires sidecar)
+
 stunner:
   enabled: false  # Disabled for minikube
 

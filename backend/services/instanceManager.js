@@ -212,7 +212,7 @@ class InstanceManager {
   }
 
   async getKubernetesInfo() {
-    if (!this.k8sDiscovery.isAvailable()) {
+    if (!this.kubernetesDiscovery.isAvailable()) {
       return {
         namespace: 'default',
         services: {},
@@ -224,24 +224,24 @@ class InstanceManager {
     }
 
     try {
-      const services = await this.k8sDiscovery.getServicesInfo();
+      const services = await this.kubernetesDiscovery.getServicesInfo();
 
       return {
-        namespace: this.k8sDiscovery.getNamespace(),
+        namespace: this.kubernetesDiscovery.getNamespace(),
         services: services,
         discoveryEnabled: true,
         lastDiscovery: this.lastDiscoveryTime,
         cachedInstancesCount: this.cachedInstances?.length || 0,
         kubernetes: {
           available: true,
-          namespace: this.k8sDiscovery.getNamespace(),
+          namespace: this.kubernetesDiscovery.getNamespace(),
           servicesFound: Object.keys(services).length
         }
       };
     } catch (error) {
       logger.error("Failed to get Kubernetes info", { error: error.message });
       return {
-        namespace: this.k8sDiscovery.getNamespace(),
+        namespace: this.kubernetesDiscovery.getNamespace(),
         services: {},
         discoveryEnabled: true,
         error: error.message,
@@ -249,7 +249,7 @@ class InstanceManager {
         cachedInstancesCount: this.cachedInstances?.length || 0,
         kubernetes: {
           available: true,
-          namespace: this.k8sDiscovery.getNamespace(),
+          namespace: this.kubernetesDiscovery.getNamespace(),
           error: error.message
         }
       };
@@ -304,7 +304,7 @@ class InstanceManager {
   }
 
   isUsingKubernetesDiscovery() {
-    return this.k8sDiscovery.isAvailable();
+    return this.kubernetesDiscovery.isAvailable();
   }
 
   invalidateCache() {

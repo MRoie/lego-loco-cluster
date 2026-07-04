@@ -31,7 +31,7 @@ data:
             return ""
 
     def get_qemu_health():
-        pid = run_cmd("pgrep -f qemu-system-i386")
+        pid = run_cmd("pgrep -fo qemu-system-i386")
         return "true" if pid else "false"
 
     def get_video_health():
@@ -42,7 +42,7 @@ data:
         
         display_active = "false"
         frame_rate = 0
-        vnc_display = os.environ.get("VNC_DISPLAY", ":1")
+        vnc_display = os.environ.get("DISPLAY") or os.environ.get("VNC_DISPLAY", ":1")
         
         # Check X display
         if run_cmd(f"xdpyinfo -display {vnc_display}"):
@@ -50,7 +50,7 @@ data:
             # Estimate frame rate
             x_activity = run_cmd(f"xwininfo -display {vnc_display} -root -stats | grep -c 'window'")
             if x_activity and int(x_activity) > 0:
-                frame_rate = 15
+                frame_rate = 25 if os.environ.get("QEMU_RENDER_BACKEND") == "qemu3dfx" else 15
 
         return {
             "vnc_available": vnc_available == "true",
@@ -112,7 +112,7 @@ data:
         except:
             pass
 
-        qemu_pid = run_cmd("pgrep -f qemu-system-i386")
+        qemu_pid = run_cmd("pgrep -fo qemu-system-i386")
         qemu_cpu = 0
         qemu_memory = 0
         if qemu_pid:
@@ -132,8 +132,12 @@ data:
         }
 
     def get_network_health():
-        bridge_up = bool(run_cmd("ip link show loco-br"))
-        tap_up = bool(run_cmd("ip link show tap0"))
+        bridge_if = os.environ.get("BRIDGE", "loco-br")
+        tap_if = os.environ.get("TAP_IF")
+        if not tap_if:
+            tap_if = f"tap{os.environ.get('INSTANCE_INDEX', '0')}"
+        bridge_up = bool(run_cmd(f"ip link show {bridge_if}"))
+        tap_up = bool(run_cmd(f"ip link show {tap_if}"))
         
         def read_stat(path):
             try:
@@ -142,13 +146,17 @@ data:
             except:
                 return 0
 
+        stat_root = f"/sys/class/net/{tap_if}/statistics"
+
         return {
+            "bridge": bridge_if,
+            "tap": tap_if,
             "bridge_up": bridge_up,
             "tap_up": tap_up,
-            "tx_packets": read_stat("/sys/class/net/tap0/statistics/tx_packets"),
-            "rx_packets": read_stat("/sys/class/net/tap0/statistics/rx_packets"),
-            "tx_errors": read_stat("/sys/class/net/tap0/statistics/tx_errors"),
-            "rx_errors": read_stat("/sys/class/net/tap0/statistics/rx_errors")
+            "tx_packets": read_stat(f"{stat_root}/tx_packets"),
+            "rx_packets": read_stat(f"{stat_root}/rx_packets"),
+            "tx_errors": read_stat(f"{stat_root}/tx_errors"),
+            "rx_errors": read_stat(f"{stat_root}/rx_errors")
         }
 
     class HealthHandler(http.server.BaseHTTPRequestHandler):

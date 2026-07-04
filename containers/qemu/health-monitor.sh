@@ -221,19 +221,21 @@ serve_health_endpoint() {
     log "Starting health monitoring HTTP server on port $HEALTH_PORT"
     
     while true; do
-        {
-            local health_report=$(generate_health_report)
-            
-            # Simple HTTP response
-            echo "HTTP/1.1 200 OK"
-            echo "Content-Type: application/json"
-            echo "Access-Control-Allow-Origin: *"
-            echo "Content-Length: ${#health_report}"
-            echo ""
-            echo "$health_report"
-        } | nc -l -p "$HEALTH_PORT" -w 1 >/dev/null 2>&1 || true
+        # Generate health data fresh for each request
+        local health_report
+        health_report=$(generate_health_report)
         
-        sleep 1
+        # Serve one HTTP response per connection
+        # Note: nc -l PORT (no -p) is required for netcat-openbsd on Ubuntu 22.04
+        {
+            echo -e "HTTP/1.1 200 OK\r"
+            echo -e "Content-Type: application/json\r"
+            echo -e "Access-Control-Allow-Origin: *\r"
+            echo -e "Connection: close\r"
+            echo -e "Content-Length: ${#health_report}\r"
+            echo -e "\r"
+            echo "$health_report"
+        } | nc -l "$HEALTH_PORT" >/dev/null 2>&1 || true
     done
 }
 

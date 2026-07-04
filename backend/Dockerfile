@@ -44,6 +44,6 @@ COPY backend/. .
 # Create config directory for mounted configmap
 RUN mkdir -p config
 
-EXPOSE 3001 5000/udp
+EXPOSE 3001 5000/udp 5001/udp
 
 CMD ["node", "server.js"]

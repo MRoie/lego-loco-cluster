@@ -13,14 +13,20 @@ export default function useWebRTC(targetId) {
   // simple numeric audio meter 0-1 updated from Web Audio API
   const [audioLevel, setAudioLevel] = useState(0);
   const [loading, setLoading] = useState(true);
-  // Connection quality metrics
+  // Previous stats snapshot for delta calculations
+  const prevStatsRef = useRef({});
+  // Connection quality metrics (extended with detailed RTCStats)
   const [connectionQuality, setConnectionQuality] = useState({
     bitrate: 0,
     packetLoss: 0,
     latency: 0,
     frameRate: 0,
     resolution: null,
-    connectionState: 'disconnected'
+    connectionState: 'disconnected',
+    codec: null,
+    audioCodec: null,
+    jitter: 0,
+    bandwidth: { inbound: 0, outbound: 0 }
   });
 
   useEffect(() => {
@@ -28,14 +34,27 @@ export default function useWebRTC(targetId) {
     let cancelled = false;
     let reconnectTimer = null;
     let statsTimer = null;
+    let reconnectAttempt = 0;
+    const MAX_RECONNECT_ATTEMPTS = 50;
+    const BASE_DELAY = 1000;
+    const MAX_DELAY = 30000;
 
     const scheduleReconnect = () => {
       if (cancelled || reconnectTimer) return;
+      if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+        logger.error('WebRTC signaling: max reconnect attempts reached', { targetId });
+        return;
+      }
       setLoading(true);
+      const exponential = BASE_DELAY * Math.pow(2, reconnectAttempt);
+      const jitter = Math.random() * 0.3 * exponential;
+      const delay = Math.min(exponential + jitter, MAX_DELAY);
+      reconnectAttempt++;
+      logger.info('Scheduling WebRTC reconnect', { targetId, attempt: reconnectAttempt, delayMs: Math.round(delay) });
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         connect();
-      }, 1000);
+      }, delay);
     };
 
     // Monitor WebRTC stats for quality metrics
@@ -44,6 +63,7 @@ export default function useWebRTC(targetId) {
       
       statsTimer = setInterval(async () => {
         try {
+          if (pc.connectionState === 'closed') return;
           const stats = await pc.getStats();
           const qualityMetrics = extractQualityMetrics(stats);
           setConnectionQuality(prev => ({
@@ -54,7 +74,7 @@ export default function useWebRTC(targetId) {
         } catch (error) {
           logger.warn('Failed to get WebRTC stats', { targetId, error: error.message });
         }
-      }, 1000); // Update stats every second
+      }, 2000); // Update stats every 2 seconds
     };
 
     // Extract quality metrics from RTCStats
@@ -64,12 +84,24 @@ export default function useWebRTC(targetId) {
         packetLoss: 0,
         latency: 0,
         frameRate: 0,
-        resolution: null
+        resolution: null,
+        codec: null,
+        audioCodec: null,
+        jitter: 0,
+        bandwidth: { inbound: 0, outbound: 0 }
       };
 
+      // Collect codec lookup table from codec-type reports
+      const codecMap = {};
       stats.forEach((report) => {
-        if (report.type === 'inbound-rtp' && report.mediaType === 'video') {
-          // Video quality metrics
+        if (report.type === 'codec') {
+          codecMap[report.id] = report.mimeType;
+        }
+      });
+
+      stats.forEach((report) => {
+        // --- Inbound video RTP ---
+        if (report.type === 'inbound-rtp' && report.kind === 'video') {
           const prev = prevStatsRef.current[report.id] || {};
           // Bitrate calculation using delta bytes and delta time
           if (
@@ -81,8 +113,9 @@ export default function useWebRTC(targetId) {
             const deltaBytes = report.bytesReceived - prev.bytesReceived;
             const deltaTimeMs = report.timestamp - prev.timestamp;
             if (deltaBytes > 0 && deltaTimeMs > 0) {
-              const bitrate = Math.round((deltaBytes * 8) / (deltaTimeMs / 1000));
-              metrics.bitrate = bitrate;
+              const bps = Math.round((deltaBytes * 8) / (deltaTimeMs / 1000));
+              metrics.bitrate = bps;
+              metrics.bandwidth.inbound = Math.round(deltaBytes / (deltaTimeMs / 1000));
             }
           }
           // Frame rate calculation using delta frames and delta time
@@ -103,9 +136,19 @@ export default function useWebRTC(targetId) {
             metrics.resolution = `${report.frameWidth}x${report.frameHeight}`;
           }
           // Packet loss calculation
-          if (report.packetsLost && report.packetsReceived) {
+          if (typeof report.packetsLost === 'number' && typeof report.packetsReceived === 'number') {
             const totalPackets = report.packetsLost + report.packetsReceived;
-            metrics.packetLoss = totalPackets > 0 ? (report.packetsLost / totalPackets) * 100 : 0;
+            metrics.packetLoss = totalPackets > 0
+              ? Math.round((report.packetsLost / totalPackets) * 10000) / 100
+              : 0;
+          }
+          // Jitter (seconds → ms)
+          if (typeof report.jitter === 'number') {
+            metrics.jitter = Math.round(report.jitter * 1000);
+          }
+          // Video codec from codecId reference
+          if (report.codecId && codecMap[report.codecId]) {
+            metrics.codec = codecMap[report.codecId];
           }
           // Store current values for next interval
           prevStatsRef.current[report.id] = {
@@ -115,9 +158,37 @@ export default function useWebRTC(targetId) {
           };
         }
 
+        // --- Inbound audio RTP ---
+        if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+          if (report.codecId && codecMap[report.codecId]) {
+            metrics.audioCodec = codecMap[report.codecId];
+          }
+        }
+
+        // --- Outbound RTP (video) for outbound bandwidth ---
+        if (report.type === 'outbound-rtp' && report.kind === 'video') {
+          const prev = prevStatsRef.current[report.id] || {};
+          if (
+            typeof report.bytesSent === 'number' &&
+            typeof report.timestamp === 'number' &&
+            typeof prev.bytesSent === 'number' &&
+            typeof prev.timestamp === 'number'
+          ) {
+            const deltaBytes = report.bytesSent - prev.bytesSent;
+            const deltaTimeMs = report.timestamp - prev.timestamp;
+            if (deltaBytes > 0 && deltaTimeMs > 0) {
+              metrics.bandwidth.outbound = Math.round(deltaBytes / (deltaTimeMs / 1000));
+            }
+          }
+          prevStatsRef.current[report.id] = {
+            bytesSent: report.bytesSent,
+            timestamp: report.timestamp
+          };
+        }
+
+        // --- Candidate pair (latency) ---
         if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-          // Latency from RTT
-          if (report.currentRoundTripTime) {
+          if (typeof report.currentRoundTripTime === 'number') {
             metrics.latency = Math.round(report.currentRoundTripTime * 1000); // Convert to ms
           }
         }
@@ -167,14 +238,22 @@ export default function useWebRTC(targetId) {
         }
 
         pc.ontrack = (ev) => {
-          const [stream] = ev.streams;
           if (videoRef.current) {
-            videoRef.current.srcObject = stream;
+            // Accumulate tracks into a single MediaStream instead of
+            // replacing srcObject each time (video and audio arrive as
+            // separate streams from werift)
+            if (!videoRef.current.srcObject) {
+              videoRef.current.srcObject = new MediaStream();
+            }
+            videoRef.current.srcObject.addTrack(ev.track);
             videoRef.current
               .play()
               .catch((e) => logger.error("Video play failed", { targetId, error: e.message }));
           }
-          if (!audioCtx) startMeter(stream);
+          // Start audio meter only when audio track arrives
+          if (ev.track.kind === 'audio' && !audioCtx) {
+            startMeter(new MediaStream([ev.track]));
+          }
           setLoading(false);
         };
 
@@ -191,7 +270,12 @@ export default function useWebRTC(targetId) {
         };
 
         ws.onopen = async () => {
+          reconnectAttempt = 0; // reset backoff on successful connection
           ws.send(JSON.stringify({ type: "register" }));
+          // Add recvonly transceivers so the SDP offer includes video and audio
+          // m= sections. Without these, the server cannot send media back.
+          pc.addTransceiver('video', { direction: 'recvonly' });
+          pc.addTransceiver('audio', { direction: 'recvonly' });
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           ws.send(
@@ -233,6 +317,9 @@ export default function useWebRTC(targetId) {
           }
         };
 
+        // Queue ICE candidates that arrive before remote description is set
+        const pendingCandidates = [];
+
         ws.onmessage = async (ev) => {
           const msg = JSON.parse(ev.data);
           if (msg.type === "signal" && msg.data) {
@@ -240,6 +327,16 @@ export default function useWebRTC(targetId) {
               await pc.setRemoteDescription(
                 new RTCSessionDescription(msg.data),
               );
+              // Flush any queued ICE candidates now that remote desc is set
+              for (const c of pendingCandidates) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(c));
+                } catch (e) {
+                  logger.warn("Failed to add queued ICE candidate", { targetId, error: e.message });
+                }
+              }
+              pendingCandidates.length = 0;
+
               if (msg.data.type === "offer") {
                 const ans = await pc.createAnswer();
                 await pc.setLocalDescription(ans);
@@ -252,10 +349,15 @@ export default function useWebRTC(targetId) {
                 );
               }
             } else if (msg.data.candidate) {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(msg.data));
-              } catch (e) {
-                logger.warn("Failed to add ICE candidate", { targetId, error: e.message });
+              // Queue candidate if remote description not yet set
+              if (!pc.remoteDescription) {
+                pendingCandidates.push(msg.data);
+              } else {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(msg.data));
+                } catch (e) {
+                  logger.warn("Failed to add ICE candidate", { targetId, error: e.message });
+                }
               }
             }
           }
@@ -292,10 +394,16 @@ export default function useWebRTC(targetId) {
         latency: 0,
         frameRate: 0,
         resolution: null,
-        connectionState: 'disconnected'
+        connectionState: 'disconnected',
+        codec: null,
+        audioCodec: null,
+        jitter: 0,
+        bandwidth: { inbound: 0, outbound: 0 }
       });
+      prevStatsRef.current = {};
     };
   }, [targetId]);
 
-  return { videoRef, audioLevel, loading, connectionQuality };
+  // Expose stats as both `stats` (new API) and `connectionQuality` (backward compat)
+  return { videoRef, audioLevel, loading, connectionQuality, stats: connectionQuality };
 }

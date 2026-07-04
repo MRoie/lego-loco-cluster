@@ -1,0 +1,50 @@
+{{- if .Values.monitoring.enabled }}
+---
+# ServiceMonitor for the backend /metrics endpoint (prom-client)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "loco.fullname" . }}-backend
+  namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: lego-loco-cluster
+    release: {{ .Values.monitoring.prometheusRelease | default "kube-prometheus" }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/part-of: lego-loco-cluster
+  namespaceSelector:
+    matchNames:
+      - {{ include "loco.namespace" . }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.monitoring.scrapeInterval | default "15s" }}
+      scrapeTimeout: {{ .Values.monitoring.scrapeTimeout | default "10s" }}
+---
+# ServiceMonitor for emulator health endpoints
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "loco.fullname" . }}-emulator
+  namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: emulator
+    app.kubernetes.io/part-of: lego-loco-cluster
+    release: {{ .Values.monitoring.prometheusRelease | default "kube-prometheus" }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: emulator
+      app.kubernetes.io/part-of: lego-loco-cluster
+  namespaceSelector:
+    matchNames:
+      - {{ include "loco.namespace" . }}
+  endpoints:
+    - port: health
+      path: /health
+      interval: {{ .Values.monitoring.scrapeInterval | default "15s" }}
+      scrapeTimeout: {{ .Values.monitoring.scrapeTimeout | default "10s" }}
+{{- end }}

@@ -1,0 +1,130 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-game-ports
+  namespace: loco
+  labels:
+    app.kubernetes.io/part-of: loco-cluster
+    app.kubernetes.io/managed-by: lan-lead
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: emulator
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Backend and kubelet health probes — VNC (5901) and health (8080)
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 5901
+        - protocol: TCP
+          port: 8080
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8080
+
+    # DirectPlay game traffic — TCP & UDP 2300
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: TCP
+          port: 2300
+        - protocol: UDP
+          port: 2300
+
+    # DirectPlay session discovery — TCP 47624
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: TCP
+          port: 47624
+
+    # NetBIOS name resolution — UDP/TCP 137-139
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: UDP
+          port: 137
+        - protocol: UDP
+          port: 138
+        - protocol: UDP
+          port: 139
+        - protocol: TCP
+          port: 137
+        - protocol: TCP
+          port: 138
+        - protocol: TCP
+          port: 139
+
+  egress:
+    # Allow DNS resolution
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow UDP streams to backend (video port 5000, audio port 5001)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+      ports:
+        - protocol: UDP
+          port: 5000
+        - protocol: UDP
+          port: 5001
+
+    # DirectPlay game traffic — TCP & UDP 2300
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: TCP
+          port: 2300
+        - protocol: UDP
+          port: 2300
+
+    # DirectPlay session discovery — TCP 47624
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: TCP
+          port: 47624
+
+    # NetBIOS name resolution — UDP/TCP 137-139
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: emulator
+      ports:
+        - protocol: UDP
+          port: 137
+        - protocol: UDP
+          port: 138
+        - protocol: UDP
+          port: 139
+        - protocol: TCP
+          port: 137
+        - protocol: TCP
+          port: 138
+        - protocol: TCP
+          port: 139

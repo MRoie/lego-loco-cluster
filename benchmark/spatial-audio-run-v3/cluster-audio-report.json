@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-02-20T00:55:42.612Z",
+  "dashboardUrl": "http://localhost:3000",
+  "duration": 15000,
+  "phases": [
+    {
+      "name": "2D Grid View",
+      "status": "completed"
+    },
+    {
+      "name": "VR View",
+      "status": "completed"
+    }
+  ],
+  "checks": {
+    "cardCount": 1,
+    "unmutedCards": 1,
+    "audioMeters2d": {
+      "total": 1,
+      "active": 0
+    },
+    "videoElements": [
+      {
+        "index": 0,
+        "srcObject": true,
+        "readyState": 4,
+        "muted": false,
+        "volume": 0.5,
+        "paused": false,
+        "width": 0,
+        "height": 0
+      }
+    ],
+    "audioTracks2d": 1,
+    "instanceRecording": true,
+    "vrScene": {
+      "sceneReady": false,
+      "tileCount": 0,
+      "hasAudioContext": true
+    }
+  },
+  "artifacts": [
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run-v3\\cluster-2d-frame-start.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run-v3\\cluster-2d-frame-mid.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run-v3\\cluster-2d-frame-end.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run-v3\\cluster-2d-recording.webm",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run-v3\\cluster-vr-frame-start.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run-v3\\cluster-vr-frame-mid.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run-v3\\cluster-vr-frame-end.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run-v3\\cluster-vr-recording.webm"
+  ],
+  "summary": {
+    "instancesFound": 1,
+    "audioTracksDetected": true,
+    "audioMetersActive": false,
+    "vrSceneLoaded": false,
+    "vrTilesRendered": 0,
+    "spatialAudioToggled": false,
+    "perInstanceRecording": true,
+    "overallStatus": "pass"
+  }
+}

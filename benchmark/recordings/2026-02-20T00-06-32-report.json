@@ -1,0 +1,283 @@
+{
+  "runId": "2026-02-20T00-06-32",
+  "url": "http://localhost:3000",
+  "duration": 60,
+  "startTime": "2026-02-20T00:06:32.576Z",
+  "endTime": "2026-02-20T00:08:39.149Z",
+  "instances": 1,
+  "instanceDetails": [
+    {
+      "id": "instance-0",
+      "status": "ready",
+      "name": "Windows 98 - Game Server"
+    }
+  ],
+  "stats": {
+    "samples": 13,
+    "avgCpu": 99,
+    "maxCpu": 100,
+    "avgMemPercent": 38,
+    "maxMemMB": 49423,
+    "avgGpu": 31,
+    "timeSeries": [
+      {
+        "timestamp": "2026-02-20T00:06:32.576Z",
+        "cpuPercent": 88,
+        "memTotalMB": 130998,
+        "memUsedMB": 48217,
+        "memPercent": 37,
+        "gpuPercent": 37,
+        "gpuMemUsedMB": 1113,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "42.05%",
+            "mem": "2.603GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:06:46.918Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 48766,
+        "memPercent": 37,
+        "gpuPercent": 21,
+        "gpuMemUsedMB": 1159,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "58.88%",
+            "mem": "2.607GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:06:57.935Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 48837,
+        "memPercent": 37,
+        "gpuPercent": 36,
+        "gpuMemUsedMB": 1142,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "84.61%",
+            "mem": "2.614GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:07:08.434Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 48841,
+        "memPercent": 37,
+        "gpuPercent": 27,
+        "gpuMemUsedMB": 1141,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "111.69%",
+            "mem": "2.652GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:07:18.860Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 48916,
+        "memPercent": 37,
+        "gpuPercent": 29,
+        "gpuMemUsedMB": 1139,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "119.46%",
+            "mem": "2.756GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:07:29.144Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 48993,
+        "memPercent": 37,
+        "gpuPercent": 29,
+        "gpuMemUsedMB": 1122,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "113.65%",
+            "mem": "2.794GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:07:38.903Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 49145,
+        "memPercent": 38,
+        "gpuPercent": 28,
+        "gpuMemUsedMB": 1149,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "120.06%",
+            "mem": "3.003GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:07:49.356Z",
+        "cpuPercent": 99,
+        "memTotalMB": 130998,
+        "memUsedMB": 49345,
+        "memPercent": 38,
+        "gpuPercent": 31,
+        "gpuMemUsedMB": 1136,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "112.38%",
+            "mem": "3.207GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:07:59.008Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 49388,
+        "memPercent": 38,
+        "gpuPercent": 37,
+        "gpuMemUsedMB": 1143,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "116.63%",
+            "mem": "3.207GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:08:08.902Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 49378,
+        "memPercent": 38,
+        "gpuPercent": 28,
+        "gpuMemUsedMB": 1127,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "113.12%",
+            "mem": "3.198GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:08:18.970Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 49423,
+        "memPercent": 38,
+        "gpuPercent": 33,
+        "gpuMemUsedMB": 1122,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "116.44%",
+            "mem": "3.198GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:08:29.288Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 49249,
+        "memPercent": 38,
+        "gpuPercent": 29,
+        "gpuMemUsedMB": 1127,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "113.74%",
+            "mem": "3.199GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      },
+      {
+        "timestamp": "2026-02-20T00:08:39.149Z",
+        "cpuPercent": 100,
+        "memTotalMB": 130998,
+        "memUsedMB": 49256,
+        "memPercent": 38,
+        "gpuPercent": 34,
+        "gpuMemUsedMB": 1122,
+        "gpuMemTotalMB": 8192,
+        "dockerContainers": [
+          {
+            "name": "loco-control-plane",
+            "cpu": "115.83%",
+            "mem": "3.2GiB / 62.76GiB"
+          }
+        ],
+        "k8sNodes": "unavailable",
+        "k8sPods": "unavailable"
+      }
+    ]
+  },
+  "screenshots": [
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\recordings\\2026-02-20T00-06-32-01-dashboard-loaded.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\recordings\\2026-02-20T00-06-32-at-10s.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\recordings\\2026-02-20T00-06-32-at-30s.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\recordings\\2026-02-20T00-06-32-at-60s.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\recordings\\2026-02-20T00-06-32-final.png"
+  ],
+  "artifacts": {
+    "video": "2026-02-20T00-06-32-game-recording.webm",
+    "report": "2026-02-20T00-06-32-report.json"
+  }
+}

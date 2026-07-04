@@ -20,13 +20,31 @@ log_info() {
 
 # Configuration with defaults
 BRIDGE=${BRIDGE:-loco-br}
-TAP_IF=${TAP_IF:-tap0}
+
+# --- Instance Identity Derivation (K2 contract: POD_NAME via downward API) ---
+# Priority: POD_NAME ordinal > INSTANCE_INDEX env > default 0
+if [ -n "${POD_NAME:-}" ]; then
+  INSTANCE_INDEX=${POD_NAME##*-}
+fi
+INSTANCE_INDEX=${INSTANCE_INDEX:-0}
+GUEST_HOSTNAME=${GUEST_HOSTNAME:-LOCO-0${INSTANCE_INDEX}}
+GUEST_IP=${GUEST_IP:-192.168.10.$((10 + INSTANCE_INDEX))}
+GUEST_MAC=${GUEST_MAC:-52:54:00:10:00:0${INSTANCE_INDEX}}
+TAP_IF=${TAP_IF:-tap${INSTANCE_INDEX}}
+GUEST_GATEWAY=${GUEST_GATEWAY:-192.168.10.1}
+GUEST_NETMASK=${GUEST_NETMASK:-255.255.255.0}
+WORKGROUP=${WORKGROUP:-LOCOLAND}
+
 DISK=${DISK:-/images/win98.qcow2}
 SNAPSHOT_REGISTRY=${SNAPSHOT_REGISTRY:-ghcr.io/mroie/qemu-snapshots}
 SNAPSHOT_TAG=${SNAPSHOT_TAG:-win98-base}
 USE_PREBUILT_SNAPSHOT=${USE_PREBUILT_SNAPSHOT:-true}
 
 log_info "Starting QEMU emulator container with configuration:"
+log_info "  INSTANCE_INDEX=$INSTANCE_INDEX (from POD_NAME=${POD_NAME:-<unset>})"
+log_info "  GUEST_HOSTNAME=$GUEST_HOSTNAME"
+log_info "  GUEST_IP=$GUEST_IP"
+log_info "  GUEST_MAC=$GUEST_MAC"
 log_info "  BRIDGE=$BRIDGE"
 log_info "  TAP_IF=$TAP_IF"
 log_info "  DISK=$DISK"
@@ -244,21 +262,32 @@ fi
 
 # === STEP 5: QEMU Startup ===
 log_info "Starting QEMU emulator..."
-log_info "QEMU command: qemu-system-i386 -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
+
+# Auto-detect KVM or fall back to TCG
+ACCEL_FLAG="-accel tcg"
+if [ -e /dev/kvm ] && [ -w /dev/kvm ]; then
+  ACCEL_FLAG="-accel kvm"
+  log_info "KVM acceleration available — using KVM"
+else
+  log_info "KVM not available — using TCG (software emulation)"
+fi
+
+log_info "QEMU command: qemu-system-i386 $ACCEL_FLAG -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
 
 # Add debugging to see what we're actually booting from
 log_info "Checking disk image contents..."
 qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
 
 qemu-system-i386 \
+  $ACCEL_FLAG \
   -M pc -cpu pentium2 \
   -m 512 -hda "$SNAPSHOT_NAME" \
-  -net nic,model=ne2k_pci -net tap,ifname=$TAP_IF,script=no,downscript=no \
+  -net nic,model=ne2k_pci,macaddr=$GUEST_MAC -net tap,ifname=$TAP_IF,script=no,downscript=no \
   -device sb16,audiodev=snd0 \
   -vga std -display vnc=0.0.0.0:1 \
   -audiodev pa,id=snd0 \
   -rtc base=localtime \
-  -boot order=dc,menu=on,splash-time=5000 \
+  -boot order=c,menu=on \
   -no-shutdown \
   -no-reboot \
   -monitor none &
@@ -281,23 +310,24 @@ log_info "VNC display available on :5901"
 
 # === STEP 6: Video Streaming Setup ===
 log_info "Starting GStreamer video stream at 1024x768 for Lego Loco compatibility..."
-log_info "Stream configuration: 1024x768@25fps, bitrate=1200kbps (optimized for higher resolution)"
+log_info "Stream configuration: VP8 via VNC capture (rfbsrc), 1024x768, bitrate=1200kbps"
+log_info "Note: Using rfbsrc to capture from QEMU VNC display (not ximagesrc/Xvfb which is empty)"
 gst-launch-1.0 -v \
-  ximagesrc display-name=:$DISPLAY_NUM use-damage=0 ! \
+  rfbsrc host=127.0.0.1 port=5901 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoconvert ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
   videoscale ! \
-  video/x-raw,width=1024,height=768,framerate=25/1 ! \
+  video/x-raw,width=1024,height=768 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  x264enc tune=zerolatency bitrate=1200 speed-preset=ultrafast key-int-max=25 ! \
+  vp8enc deadline=1 target-bitrate=1200000 keyframe-max-dist=25 cpu-used=8 ! \
   queue max-size-time=100000000 max-size-buffers=5 leaky=downstream ! \
-  rtph264pay config-interval=1 ! \
+  rtpvp8pay ! \
   udpsink host=127.0.0.1 port=5000 sync=false async=false &
 GSTREAMER_PID=$!
 
 log_success "GStreamer started with PID: $GSTREAMER_PID"
-log_info "Stream details: 1024x768@25fps H.264 stream on UDP port 5000"
+log_info "Stream details: 1024x768 VP8 stream via rfbsrc on UDP port 5000"
 
 # === STEP 7: Stream Health Monitoring (SRE Principles) ===
 log_info "Implementing SRE monitoring for stream reliability..."
