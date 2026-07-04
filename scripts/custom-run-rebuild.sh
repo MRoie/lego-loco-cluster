@@ -9,11 +9,13 @@ if ! ip link show $TAP_IF > /dev/null 2>&1; then
     ip link set dev $TAP_IF up
 fi
 
-echo "Starting QEMU with direct access to /vm/win98.qcow2 (CHANGES WILL BE SAVED)..."
+echo "Starting QEMU (REBUILD mode) with /vm/win98-rebuild.qcow2 as hda and win98se.iso as cdrom..."
+echo "Boot order=dc: CD-ROM first (press a key to install), falls through to hda if no key pressed."
 qemu-system-i386 \
   -M pc -cpu pentium2 -m 1024 \
-  -hda /vm/win98.qcow2 \
-  -drive file=/vm/softgpu.iso,media=cdrom \
+  -hda /vm/win98-rebuild.qcow2 \
+  -cdrom /vm/win98se.iso \
+  -boot order=dc,menu=on \
   -device sb16 \
   -usb -device usb-tablet \
   -vga vmware -display vnc=0.0.0.0:0 \

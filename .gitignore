@@ -12,3 +12,8 @@ images/*
 compose/*.tar
 talosctl
 
+# Large Win98 rebuild source artifacts (staged locally, not tracked in git)
+containers/*.iso
+containers/*.zip
+containers/win98_loco_qemu.qcow2
+

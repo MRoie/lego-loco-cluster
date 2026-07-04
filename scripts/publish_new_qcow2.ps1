@@ -18,7 +18,7 @@ Copy-Item $QcowFile (Join-Path $TempContext "win98.qcow2.builtin")
 
 $DockerFileContent = @"
 FROM ghcr.io/mroie/lego-loco-cluster/win98-softgpu:latest
-COPY win98.qcow2.builtin /vm/win98_softgpu.qcow2
+COPY win98.qcow2.builtin /opt/builtin-images/win98.qcow2.builtin
 "@
 
 Set-Content (Join-Path $TempContext "Dockerfile") $DockerFileContent
