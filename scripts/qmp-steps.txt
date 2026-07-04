@@ -1,4 +1,3 @@
 # check both: host setup + joiner search
-0 sleep 15
 0 dump w0x
 1 dump w1x
