@@ -1,3 +1,4 @@
+{{- if .Values.emulator.diskPVC }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -16,6 +17,5 @@ spec:
   resources:
     requests:
       storage: {{ .Values.storage.diskSize | default "10Gi" }}
-  {{- if .Values.emulator.diskPVC }}
   volumeName: {{ .Values.emulator.diskPVC }}-pv
-  {{- end }}
+{{- end }}

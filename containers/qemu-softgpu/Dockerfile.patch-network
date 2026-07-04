@@ -1,0 +1,16 @@
+# Lightweight patch layer: refresh the runtime scripts (VXLAN L2 mesh, DHCP,
+# NetBIOS/identity floppy support merged in feature/pi-dev-agent-teams) on top
+# of the already-published win98-softgpu image, without re-baking the 9GB+
+# disk image or recompiling QEMU.
+ARG BASE_IMAGE=ghcr.io/mroie/lego-loco-cluster/win98-softgpu:latest
+FROM ${BASE_IMAGE}
+
+COPY entrypoint.sh /entrypoint.sh
+COPY customize-win98-instance.sh /usr/local/bin/customize-win98-instance.sh
+COPY mini_dhcp.py /usr/local/bin/mini_dhcp.py
+COPY qmp-control.py /usr/local/bin/qmp-control.py
+COPY watch_art_res.sh /usr/local/bin/watch_art_res.sh
+COPY health-monitor.sh /usr/local/bin/health-monitor.sh
+RUN chmod +x /entrypoint.sh /usr/local/bin/customize-win98-instance.sh /usr/local/bin/mini_dhcp.py /usr/local/bin/qmp-control.py /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -42,3 +42,11 @@ __pycache__/
 # Transient debug output from helper scripts 
 scripts/*-result.txt 
 scripts/merge-status.txt 
+.kube-config
+.bin/helm.exe
+.bin/helm.zip
+.bin/kind.exe
+.bin/kubectl.exe
+.bin/helm-extract/windows-amd64/helm.exe
+.bin/helm-extract/windows-amd64/LICENSE
+.bin/helm-extract/windows-amd64/README.md
