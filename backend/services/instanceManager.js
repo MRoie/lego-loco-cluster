@@ -115,7 +115,7 @@ class InstanceManager {
         if (!inst.health) inst.health = {};
 
         // Update overall health based on probe
-        console.log(`[DEBUG] Probe result for ${inst.id}:`, JSON.stringify(inst.probe));
+        logger.info(`Probe result for ${inst.id}:`, JSON.stringify(inst.probe));
 
         if (inst.probe.reachable && inst.probe.services.vnc.status === 'ok') {
           // If probe is good, trust it
@@ -123,7 +123,7 @@ class InstanceManager {
           inst.health.ready = true;
           inst.health.details = 'Active probe successful';
         } else {
-          console.log(`[DEBUG] Probe failed for ${inst.id}`, inst.probe.services.vnc.status);
+          logger.info(`Probe failed for ${inst.id}`, inst.probe.services.vnc.status);
           logger.info(`Probe failed for ${inst.id}`, {
             vnc: inst.probe.services.vnc.status,
             health: inst.probe.services.health.status,

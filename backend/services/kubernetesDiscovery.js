@@ -118,8 +118,8 @@ class KubernetesDiscovery {
 
       const labelSelector = 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster';
 
-      console.log(`🚀 Calling Kubernetes APIs for namespace: "${namespace}"`);
-      console.log(`📝 Label selector: "${labelSelector}"`);
+      logger.info(`Calling Kubernetes APIs for namespace: "${namespace}"`);
+      logger.info(`Label selector: "${labelSelector}"`);
 
       // Add pre-call validation
       if (typeof namespace !== 'string') {
@@ -137,7 +137,7 @@ class KubernetesDiscovery {
         labelSelector: labelSelector
       };
 
-      console.log(`🔧 API call parameters:`, { pods: listPodsParams, statefulSets: listStatefulSetsParams });
+      logger.info(`API call parameters:`, { pods: listPodsParams, statefulSets: listStatefulSetsParams });
 
       // Execute both API calls in parallel for efficiency
       // The newer Kubernetes client expects an object with namespace and other options
@@ -152,13 +152,13 @@ class KubernetesDiscovery {
       }
 
       if (!statefulSetsResponse || !statefulSetsResponse.body) {
-        console.log('⚠️ No StatefulSets response or body from Kubernetes API');
+        logger.info('No StatefulSets response or body from Kubernetes API');
       }
 
       const pods = podsResponse.body.items || [];
       const statefulSets = statefulSetsResponse.body.items || [];
 
-      console.log(`✅ Kubernetes API responses received - found ${pods.length} pods and ${statefulSets.length} StatefulSets`);
+      logger.info(`Kubernetes API responses received - found ${pods.length} pods and ${statefulSets.length} StatefulSets`);
 
       const instances = [];
       logger.debug("Processing discovered pods", { podCount: pods.length });
@@ -209,9 +209,9 @@ class KubernetesDiscovery {
             }
           };
 
-          console.log(`✅ Added instance: ${instance.id} (${pod.metadata.name})`);
+          logger.info(`Added instance: ${instance.id} (${pod.metadata.name})`);
           if (statefulSet) {
-            console.log(`   📊 StatefulSet info: ${statefulSet.metadata.name} (${statefulSet.status.readyReplicas || 0}/${statefulSet.spec.replicas} ready)`);
+            logger.info(`   📊 StatefulSet info: ${statefulSet.metadata.name} (${statefulSet.status.readyReplicas || 0}/${statefulSet.spec.replicas} ready)`);
           }
           instances.push(instance);
           logger.debug("Instance discovered", {
@@ -279,11 +279,11 @@ class KubernetesDiscovery {
       // Ensure namespace is a valid string with extra validation, default to 'loco'
       const namespace = String(this.namespace).trim();
       if (!namespace || namespace === 'null' || namespace === 'undefined') {
-        console.warn('Namespace validation failed for services info - using default: loco');
+        logger.warn('Namespace validation failed for services info - using default: loco');
         return {};
       }
 
-      console.log(`🔍 Getting services info for namespace: "${namespace}"`);
+      logger.info(`Getting services info for namespace: "${namespace}"`);
 
       // Use object-based parameters for kubernetes/client-node v1.3.0+
       const labelSelector = 'app.kubernetes.io/part-of=lego-loco-cluster';
@@ -299,7 +299,7 @@ class KubernetesDiscovery {
         return {};
       }
 
-      console.log(`✅ Found ${servicesResponse.body.items?.length || 0} services`);
+      logger.info(`Found ${servicesResponse.body.items?.length || 0} services`);
 
       const services = {};
 
@@ -311,7 +311,7 @@ class KubernetesDiscovery {
           ports: service.spec.ports,
           selector: service.spec.selector
         };
-        console.log(`📋 Found service: ${service.metadata.name} (${service.spec.type})`);
+        logger.info(`Found service: ${service.metadata.name} (${service.spec.type})`);
       }
 
       return services;
@@ -385,7 +385,7 @@ class KubernetesDiscovery {
         }
       );
 
-      console.log(`✅ Watch established for namespace: "${namespace}"`);
+      logger.info(`Watch established for namespace: "${namespace}"`);
       return watchRequest;
     } catch (error) {
       logger.error("Failed to start watching instances", { error: error.message });
@@ -405,7 +405,7 @@ class KubernetesDiscovery {
     }
 
     if (!this.namespace || this.namespace.trim() === '' || this.namespace === 'null' || this.namespace === 'undefined') {
-      console.warn('Cannot get StatefulSets info: Kubernetes namespace is null, undefined, or empty');
+      logger.warn('Cannot get StatefulSets info: Kubernetes namespace is null, undefined, or empty');
       return {};
     }
 
@@ -413,11 +413,11 @@ class KubernetesDiscovery {
       // Ensure namespace is a valid string with extra validation, default to 'loco'
       const namespace = String(this.namespace).trim();
       if (!namespace || namespace === 'null' || namespace === 'undefined') {
-        console.warn('Namespace validation failed for StatefulSets info - using default: loco');
+        logger.warn('Namespace validation failed for StatefulSets info - using default: loco');
         return {};
       }
 
-      console.log(`🔍 Getting StatefulSets info for namespace: "${namespace}"`);
+      logger.info(`Getting StatefulSets info for namespace: "${namespace}"`);
 
       // Use object-based parameters for kubernetes/client-node v1.3.0+
       const labelSelector = 'app.kubernetes.io/part-of=lego-loco-cluster';
@@ -429,11 +429,11 @@ class KubernetesDiscovery {
       const statefulSetsResponse = await this.k8sAppsApi.listNamespacedStatefulSet(listStatefulSetsParams);
 
       if (!statefulSetsResponse || !statefulSetsResponse.body) {
-        console.log('⚠️ No StatefulSets response or body from Kubernetes API');
+        logger.info('No StatefulSets response or body from Kubernetes API');
         return {};
       }
 
-      console.log(`✅ Found ${statefulSetsResponse.body.items?.length || 0} StatefulSets`);
+      logger.info(`Found ${statefulSetsResponse.body.items?.length || 0} StatefulSets`);
 
       const statefulSets = {};
 
@@ -449,12 +449,12 @@ class KubernetesDiscovery {
           observedGeneration: sts.status.observedGeneration,
           conditions: sts.status.conditions || []
         };
-        console.log(`📋 Found StatefulSet: ${sts.metadata.name} (${sts.status.readyReplicas || 0}/${sts.spec.replicas} ready)`);
+        logger.info(`Found StatefulSet: ${sts.metadata.name} (${sts.status.readyReplicas || 0}/${sts.spec.replicas} ready)`);
       }
 
       return statefulSets;
     } catch (error) {
-      console.error('❌ Failed to get StatefulSets info:', error.message);
+      logger.error('Failed to get StatefulSets info:', error.message);
       return {};
     }
   }
