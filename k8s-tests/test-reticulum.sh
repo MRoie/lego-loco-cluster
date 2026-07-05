@@ -124,7 +124,8 @@ fi
 # ---------------------------------------------------------------------------
 # Step 5 — Run benchmark if available
 # ---------------------------------------------------------------------------
-if command -v python3 >/dev/null 2>&1 && [ -f "benchmark/reticulum_bench.py" ]; then
+# python3 -c guards against launchers that exist but cannot run (e.g. Windows Store shim)
+if python3 -c 'pass' >/dev/null 2>&1 && [ -f "benchmark/reticulum_bench.py" ]; then
   log "Running local loopback benchmark..."
   python3 benchmark/reticulum_bench.py --messages 50 --output "$LOG_DIR/reticulum_bench.csv" 2>&1 | while IFS= read -r line; do
     log "  [bench] $line"
