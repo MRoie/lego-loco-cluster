@@ -1,4 +1,0 @@
-[R] START id=0
-[R] Connected
-[R] initial: W=95% B=0% G=3% O=0%
-[R] === TEST 1: Launch calc ===
