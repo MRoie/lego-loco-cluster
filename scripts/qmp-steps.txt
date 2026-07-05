@@ -1,3 +1,15 @@
-# check both: host setup + joiner search
-0 dump w0x
-1 dump w1x
+# instance-0 from mainmenu: click multiplayer case (cursor already on it)
+0 hmp mouse_button 1
+0 hmp mouse_button 0
+0 sleep 4
+0 dump cn0a
+# join binoculars appear at right; move to join (lower red button ~828,490)
+0 hmp mouse_move -3000 -3000
+0 sleep 1
+0 hmp mouse_move 828 490
+0 sleep 1
+0 dump cn0b
+0 hmp mouse_button 1
+0 hmp mouse_button 0
+0 sleep 4
+0 dump cn0c

@@ -50,12 +50,11 @@ data:
   {{- end }}
   
   {{- if .Values.storage.strategy.hybrid.emptyDir.enabled }}
-  empty-dir-medium: {{ .Values.storage.strategy.hybrid.emptyDir.medium }}
-  empty-dir-size-limit: {{ .Values.storage.strategy.hybrid.emptyDir.sizeLimit }}
+  empty-dir-medium: {{ .Values.storage.strategy.hybrid.emptyDir.medium | quote }}
+  empty-dir-size-limit: {{ .Values.storage.strategy.hybrid.emptyDir.sizeLimit | quote }}
   {{- end }}
   
   {{- if .Values.storage.strategy.hybrid.configMap.enabled }}
   config-map-name: {{ .Values.storage.strategy.hybrid.configMap.name }}
   config-map-key: {{ .Values.storage.strategy.hybrid.configMap.dataKey }}
-  {{- end }}
-{{- end }} 
+  {{- en

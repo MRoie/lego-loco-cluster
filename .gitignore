@@ -50,3 +50,7 @@ scripts/merge-status.txt
 .bin/helm-extract/windows-amd64/helm.exe
 .bin/helm-extract/windows-amd64/LICENSE
 .bin/helm-extract/windows-amd64/README.md
+
+# Local bake artifacts and screenshot output (large binaries)
+containers/qemu-softgpu/tmp-bake/
+scripts/out/
