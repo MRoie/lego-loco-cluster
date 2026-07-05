@@ -26,7 +26,7 @@ export default function NoVNCViewer({ instanceId, fullscreen = false }) {
     const loadNoVNC = async () => {
       try {
         logger.debug('Loading NoVNC RFB module');
-        const novncModule = await import('@novnc/novnc/lib/rfb.js');
+        const novncModule = await import('@novnc/novnc/core/rfb.js');
         const RFBClass = novncModule.default || novncModule.RFB;
         setRFB(() => RFBClass);
         logger.info('NoVNC RFB module loaded successfully');

@@ -134,11 +134,8 @@ spec:
           value: {{ .Values.git.userName | quote }}
         - name: GIT_USER_EMAIL
           value: {{ .Values.git.userEmail | quote }}
-        # Instance identity from StatefulSet ordinal (hostname = <name>-<ordinal>)
-        - name: INSTANCE_ID
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+        # INSTANCE_ID is derived from the pod hostname ordinal inside
+        # setup-lan-network.sh (the pod-index label requires k8s >=1.28)
         # Socket master is always ordinal-0 pod (headless service DNS)
         - name: SOCKET_MASTER_HOST
           value: "{{ include "loco.fullname" . }}-emulator-0.{{ include "loco.fullname" . }}-emulator.{{ include "loco.namespace" . }}.svc.cluster.local"

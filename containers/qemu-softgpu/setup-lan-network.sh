@@ -26,6 +26,11 @@ fi
 NETWORK_MODE=${NETWORK_MODE:-socket}
 BRIDGE=${BRIDGE:-loco-br}
 TAP_IF=${TAP_IF:-tap0}
+# Derive INSTANCE_ID from the StatefulSet hostname ordinal when not provided
+# (the apps.kubernetes.io/pod-index label needs k8s >=1.28; this works everywhere)
+if [ -z "${INSTANCE_ID:-}" ] && [[ "$(hostname)" =~ -([0-9]+)$ ]]; then
+  INSTANCE_ID="${BASH_REMATCH[1]}"
+fi
 INSTANCE_ID=${INSTANCE_ID:-0}
 SOCKET_MASTER_HOST=${SOCKET_MASTER_HOST:-loco-emulator-0}
 SOCKET_PORT=${SOCKET_PORT:-4444}
@@ -39,7 +44,12 @@ GUEST_IP="192.168.10.$((10 + INSTANCE_ID))"
 BRIDGE_IP="192.168.10.1"
 SUBNET="192.168.10.0/24"
 
-log_info "Network setup: mode=$NETWORK_MODE instance=$INSTANCE_ID guest_ip=$GUEST_IP"
+# Unique guest MAC per instance — QEMU's default (52:54:00:12:34:56) is
+# identical across instances, and duplicate MACs break ARP/DirectPlay on a
+# shared L2 segment
+GUEST_MAC=$(printf '52:54:00:10:00:%02x' "$INSTANCE_ID")
+
+log_info "Network setup: mode=$NETWORK_MODE instance=$INSTANCE_ID guest_ip=$GUEST_IP mac=$GUEST_MAC"
 
 # ---------------------------------------------------------------
 # Helper: create local bridge + TAP and attach QEMU
@@ -76,7 +86,7 @@ setup_socket_network() {
 
   # Multicast mode creates a true shared L2 segment — all instances join
   # the same multicast group and see ALL each other's Ethernet frames
-  QEMU_NET_ARGS="-netdev socket,id=lan0,mcast=${MCAST_GROUP}:${MCAST_PORT} -device ne2k_pci,netdev=lan0"
+  QEMU_NET_ARGS="-netdev socket,id=lan0,mcast=${MCAST_GROUP}:${MCAST_PORT} -device ne2k_pci,netdev=lan0,mac=${GUEST_MAC}"
   log_info "Multicast socket: group=${MCAST_GROUP} port=${MCAST_PORT} (all instances identical)"
 
   # Also keep TAP for host-guest communication (health checks, etc.)
@@ -110,7 +120,7 @@ setup_vxlan_network() {
   ip link set "$VXLAN_IF" up
 
   # Standard TAP-based QEMU networking
-  QEMU_NET_ARGS="-net nic,model=ne2k_pci -net tap,ifname=${TAP_IF},script=no,downscript=no"
+  QEMU_NET_ARGS="-net nic,model=ne2k_pci,macaddr=${GUEST_MAC} -net tap,ifname=${TAP_IF},script=no,downscript=no"
 
   log_success "VXLAN overlay $VXLAN_IF attached to $BRIDGE"
 }
@@ -129,7 +139,7 @@ setup_macvlan_network() {
     ip link set net1 master "$BRIDGE" || true
     ip link set net1 up || true
 
-    QEMU_NET_ARGS="-net nic,model=ne2k_pci -net tap,ifname=${TAP_IF},script=no,downscript=no"
+    QEMU_NET_ARGS="-net nic,model=ne2k_pci,macaddr=${GUEST_MAC} -net tap,ifname=${TAP_IF},script=no,downscript=no"
     log_success "Macvlan interface net1 attached to $BRIDGE"
   else
     log_warning "net1 interface not found — falling back to socket mode"
@@ -143,7 +153,7 @@ setup_macvlan_network() {
 setup_user_network() {
   log_info "Setting up user-mode NAT networking (no LAN play)"
 
-  QEMU_NET_ARGS="-netdev user,id=net0,hostfwd=tcp::2300-:2300,hostfwd=udp::2300-:2300,hostfwd=tcp::47624-:47624,hostfwd=udp::47624-:47624 -device ne2k_pci,netdev=net0"
+  QEMU_NET_ARGS="-netdev user,id=net0,hostfwd=tcp::2300-:2300,hostfwd=udp::2300-:2300,hostfwd=tcp::47624-:47624,hostfwd=udp::47624-:47624 -device ne2k_pci,netdev=net0,mac=${GUEST_MAC}"
 
   log_warning "User-mode networking: guests are fully isolated. LAN play disabled."
 }
@@ -156,7 +166,7 @@ setup_bridge_network() {
 
   setup_bridge_and_tap
 
-  QEMU_NET_ARGS="-net nic,model=ne2k_pci -net tap,ifname=${TAP_IF},script=no,downscript=no"
+  QEMU_NET_ARGS="-net nic,model=ne2k_pci,macaddr=${GUEST_MAC} -net tap,ifname=${TAP_IF},script=no,downscript=no"
 
   log_warning "Legacy bridge mode: each container is isolated. LAN play disabled."
 }
