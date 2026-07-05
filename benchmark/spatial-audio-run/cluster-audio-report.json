@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-02-20T00:12:11.127Z",
+  "dashboardUrl": "http://localhost:3000",
+  "duration": 10000,
+  "phases": [
+    {
+      "name": "2D Grid View",
+      "status": "completed"
+    },
+    {
+      "name": "VR View",
+      "status": "completed"
+    }
+  ],
+  "checks": {
+    "cardCount": 1,
+    "unmutedCards": 1,
+    "audioMeters2d": {
+      "total": 1,
+      "active": 0
+    },
+    "videoElements": [],
+    "audioTracks2d": 0,
+    "vrScene": {
+      "sceneReady": false,
+      "tileCount": 0,
+      "hasAudioContext": true
+    }
+  },
+  "artifacts": [
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run\\cluster-2d-frame-start.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run\\cluster-2d-frame-mid.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run\\cluster-2d-frame-end.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run\\cluster-2d-recording.webm",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run\\cluster-vr-frame-start.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run\\cluster-vr-frame-mid.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run\\cluster-vr-frame-end.png",
+    "S:\\Lego\\emulate\\dev\\loco_cluster\\lego-loco-cluster\\benchmark\\spatial-audio-run\\cluster-vr-recording.webm"
+  ],
+  "summary": {
+    "instancesFound": 1,
+    "audioTracksDetected": false,
+    "audioMetersActive": false,
+    "vrSceneLoaded": false,
+    "vrTilesRendered": 0,
+    "spatialAudioToggled": false,
+    "perInstanceRecording": false,
+    "overallStatus": "pass"
+  }
+}

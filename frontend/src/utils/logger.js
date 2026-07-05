@@ -49,7 +49,10 @@ class FrontendLogger {
 
     // Emit event for metrics collection or backend aggregation
     // This allows the metrics collector to subscribe to log events without direct coupling
-    window.dispatchEvent(new CustomEvent('frontendLog', { detail: logEntry }));
+    // Guard for non-browser contexts (unit tests, SSR)
+    if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('frontendLog', { detail: logEntry }));
+    }
   }
 
   debug(msg, ctx) { this._log('debug', msg, ctx); }

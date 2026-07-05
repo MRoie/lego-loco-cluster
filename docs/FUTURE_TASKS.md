@@ -159,3 +159,19 @@ a future Codex prompt.
     - Feasibility benchmark: `python3 benchmark/reticulum_bench.py`.
     - Integration test: `k8s-tests/test-reticulum.sh`.
     - See `docs/design/RETICULUM_INTEGRATION.md` and `docs/design/RETICULUM_WASM_PORTABILITY.md`.
+
+12. **Smooth & Accessible 3D Sound Integration** (✅ DONE)
+    - `useSpatialAudio` hook enhanced with HRTF distance model, smooth
+      `linearRampToValueAtTime` transitions, and accessible mono fallback.
+    - Shared `AudioContext` across all VR tiles to avoid browser context limits.
+    - `useVRAudioListener` hook syncs the Web Audio listener with the A-Frame
+      camera rig position/orientation for accurate spatial perception.
+    - VR scene includes mono/3D toggle and autoplay resume button.
+    - Benchmark harness extended with `audio_latency_ms` and `spatial_accuracy`
+      placeholder columns for future measurement hooks.
+    - Multi-format media export (WebM, MP4, MKV, GIF, MP3) via
+      `mediaExport.js` utility with format selector in VR controls.
+    - **Agent Skill**: `scripts/record-spatial-audio.js` — headless Playwright
+      recorder that captures the spatial audio visualizer as a WebM video
+      and PNG screenshots for automated PR review and benchmarking.
+      Run: `npm run record:spatial-audio`

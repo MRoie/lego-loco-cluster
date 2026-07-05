@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:vr": "VITE_DEFAULT_VR=true vite build",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {

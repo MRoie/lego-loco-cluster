@@ -167,14 +167,22 @@ export default function useWebRTC(targetId) {
         }
 
         pc.ontrack = (ev) => {
-          const [stream] = ev.streams;
           if (videoRef.current) {
-            videoRef.current.srcObject = stream;
+            // Accumulate tracks into a single MediaStream instead of
+            // replacing srcObject each time (video and audio arrive as
+            // separate streams from werift)
+            if (!videoRef.current.srcObject) {
+              videoRef.current.srcObject = new MediaStream();
+            }
+            videoRef.current.srcObject.addTrack(ev.track);
             videoRef.current
               .play()
               .catch((e) => logger.error("Video play failed", { targetId, error: e.message }));
           }
-          if (!audioCtx) startMeter(stream);
+          // Start audio meter only when audio track arrives
+          if (ev.track.kind === 'audio' && !audioCtx) {
+            startMeter(new MediaStream([ev.track]));
+          }
           setLoading(false);
         };
 
@@ -192,6 +200,10 @@ export default function useWebRTC(targetId) {
 
         ws.onopen = async () => {
           ws.send(JSON.stringify({ type: "register" }));
+          // Add recvonly transceivers so the SDP offer includes video and audio
+          // m= sections. Without these, the server cannot send media back.
+          pc.addTransceiver('video', { direction: 'recvonly' });
+          pc.addTransceiver('audio', { direction: 'recvonly' });
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           ws.send(
@@ -233,6 +245,9 @@ export default function useWebRTC(targetId) {
           }
         };
 
+        // Queue ICE candidates that arrive before remote description is set
+        const pendingCandidates = [];
+
         ws.onmessage = async (ev) => {
           const msg = JSON.parse(ev.data);
           if (msg.type === "signal" && msg.data) {
@@ -240,6 +255,16 @@ export default function useWebRTC(targetId) {
               await pc.setRemoteDescription(
                 new RTCSessionDescription(msg.data),
               );
+              // Flush any queued ICE candidates now that remote desc is set
+              for (const c of pendingCandidates) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(c));
+                } catch (e) {
+                  logger.warn("Failed to add queued ICE candidate", { targetId, error: e.message });
+                }
+              }
+              pendingCandidates.length = 0;
+
               if (msg.data.type === "offer") {
                 const ans = await pc.createAnswer();
                 await pc.setLocalDescription(ans);
@@ -252,10 +277,15 @@ export default function useWebRTC(targetId) {
                 );
               }
             } else if (msg.data.candidate) {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(msg.data));
-              } catch (e) {
-                logger.warn("Failed to add ICE candidate", { targetId, error: e.message });
+              // Queue candidate if remote description not yet set
+              if (!pc.remoteDescription) {
+                pendingCandidates.push(msg.data);
+              } else {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(msg.data));
+                } catch (e) {
+                  logger.warn("Failed to add ICE candidate", { targetId, error: e.message });
+                }
               }
             }
           }

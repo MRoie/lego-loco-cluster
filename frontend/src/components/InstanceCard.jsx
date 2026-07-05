@@ -1,20 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import VNCViewerSwitcher from './VNCViewerSwitcher';
 import useWebRTC from '../hooks/useWebRTC';
+import useInstanceRecorder from '../hooks/useInstanceRecorder';
 import AudioSinkSelector from './AudioSinkSelector';
 import QualityIndicator from './QualityIndicator';
 
 /**
  * Individual instance card component for the 3x3 grid
  * Styled to match LEGO Loco character cards with red borders, yellow accents, and cream backgrounds
+ * Now includes full audio controls: volume slider, mute toggle, audio level meter,
+ * and per-instance WebRTC stream recording.
+ *
  * Props:
  * - instance: instance object with id, status, provisioned, etc.
  * - isActive: whether this card is currently focused
  * - onClick: callback when card is clicked
  */
 export default function InstanceCard({ instance, isActive, onClick, onFullscreen }) {
-  const { videoRef, loading, connectionQuality } = useWebRTC(instance.id);
+  const { videoRef, loading, audioLevel, connectionQuality } = useWebRTC(instance.id);
+  const { recording, startRecording, stopRecording } = useInstanceRecorder(
+    videoRef, 'webm', instance.id || 'instance'
+  );
+  const [volume, setVolumeState] = useState(1);
+  const [muted, setMuted] = useState(true);
+  const levelRef = useRef(null);
+
+  // Sync volume / mute to the <video> element
+  useEffect(() => {
+    const vid = videoRef?.current;
+    if (!vid) return;
+    vid.volume = volume;
+    vid.muted = muted;
+  }, [volume, muted, videoRef]);
+
+  // Animate the audio level meter bar
+  useEffect(() => {
+    if (!levelRef.current) return;
+    const pct = Math.min(audioLevel * 100, 100);
+    levelRef.current.style.width = `${pct}%`;
+    levelRef.current.style.backgroundColor =
+      pct > 75 ? '#ef4444' : pct > 40 ? '#eab308' : '#22c55e';
+  }, [audioLevel]);
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'ready':
@@ -145,10 +173,47 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
             </div>
           </div>
 
-          {/* Control buttons row like LEGO character card buttons */}
-          <div className="flex justify-between items-center">
-            <AudioSinkSelector mediaRef={videoRef} />
-            <div className="flex space-x-2">
+          {/* Audio controls row */}
+          <div className="flex flex-col gap-1.5">
+            {/* Mute toggle + Volume slider + Record + Fullscreen */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
+                className={`lego-mini-button text-xs font-bold shadow-lg ${
+                  muted
+                    ? 'bg-gray-400 border-gray-600 text-white'
+                    : 'bg-green-500 border-green-700 text-white'
+                }`}
+                title={muted ? 'Unmute audio' : 'Mute audio'}
+                aria-pressed={!muted}
+              >
+                {muted ? '🔇' : '🔊'}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
+                onChange={(e) => setVolumeState(parseFloat(e.target.value))}
+                onClick={(e) => e.stopPropagation()}
+                className="flex-1 h-1.5 accent-yellow-400"
+                aria-label={`Volume for ${instance.name || instance.id}`}
+                title={`Volume: ${Math.round(volume * 100)}%`}
+              />
+              <span className="text-xs font-bold text-black w-8 text-right">{Math.round(volume * 100)}%</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); recording ? stopRecording() : startRecording(); }}
+                className={`lego-mini-button text-xs font-bold shadow-lg ${
+                  recording
+                    ? 'bg-red-500 border-red-700 text-white animate-pulse'
+                    : 'bg-blue-500 border-blue-700 text-white'
+                }`}
+                title={recording ? 'Stop recording' : 'Record this instance stream'}
+                aria-pressed={recording}
+              >
+                {recording ? '⏹' : '⏺'}
+              </button>
               {instance.provisioned && (
                 <button
                   onClick={(e) => {
@@ -161,12 +226,18 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
                   ⛶
                 </button>
               )}
-              <button className="lego-mini-button bg-red-500 border-red-700 hover:bg-red-400 text-white shadow-lg">
-                ×
-              </button>
-              <button className="lego-mini-button bg-blue-500 border-blue-700 hover:bg-blue-400 text-white shadow-lg">
-                ?
-              </button>
+            </div>
+            {/* Audio level meter */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-600">🎵</span>
+              <div className="flex-1 h-1.5 bg-gray-300 rounded-full overflow-hidden">
+                <div
+                  ref={levelRef}
+                  className="h-full rounded-full transition-all duration-75"
+                  style={{ width: '0%', backgroundColor: '#22c55e' }}
+                />
+              </div>
+              <AudioSinkSelector mediaRef={videoRef} />
             </div>
           </div>
         </div>
@@ -221,7 +292,6 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
                     className="w-full h-full object-contain bg-black"
                     autoPlay
                     playsInline
-                    muted
                   />
                 ) : (
                   <VNCViewerSwitcher instanceId={instance.id} />

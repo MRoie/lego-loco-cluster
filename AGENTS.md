@@ -195,3 +195,27 @@ Completing these tasks will yield a robust Windows 98 cluster with automated de
 27. **Multi-Instance Stress Test (3×3 Grid)** – Run all 9 emulators with LAN session benchmark for 30 minutes. Monitor for memory leaks, CPU creep, GStreamer stalls, WebSocket disconnects, OOM kills. Record resource utilization time-series and flag > 10% degradation.
 
 28. **CI Performance Gate** – GitHub Actions job running benchmark harness on every PR against stored baselines. Fail if stream FPS drops > 15%, latency increases > 20ms, or CPU per instance increases > 10%. Store baseline artefacts and trend charts.
+
+## Agent Skills
+
+### 🎧 Spatial Audio Recording
+Record the spatial audio visualizer headlessly and produce video/screenshot
+artifacts for PR review and benchmarking.
+
+```bash
+# Record a 5-second session (default)
+npm run record:spatial-audio
+
+# Custom duration and output directory
+node scripts/record-spatial-audio.js --duration 8000 --out benchmark/
+
+# Outputs:
+#   benchmark/spatial-audio-recording.webm   — screen capture video
+#   benchmark/spatial-audio-frame-start.png  — first-frame screenshot
+#   benchmark/spatial-audio-frame-mid.png    — mid-point screenshot
+#   benchmark/spatial-audio-frame-end.png    — final-frame screenshot
+```
+
+Supported export formats in the VR scene UI: **WebM**, **MP4**, **MKV**,
+**GIF**, **MP3**. See `frontend/src/utils/mediaExport.js` for the format
+registry and MIME negotiation logic.

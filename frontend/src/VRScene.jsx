@@ -1,8 +1,12 @@
 import 'aframe';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useActive } from './ActiveContext';
 import useWebRTC from './hooks/useWebRTC';
 import useSpatialAudio from './hooks/useSpatialAudio';
+import useVRAudioListener from './hooks/useVRAudioListener';
+import usePerformanceRecorder from './hooks/usePerformanceRecorder';
+import useVideoRecorder from './hooks/useVideoRecorder';
+import { FORMAT_KEYS, EXPORT_FORMATS } from './utils/mediaExport';
 import VRReactVNCViewer from './components/VRReactVNCViewer';
 import ControlsConfig from './components/ControlsConfig';
 import VRToast from './components/VRToast';
@@ -14,19 +18,33 @@ function positionForIndex(i, cols, rows) {
   return { x: x * 1.4, y: y * 1.0 };
 }
 
-function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds }) {
+function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio, muted, audioLevel, onAudioLevel }) {
   const vncRef = useRef(null);
   const planeRef = useRef(null);
   const [textureCreated, setTextureCreated] = useState(false);
-  const { videoRef: rtcVideoRef } = useWebRTC(inst.id);
+  const { videoRef: rtcVideoRef, audioLevel: tileAudioLevel } = useWebRTC(inst.id);
   const pos = positionForIndex(idx, cols, rows);
-  const { setVolume } = useSpatialAudio(rtcVideoRef, [pos.x, pos.y, -3]);
+  const { setVolume, resumeContext } = useSpatialAudio(
+    rtcVideoRef,
+    [pos.x, pos.y, -3],
+    { mono: monoAudio },
+    sharedAudioCtx,
+  );
+
+  // Propagate audio level up to parent for per-tile meters
+  useEffect(() => {
+    if (onAudioLevel) onAudioLevel(idx, tileAudioLevel);
+  }, [tileAudioLevel, idx, onAudioLevel]);
 
 
   useEffect(() => {
+    if (muted) {
+      setVolume(0);
+      return;
+    }
     const finalVol = volume * (activeIds.includes(inst.id) ? 1 : ambientVolume);
     setVolume(finalVol);
-  }, [volume, activeIds, inst.id, ambientVolume, setVolume]);
+  }, [volume, activeIds, inst.id, ambientVolume, setVolume, muted]);
 
   const handleVNCConnect = (instanceId) => {
     console.log(`VR: VNC connected for ${instanceId}`);
@@ -114,6 +132,11 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   };
 
   // reuse computed position
+  // Compute audio ring scale from audioLevel (0-1) for 3D visualisation
+  const ringScale = 1 + (tileAudioLevel || 0) * 0.6;
+  const ringOpacity = Math.min(0.15 + (tileAudioLevel || 0) * 0.5, 0.7);
+  const ringColor = muted ? '#666' : (active === idx ? '#FFD700' : '#3ABFF8');
+
   return (
     <>
       <VRReactVNCViewer
@@ -139,6 +162,24 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
           material={`color: ${active === idx ? '#0055BF' : '#C4281C'}; side: double`}
           position="0 0 -0.01"
         />
+
+        {/* Audio level ring — pulses with live audio level */}
+        <a-entity
+          geometry="primitive: ring; radiusInner: 0.55; radiusOuter: 0.62"
+          material={`color: ${ringColor}; opacity: ${ringOpacity}; side: double; transparent: true`}
+          scale={`${ringScale} ${ringScale} 1`}
+          position="0 0 0.015"
+        />
+
+        {/* Mute indicator */}
+        {muted && (
+          <a-text
+            value="🔇"
+            align="center"
+            width="0.6"
+            position="0.5 -0.35 0.03"
+          />
+        )}
         
         {status && status !== 'ready' && (
           <a-text
@@ -187,7 +228,89 @@ export default function VRScene({ onExit }) {
   const [toast, setToast] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [volumes, setVolumes] = useState([]);
+  const [mutedTiles, setMutedTiles] = useState([]);
+  const [audioLevels, setAudioLevels] = useState([]);
+  const [monoAudio, setMonoAudio] = useState(false);
+  const [audioResumed, setAudioResumed] = useState(false);
+  const [sharedAudioCtx, setSharedAudioCtx] = useState(null);
+  const [exportFormat, setExportFormat] = useState('webm');
   const ambientVolume = 0.2;
+
+  // Lazily create a single shared AudioContext for all tiles
+  const getSharedAudioCtx = useCallback(() => {
+    if (!sharedAudioCtx) {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      setSharedAudioCtx(ctx);
+      return ctx;
+    }
+    return sharedAudioCtx;
+  }, [sharedAudioCtx]);
+
+  // Resume the shared context on first user gesture (autoplay policy)
+  const handleAudioResume = useCallback(async () => {
+    const ctx = getSharedAudioCtx();
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    setAudioResumed(true);
+  }, [getSharedAudioCtx]);
+
+  // Sync the AudioContext listener with the VR camera rig position
+  useVRAudioListener(sharedAudioCtx);
+
+  // Performance recorder for spatial audio metrics
+  const {
+    recording: perfRecording,
+    startRecording: startPerfRecording,
+    recordTileSnapshot,
+    exportRecording: exportPerfRecording,
+  } = usePerformanceRecorder();
+
+  // Video recorder for canvas capture (multi-format)
+  const {
+    videoRecording,
+    startVideoRecording,
+    stopVideoRecording,
+  } = useVideoRecorder(exportFormat);
+
+  // Feed tile snapshot into the recorder each time volumes/active change
+  useEffect(() => {
+    if (!perfRecording) return;
+    const tileData = instances.map((inst, idx) => {
+      const p = positionForIndex(idx, cols, rows);
+      return { id: inst.id, volume: volumes[idx] || 1, position: { x: p.x, y: p.y, z: -3 } };
+    });
+    recordTileSnapshot(active, monoAudio, tileData);
+  }, [perfRecording, active, monoAudio, volumes, instances, cols, rows, recordTileSnapshot]);
+
+  const handleTogglePerfRecording = useCallback(() => {
+    if (perfRecording) {
+      exportPerfRecording();
+      setToast('Performance log exported');
+    } else if (sharedAudioCtx) {
+      startPerfRecording(sharedAudioCtx);
+      setToast('Recording started');
+    }
+  }, [perfRecording, sharedAudioCtx, exportPerfRecording, startPerfRecording]);
+
+  const handleToggleVideoRecording = useCallback(() => {
+    if (videoRecording) {
+      stopVideoRecording();
+      setToast(`${EXPORT_FORMATS[exportFormat]?.label || 'File'} saved`);
+    } else {
+      startVideoRecording();
+      setToast(`Recording ${EXPORT_FORMATS[exportFormat]?.label || exportFormat}…`);
+    }
+  }, [videoRecording, startVideoRecording, stopVideoRecording, exportFormat]);
+
+  // Clean up shared context on unmount
+  useEffect(() => {
+    return () => {
+      if (sharedAudioCtx) {
+        sharedAudioCtx.close();
+      }
+    };
+  }, [sharedAudioCtx]);
   const defaultControllerMap = {
     abuttondown: 'F1',
     bbuttondown: 'F2',
@@ -268,6 +391,8 @@ export default function VRScene({ onExit }) {
           setInstances(data);
           vncRefs.current = new Array(data.length);
           setVolumes(new Array(data.length).fill(1));
+          setMutedTiles(new Array(data.length).fill(false));
+          setAudioLevels(new Array(data.length).fill(0));
         } else {
           throw new Error('no data');
         }
@@ -278,6 +403,8 @@ export default function VRScene({ onExit }) {
         );
         vncRefs.current = new Array(3);
         setVolumes(new Array(3).fill(1));
+        setMutedTiles(new Array(3).fill(false));
+        setAudioLevels(new Array(3).fill(0));
         setInfo('Using placeholder streams');
       });
     
@@ -380,6 +507,15 @@ export default function VRScene({ onExit }) {
     setConnectedVNCs(prev => new Set([...prev, idx]));
   };
 
+  const handleAudioLevel = useCallback((idx, level) => {
+    setAudioLevels(prev => {
+      if (prev[idx] === level) return prev;
+      const arr = [...prev];
+      arr[idx] = level;
+      return arr;
+    });
+  }, []);
+
   const cols = Math.ceil(Math.sqrt(instances.length || 1));
   const rows = Math.ceil((instances.length || 1) / cols);
 
@@ -413,13 +549,14 @@ export default function VRScene({ onExit }) {
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-4 z-10 bg-white/90 p-2 rounded-lg border-2 border-yellow-400">
+      <div className="absolute bottom-4 left-4 z-10 bg-white/90 p-2 rounded-lg border-2 border-yellow-400" role="group" aria-label="Audio controls">
         <label className="text-sm font-bold text-black mb-1 block">🔊 Volume:</label>
         <input
           type="range"
           min="0"
           max="1"
           step="0.01"
+          aria-label={`Volume for tile ${active + 1}`}
           value={volumes[active] || 1}
           onChange={(e) => {
             const v = parseFloat(e.target.value);
@@ -431,6 +568,83 @@ export default function VRScene({ onExit }) {
           }}
           className="w-20"
         />
+        <span className="text-xs font-bold text-black ml-1">{Math.round((volumes[active] || 1) * 100)}%</span>
+        {/* Audio level meter for active tile */}
+        <div className="flex items-center gap-1 mt-1">
+          <span className="text-xs text-gray-600">🎵</span>
+          <div className="flex-1 h-1.5 bg-gray-300 rounded-full overflow-hidden w-20">
+            <div
+              className="h-full rounded-full transition-all duration-75"
+              style={{
+                width: `${Math.min((audioLevels[active] || 0) * 100, 100)}%`,
+                backgroundColor: (audioLevels[active] || 0) > 0.75 ? '#ef4444' : (audioLevels[active] || 0) > 0.4 ? '#eab308' : '#22c55e'
+              }}
+            />
+          </div>
+        </div>
+        <div className="flex items-center mt-1 gap-2">
+          <button
+            onClick={() => {
+              setMutedTiles((m) => {
+                const arr = [...m];
+                arr[active] = !arr[active];
+                return arr;
+              });
+            }}
+            className={`text-xs px-2 py-0.5 rounded border font-bold ${mutedTiles[active] ? 'bg-gray-400 text-white border-gray-600' : 'bg-green-500 text-white border-green-700'}`}
+            aria-pressed={!mutedTiles[active]}
+            title={mutedTiles[active] ? 'Unmute this tile' : 'Mute this tile'}
+          >
+            {mutedTiles[active] ? '🔇 Muted' : '🔊 On'}
+          </button>
+          <button
+            onClick={() => setMonoAudio((m) => !m)}
+            className={`text-xs px-2 py-0.5 rounded border font-bold ${monoAudio ? 'bg-blue-500 text-white border-blue-700' : 'bg-gray-200 text-black border-gray-400'}`}
+            aria-pressed={monoAudio}
+            title="Mono audio disables 3D spatial sound for accessibility"
+          >
+            {monoAudio ? '🔈 Mono' : '🎧 3D'}
+          </button>
+          <button
+            onClick={handleTogglePerfRecording}
+            className={`text-xs px-2 py-0.5 rounded border font-bold ${perfRecording ? 'bg-red-500 text-white border-red-700 animate-pulse' : 'bg-gray-200 text-black border-gray-400'}`}
+            aria-pressed={perfRecording}
+            title={perfRecording ? 'Stop recording and export performance log' : 'Start recording spatial audio performance'}
+          >
+            {perfRecording ? '⏹ Export Log' : '⏺ Record Perf'}
+          </button>
+          <select
+            value={exportFormat}
+            onChange={(e) => setExportFormat(e.target.value)}
+            disabled={videoRecording}
+            className="text-xs px-1 py-0.5 rounded border font-bold bg-gray-200 text-black border-gray-400"
+            aria-label="Export format"
+            title="Choose recording format"
+          >
+            {FORMAT_KEYS.map((k) => (
+              <option key={k} value={k}>
+                {EXPORT_FORMATS[k].label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleToggleVideoRecording}
+            className={`text-xs px-2 py-0.5 rounded border font-bold ${videoRecording ? 'bg-red-500 text-white border-red-700 animate-pulse' : 'bg-gray-200 text-black border-gray-400'}`}
+            aria-pressed={videoRecording}
+            title={videoRecording ? `Stop recording and save ${EXPORT_FORMATS[exportFormat]?.label}` : `Record VR scene as ${EXPORT_FORMATS[exportFormat]?.label}`}
+          >
+            {videoRecording ? `⏹ Save ${EXPORT_FORMATS[exportFormat]?.label}` : `🎥 Rec ${EXPORT_FORMATS[exportFormat]?.label}`}
+          </button>
+          {!audioResumed && (
+            <button
+              onClick={handleAudioResume}
+              className="text-xs px-2 py-0.5 rounded border font-bold bg-green-400 text-black border-green-600 animate-pulse"
+              aria-label="Enable audio playback"
+            >
+              ▶ Enable Audio
+            </button>
+          )}
+        </div>
       </div>
 
       {menuOpen && (
@@ -472,6 +686,11 @@ export default function VRScene({ onExit }) {
               volume={volumes[idx] || 1}
               ambientVolume={ambientVolume}
               onVNCReady={handleVNCReady}
+              sharedAudioCtx={sharedAudioCtx}
+              monoAudio={monoAudio}
+              muted={mutedTiles[idx] || false}
+              audioLevel={audioLevels[idx] || 0}
+              onAudioLevel={handleAudioLevel}
             />
           ))}
         </a-entity>

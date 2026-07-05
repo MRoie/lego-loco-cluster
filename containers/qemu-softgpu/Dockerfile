@@ -11,6 +11,7 @@ RUN apt-get update && \
     qemu-system-x86 qemu-system-gui qemu-utils pulseaudio \
     gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+    gstreamer1.0-plugins-base gstreamer1.0-pulseaudio libopus-dev \
     x11-utils xdotool iproute2 xvfb net-tools \
     curl wget skopeo git inotify-tools nfs-common rsync \
     netcat-openbsd procps alsa-utils && \
