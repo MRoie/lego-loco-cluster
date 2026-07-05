@@ -151,3 +151,11 @@ a future Codex prompt.
     - Creates cluster, runs `bench.py` with thresholds, checks for FAIL.
     - Uploads benchmark artifacts with 30-day retention.
     - Fails PR if performance degrades beyond limits.
+
+16. **Reticulum Mesh Integration**
+    - Integrate [Reticulum](https://reticulum.network/) for encrypted pod-to-pod communication.
+    - Deploy rnsd sidecar with AutoInterface on the loco-network bridge.
+    - Game-state synchronisation via QMP relay.
+    - Feasibility benchmark: `python3 benchmark/reticulum_bench.py`.
+    - Integration test: `k8s-tests/test-reticulum.sh`.
+    - See `docs/design/RETICULUM_INTEGRATION.md` and `docs/design/RETICULUM_WASM_PORTABILITY.md`.

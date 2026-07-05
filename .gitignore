@@ -11,6 +11,9 @@ images/*.tar.gz
 images/*
 compose/*.tar
 talosctl
+k8s-tests/logs/
+
+__pycache__/
 
 .vscode/settings.json
 
