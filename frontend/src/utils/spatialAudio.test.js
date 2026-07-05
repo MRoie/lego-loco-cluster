@@ -207,3 +207,41 @@ describe('Spatial audio panner wiring', () => {
     expect(panner.positionZ.linearRampToValueAtTime).toHaveBeenCalledWith(-3, rampTime);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Listener orientation math
+// ---------------------------------------------------------------------------
+import { quaternionToListenerVectors } from '../hooks/useVRAudioListener';
+
+describe('quaternionToListenerVectors', () => {
+  const close = (a, b) => a.forEach((v, i) => expect(v).toBeCloseTo(b[i], 6));
+
+  it('identity quaternion looks down -Z with +Y up', () => {
+    const { forward, up } = quaternionToListenerVectors({ x: 0, y: 0, z: 0, w: 1 });
+    close(forward, [0, 0, -1]);
+    close(up, [0, 1, 0]);
+  });
+
+  it('180° yaw turns the listener to face +Z', () => {
+    // Rotation of pi around Y: q = (0, sin(pi/2), 0, cos(pi/2)) = (0,1,0,0)
+    const { forward, up } = quaternionToListenerVectors({ x: 0, y: 1, z: 0, w: 0 });
+    close(forward, [0, 0, 1]);
+    close(up, [0, 1, 0]);
+  });
+
+  it('90° yaw left faces -X', () => {
+    // Rotation of +pi/2 around Y: q = (0, sin(pi/4), 0, cos(pi/4))
+    const s = Math.SQRT1_2;
+    const { forward, up } = quaternionToListenerVectors({ x: 0, y: s, z: 0, w: s });
+    close(forward, [-1, 0, 0]);
+    close(up, [0, 1, 0]);
+  });
+
+  it('90° pitch up faces +Y with up tilted to +Z', () => {
+    // Rotation of +pi/2 around X: q = (sin(pi/4), 0, 0, cos(pi/4))
+    const s = Math.SQRT1_2;
+    const { forward, up } = quaternionToListenerVectors({ x: s, y: 0, z: 0, w: s });
+    close(forward, [0, 1, 0]);
+    close(up, [0, 0, 1]);
+  });
+});
