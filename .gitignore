@@ -12,3 +12,13 @@ images/*
 compose/*.tar
 talosctl
 
+.vscode/settings.json
+
+# Captured tool/session output — never commit
+*_out.txt
+*_log.txt
+*_results.txt
+*.stackdump
+*.bmp
+/kind
+/kind.exe

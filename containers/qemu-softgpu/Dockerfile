@@ -24,7 +24,9 @@ COPY --from=win98-extractor /opt/builtin-images/win98.qcow2.builtin /opt/builtin
 COPY entrypoint.sh /entrypoint.sh
 COPY watch_art_res.sh /usr/local/bin/watch_art_res.sh
 COPY health-monitor.sh /usr/local/bin/health-monitor.sh
-RUN chmod +x /entrypoint.sh /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh
+COPY setup-lan-network.sh /usr/local/bin/setup-lan-network.sh
+RUN sed -i 's/\r$//' /entrypoint.sh /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh /usr/local/bin/setup-lan-network.sh && \
+    chmod +x /entrypoint.sh /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh /usr/local/bin/setup-lan-network.sh
 
 # ---- Verify the disk image is available ----
 RUN ls -la /opt/builtin-images/ && \
