@@ -17,7 +17,7 @@ import QualityIndicator from './QualityIndicator';
  * - isActive: whether this card is currently focused
  * - onClick: callback when card is clicked
  */
-export default function InstanceCard({ instance, isActive, onClick }) {
+export default function InstanceCard({ instance, isActive, onClick, onFullscreen }) {
   const { videoRef, loading, audioLevel, connectionQuality } = useWebRTC(instance.id);
   const { recording, startRecording, stopRecording } = useInstanceRecorder(
     videoRef, 'webm', instance.id || 'instance'
@@ -42,6 +42,7 @@ export default function InstanceCard({ instance, isActive, onClick }) {
     levelRef.current.style.backgroundColor =
       pct > 75 ? '#ef4444' : pct > 40 ? '#eab308' : '#22c55e';
   }, [audioLevel]);
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'ready':
@@ -135,6 +136,10 @@ export default function InstanceCard({ instance, isActive, onClick }) {
   return (
     <motion.div
       onClick={onClick}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (onFullscreen && instance.provisioned) onFullscreen();
+      }}
       className={`
         relative transition-all duration-300 cursor-pointer overflow-hidden
         ${isActive
@@ -170,7 +175,7 @@ export default function InstanceCard({ instance, isActive, onClick }) {
 
           {/* Audio controls row */}
           <div className="flex flex-col gap-1.5">
-            {/* Mute toggle + Volume slider + Record */}
+            {/* Mute toggle + Volume slider + Record + Fullscreen */}
             <div className="flex items-center gap-2">
               <button
                 onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
@@ -209,6 +214,18 @@ export default function InstanceCard({ instance, isActive, onClick }) {
               >
                 {recording ? '⏹' : '⏺'}
               </button>
+              {instance.provisioned && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onFullscreen) onFullscreen();
+                  }}
+                  className="lego-mini-button bg-green-600 border-green-800 hover:bg-green-500 text-white shadow-lg"
+                  title="Fullscreen control (or double-click card)"
+                >
+                  ⛶
+                </button>
+              )}
             </div>
             {/* Audio level meter */}
             <div className="flex items-center gap-2">

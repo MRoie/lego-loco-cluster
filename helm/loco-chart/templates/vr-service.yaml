@@ -1,3 +1,4 @@
+{{- if and .Values.vr (ne (toString .Values.vr.enabled) "false") }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -16,3 +17,4 @@ spec:
   - protocol: TCP
     port: {{ .Values.vr.servicePort }}
     targetPort: {{ .Values.vr.servicePort }}
+{{- end }}
