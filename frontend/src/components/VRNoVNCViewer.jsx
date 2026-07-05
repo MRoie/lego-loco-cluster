@@ -16,7 +16,7 @@ const VRNoVNCViewer = forwardRef(({ instanceId, onConnect, onDisconnect }, ref) 
     const loadNoVNC = async () => {
       try {
         console.log('Loading NoVNC RFB module for VR...');
-        const novncModule = await import('@novnc/novnc/core/rfb.js');
+        const novncModule = await import('@novnc/novnc');
         const RFBClass = novncModule.default || novncModule.RFB;
         setRFB(() => RFBClass);
         console.log('NoVNC RFB module loaded successfully for VR');
