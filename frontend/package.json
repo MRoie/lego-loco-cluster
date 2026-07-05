@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@novnc/novnc": "^1.7.0",
     "aframe": "^1.7.1",
     "framer-motion": "^11.0.0",
     "react": "^19.1.0",

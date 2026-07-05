@@ -14,3 +14,14 @@ talosctl
 k8s-tests/logs/
 
 __pycache__/
+
+.vscode/settings.json
+
+# Captured tool/session output — never commit
+*_out.txt
+*_log.txt
+*_results.txt
+*.stackdump
+*.bmp
+/kind
+/kind.exe

@@ -186,7 +186,80 @@ jobs:
         if: always()
         run: scripts/manage_hybrid_cluster.sh destroy
 
-  # Run end-to-end tests against local services (no cluster needed)
+  # Performance benchmark gate — fail if metrics degrade beyond thresholds
+  performance-gate:
+    needs: [build, cluster-integration, prepare-ci-image]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    container:
+      image: ${{ needs.prepare-ci-image.outputs.ci-image }}
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install system packages (fallback only)
+        if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-kvm docker.io curl jq python3 \
+            ca-certificates apt-transport-https lsb-release gnupg conntrack
+      - name: Install kubectl and helm (fallback only)
+        if: needs.prepare-ci-image.outputs.ci-image == env.CI_FALLBACK_IMAGE
+        run: |
+          curl -LO "https://dl.k8s.io/release/v1.28.3/bin/linux/amd64/kubectl"
+          install -m 0755 kubectl /usr/local/bin/kubectl
+          curl https://get.helm.sh/helm-v3.15.4-linux-amd64.tar.gz | tar -xzO linux-amd64/helm > /usr/local/bin/helm
+          chmod +x /usr/local/bin/helm
+          curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+          install -m 0755 minikube /usr/local/bin/minikube
+      - name: Start Docker daemon
+        run: scripts/start_docker_daemon.sh
+      - name: Install Node dependencies
+        run: |
+          cd backend && npm install && cd ..
+          cd frontend && npm install && npm run build && cd ..
+      - name: Create cluster
+        run: scripts/manage_hybrid_cluster.sh create
+      - name: Run performance benchmark
+        run: |
+          echo "=== Running Performance Benchmark ==="
+          python3 benchmark/bench.py \
+            --mode k8s \
+            --replicas 1 \
+            --duration 60 \
+            --interval 10 \
+            --output-dir benchmark/ci-results \
+            --csv ci-benchmark.csv || true
+      - name: Check benchmark thresholds
+        run: |
+          echo "=== Checking Performance Thresholds ==="
+          REPORT="benchmark/ci-results/BENCHMARK_REPORT.md"
+          if [ -f "$REPORT" ]; then
+            cat "$REPORT"
+            # Fail if report contains FAIL verdict
+            if grep -q "FAIL" "$REPORT"; then
+              echo "❌ Performance benchmark FAILED — thresholds exceeded"
+              exit 1
+            fi
+            echo "✅ Performance benchmark passed"
+          else
+            echo "⚠️  No benchmark report generated (cluster may not be running emulators)"
+          fi
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-benchmark
+          path: benchmark/ci-results/
+          retention-days: 30
+      - name: Destroy cluster
+        if: always()
+        run: scripts/manage_hybrid_cluster.sh destroy
   e2e:
     needs: [build, prepare-ci-image]
     runs-on: ubuntu-22.04

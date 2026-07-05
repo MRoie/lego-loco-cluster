@@ -17,3 +17,6 @@ spec:
   - name: http
     port: {{ .Values.frontend.servicePort }}
     targetPort: {{ .Values.frontend.servicePort }}
+    {{- if .Values.frontend.nodePort }}
+    nodePort: {{ .Values.frontend.nodePort }}
+    {{- end }}

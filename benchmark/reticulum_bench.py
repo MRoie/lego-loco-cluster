@@ -489,7 +489,7 @@ def main():
                         default="python", help="Sidecar runtime mode")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,
                         help="Base UDP port")
-    parser.add_argument("--output", default=os.path.join(RESULTS_DIR, "results"),
+    parser.add_argument("--output", default=os.path.join(RESULTS_DIR, "reticulum_results"),
                         help="Output path prefix (writes .csv and .md)")
     parser.add_argument("--pods", type=int, default=0,
                         help="Live cluster pods to test (0 = loopback only)")

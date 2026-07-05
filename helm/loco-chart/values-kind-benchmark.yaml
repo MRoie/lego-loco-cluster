@@ -1,0 +1,156 @@
+# values-kind-benchmark.yaml
+# Kind cluster deployment for stress-test benchmarks
+# Usage:
+#   kind create cluster --config k8s/kind-config.yaml --name loco
+#   helm install loco ./helm/loco-chart -n loco --create-namespace -f helm/loco-chart/values-kind-benchmark.yaml
+
+replicas: 9
+namespace: loco
+
+# No image pull secrets — images preloaded via `kind load docker-image`
+imagePullSecrets: []
+
+# RBAC for backend auto-discovery of emulator pods
+rbac:
+  create: true
+
+# Disable ingress — use kubectl port-forward or NodePort
+ingress:
+  enabled: false
+
+# Storage: use emptyDir (no PVC needed, disk image is built-in)
+storage:
+  class: "standard"
+  nfsSize: "1Gi"
+  diskSize: "2Gi"
+  strategy:
+    hostPath:
+      enabled: false
+    hybrid:
+      enabled: true
+      primary: "emptyDir"
+      fallback: "emptyDir"
+      nfs:
+        enabled: false
+      emptyDir:
+        enabled: true
+        medium: ""
+        sizeLimit: "2Gi"
+      configMap:
+        enabled: false
+
+emulator:
+  replicas: 9
+  image: qemu-loco
+  tag: latest
+  imagePullPolicy: Never   # Pre-loaded into Kind
+  serviceType: ClusterIP
+  servicePort: 5901
+  healthPort: 8080
+
+  # No PVC — use emptyDir + builtin image fallback
+  diskPVC: ""
+  diskReadOnly: false
+
+  # Snapshot download disabled — disk is built into the image
+  usePrebuiltSnapshot: false
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+
+  probes:
+    startup:
+      enabled: true
+      path: /health
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 60   # 10min startup budget for QEMU boot
+    liveness:
+      enabled: true
+      path: /health
+      initialDelaySeconds: 120
+      periodSeconds: 15
+      timeoutSeconds: 10
+      failureThreshold: 5
+    readiness:
+      enabled: true
+      path: /health
+      initialDelaySeconds: 45
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 5
+
+  resources:
+    limits:
+      cpu: "800m"
+      memory: "768Mi"
+    requests:
+      cpu: "200m"
+      memory: "384Mi"
+
+  env:
+    BRIDGE: "loco-br"
+    TAP_IF: "tap0"
+    DISK: "/images/win98.qcow2"
+    DISPLAY_NUM: "99"
+    USE_PREBUILT_SNAPSHOT: "false"
+    NETWORK_MODE: "socket"
+    SOCKET_PORT: "4444"
+    SOCKET_MASTER_HOST: ""   # Auto-computed by StatefulSet template
+    MCAST_GROUP: "230.0.0.1"
+    MCAST_PORT: "1234"
+
+backend:
+  image: lego-loco-backend
+  tag: latest
+  imagePullPolicy: Never
+  servicePort: 3001
+  nodePort: 30001
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+frontend:
+  image: lego-loco-frontend
+  tag: latest
+  imagePullPolicy: Never
+  servicePort: 3000
+  nodePort: 30000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  env:
+    BACKEND_HOST: "loco-loco-backend"
+    BACKEND_PORT: "3001"
+    FRONTEND_PORT: "3000"
+
+vr:
+  enabled: false   # Skip VR for benchmark
+
+vnc:
+  implementation: "novnc"
+  fallbackEnabled: true
+  maxRetries: 3
+
+git:
+  userName: "Loco Watcher"
+  userEmail: "watcher@example.com"
+
+artRes:
+  nfs:
+    server: nfs-server.loco.svc.cluster.local
+    path: /exports/art
+
+stunner:
+  enabled: false
+
+nfs:
+  enabled: false
