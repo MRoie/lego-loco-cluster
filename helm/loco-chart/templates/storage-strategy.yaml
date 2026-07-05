@@ -57,4 +57,5 @@ data:
   {{- if .Values.storage.strategy.hybrid.configMap.enabled }}
   config-map-name: {{ .Values.storage.strategy.hybrid.configMap.name }}
   config-map-key: {{ .Values.storage.strategy.hybrid.configMap.dataKey }}
-  {{- en
+  {{- end }}
+{{- end }} 
