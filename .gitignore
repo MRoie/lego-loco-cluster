@@ -25,3 +25,4 @@ __pycache__/
 *.bmp
 /kind
 /kind.exe
+/.vscode/
