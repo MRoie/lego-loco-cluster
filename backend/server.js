@@ -33,13 +33,39 @@ const StreamQualityMonitor = require("./services/streamQualityMonitor");
 const InstanceManager = require("./services/instanceManager");
 const rateLimit = require("./utils/rateLimit");
 const validate = require("./utils/validate");
+const helmet = require("helmet");
 
 // Rate limiters
 const writeRateLimit = rateLimit({ windowMs: 60_000, max: 30 });   // 30 req/min for general POST
 const criticalRateLimit = rateLimit({ windowMs: 60_000, max: 5 });  // 5 req/min for recovery/restart
+// Broad read-path limiter (concept from #82). Generous: the dashboard polls
+// several endpoints every 5s per client. Override via API_RATE_LIMIT_MAX.
+const apiReadRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: parseInt(process.env.API_RATE_LIMIT_MAX || '600', 10),
+});
 
 const app = express();
 const server = http.createServer(app);
+
+// Security headers (concept from #82). CSP is disabled: this server only
+// speaks JSON/WebSocket behind the nginx frontend, and a strict CSP here
+// would apply to proxied content it does not own.
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// Rate-limit the API surface, but never the kubelet probe or metrics paths —
+// throttling liveness probes would turn load into restarts.
+app.use((req, res, next) => {
+  if (
+    req.path === '/health' ||
+    req.path === '/ready' ||
+    req.path === '/metrics' ||
+    !req.path.startsWith('/api/')
+  ) {
+    return next();
+  }
+  return apiReadRateLimit(req, res, next);
+});
 
 // Global error handlers
 process.on('uncaughtException', (err) => {

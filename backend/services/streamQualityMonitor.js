@@ -23,6 +23,12 @@ class StreamQualityMonitor {
     this.isRunning = false;
     this.recoveryAttempts = new Map(); // instanceId -> attempts count
     this.maxRecoveryAttempts = 3;
+
+    // SLA scoring + alerting (concept from PR #82)
+    this.slaAlertThreshold = parseInt(process.env.SLA_ALERT_THRESHOLD || '70', 10);
+    this.alertWebhookUrl = process.env.ALERT_WEBHOOK_URL || null;
+    this.alertCooldownMs = parseInt(process.env.SLA_ALERT_COOLDOWN_MS || '300000', 10);
+    this.lastAlertAt = new Map(); // instanceId -> timestamp of last alert
   }
 
   /**
@@ -129,6 +135,8 @@ class StreamQualityMonitor {
       // Update metrics map
       results.forEach(metrics => {
         if (metrics && metrics.instanceId) {
+          metrics.slaScore = this.computeSlaScore(metrics);
+          this.evaluateSlaAlert(metrics);
           this.metrics.set(metrics.instanceId, metrics);
         }
       });
@@ -719,6 +727,65 @@ class StreamQualityMonitor {
   }
 
   /**
+   * Compute a 0-100 SLA score for one instance's metrics (concept from #82).
+   * Weights: availability 50 (vnc 25, stream 10, audio 10, controls 5),
+   * latency 30 (full marks <=100 ms, linear falloff to 0 at 1000 ms),
+   * video frame rate 20 (full marks at >=15 fps).
+   */
+  computeSlaScore(metrics) {
+    let score = 0;
+    const a = metrics.availability || {};
+    if (a.vnc) score += 25;
+    if (a.stream) score += 10;
+    if (a.audio) score += 10;
+    if (a.controls) score += 5;
+
+    const latency = metrics.quality ? metrics.quality.connectionLatency : null;
+    if (latency !== null && latency !== undefined) {
+      score += latency <= 100 ? 30 : Math.max(0, Math.round(30 * (1 - (latency - 100) / 900)));
+    }
+
+    const fps = (metrics.quality && metrics.quality.videoFrameRate) || 0;
+    score += Math.min(20, Math.round((fps / 15) * 20));
+
+    return Math.min(100, score);
+  }
+
+  /**
+   * Fire a webhook alert (with per-instance cooldown) when an instance's
+   * SLA score degrades below the threshold. No-op without ALERT_WEBHOOK_URL.
+   */
+  evaluateSlaAlert(metrics) {
+    if (!this.alertWebhookUrl) return;
+    if (metrics.slaScore >= this.slaAlertThreshold) return;
+
+    const now = Date.now();
+    const last = this.lastAlertAt.get(metrics.instanceId) || 0;
+    if (now - last < this.alertCooldownMs) return;
+    this.lastAlertAt.set(metrics.instanceId, now);
+
+    const payload = {
+      type: 'sla_degraded',
+      instanceId: metrics.instanceId,
+      slaScore: metrics.slaScore,
+      threshold: this.slaAlertThreshold,
+      availability: metrics.availability,
+      latencyMs: metrics.quality ? metrics.quality.connectionLatency : null,
+      timestamp: new Date(now).toISOString(),
+    };
+
+    fetch(this.alertWebhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(() => {
+      logger.warn('SLA alert sent', { instanceId: metrics.instanceId, slaScore: metrics.slaScore });
+    }).catch((err) => {
+      logger.error('SLA alert webhook failed', { error: err.message });
+    });
+  }
+
+  /**
    * Get quality summary for all instances
    */
   getQualitySummary() {
@@ -751,11 +818,22 @@ class StreamQualityMonitor {
       return dist;
     }, {});
 
+    const slaScores = instances
+      .map(m => m.slaScore)
+      .filter(s => s !== null && s !== undefined);
+    const averageSlaScore = slaScores.length > 0
+      ? Math.round(slaScores.reduce((x, y) => x + y, 0) / slaScores.length)
+      : null;
+
     return {
       total,
       available,
       availabilityPercent: (available / total) * 100,
       averageLatency: averageLatency ? Math.round(averageLatency) : null,
+      averageSlaScore,
+      degradedInstances: instances
+        .filter(m => (m.slaScore ?? 100) < this.slaAlertThreshold)
+        .map(m => ({ instanceId: m.instanceId, slaScore: m.slaScore })),
       qualityDistribution
     };
   }
