@@ -4,6 +4,14 @@ server {
     
     root /usr/share/nginx/html;
     index index.html;
+
+    # Gzip compression (concept from #74)
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript
+               text/xml application/xml application/xml+rss image/svg+xml;
     
     # Proxy API calls to backend
     location /api/ {
