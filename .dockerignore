@@ -1,4 +1,17 @@
-node_modules
-.git
-.DS_Store
-*.log
+# Root build context is only used by backend/Dockerfile, which copies
+# backend/, utils/ and (at runtime) config/. Allowlist those and exclude
+# everything else — the working tree carries multi-GB ISOs, disk images
+# and bake artifacts that otherwise ship to the daemon on every build.
+*
+
+!backend
+!utils
+!config
+
+# Re-exclude junk inside the allowed trees
+backend/node_modules
+backend/logs
+backend/coverage
+backend/*.log
+**/.DS_Store
+**/npm-debug.log*

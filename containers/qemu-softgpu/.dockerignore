@@ -1,0 +1,9 @@
+# Keep the emulator build context lean — bake artifacts and stray disk
+# images in this directory can exceed 1 GB and are never COPY'd.
+tmp-bake
+*.qcow2
+*.iso
+*.tar
+*.tar.gz
+*.md
+.DS_Store
