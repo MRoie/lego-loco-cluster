@@ -1,7 +1,7 @@
 # Root Cause Analysis: Kubernetes Discovery API Parameter Error
 
 **Date:** 2025-08-14  
-**Status:** ACTIVE - Production blocking issue  
+**Status:** RESOLVED — fixed on main (namespace handling rewritten in kubernetesDiscovery.js; see TASKS_ORCHESTRATION.md Task 1.1). Kept as historical RCA.  
 **Priority:** CRITICAL  
 **Issue ID:** K8S-DISCOVERY-001  
 
@@ -129,7 +129,7 @@ If issue persists after systematic rebuild:
 
 ## Next Steps
 
-1. **Execute development cycle script** (to be created)
+1. **Execute development cycle script** — `scripts/dev-cycle-deploy.sh` (full cycle) or `scripts/simple-backend-deploy.sh` (backend-only)
 2. **Systematic build verification**
 3. **API client investigation**
 4. **Production deployment validation**

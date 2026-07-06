@@ -8,7 +8,7 @@ set -e  # Exit on any error
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 IMAGE_NAME="loco-backend"
-IMAGE_TAG="latest"
+IMAGE_TAG="${IMAGE_TAG:-dev-$(date +%Y%m%d-%H%M%S)}"
 NAMESPACE="loco"
 HELM_RELEASE="loco"
 HELM_CHART="./helm/loco-chart"
@@ -122,10 +122,11 @@ cleanup_all() {
     
     # Additional cleanup for stuck resources
     log_info "Force cleaning any stuck resources..."
-    kubectl get all --all-namespaces | grep -E "(loco|emulator)" | awk '{print $1 "/" $2}' | while read resource; do
-        if [[ -n "$resource" && "$resource" != "/" ]]; then
-            log_info "Force deleting stuck resource: $resource"
-            kubectl delete "$resource" --force --grace-period=0 2>/dev/null || log_warning "Failed to force delete $resource"
+    # Column 1 is the namespace, column 2 the type/name pair - delete as "-n <ns> <type/name>"
+    kubectl get all --all-namespaces --no-headers 2>/dev/null | grep -E "(loco|emulator)" | awk '{print $1 " " $2}' | while read -r ns resource; do
+        if [[ -n "$ns" && -n "$resource" ]]; then
+            log_info "Force deleting stuck resource: $ns/$resource"
+            kubectl delete -n "$ns" "$resource" --force --grace-period=0 2>/dev/null || log_warning "Failed to force delete $ns/$resource"
         fi
     done
     
@@ -313,7 +314,7 @@ nfs:
 EOF
     
     # Deploy with the values file
-    if helm install "$HELM_RELEASE" "$HELM_CHART" \
+    if helm upgrade --install "$HELM_RELEASE" "$HELM_CHART" \
         --namespace "$NAMESPACE" \
         --values /tmp/helm-values.yaml \
         --wait \
@@ -509,8 +510,7 @@ main() {
     log_section "Development Cycle Complete"
     log_success "🎯 Development cycle completed successfully!"
     log_info "🔍 Check the debug information above for any issues"
-    log_info "📝 Update RCA_KUBERNETES_DISCOVERY.md with results"
-    log_info "📝 Update RCA_KUBERNETES_DISCOVERY.md with results"
+    log_info "📝 Update docs/RCA_KUBERNETES_DISCOVERY.md with results"
 }
 
 # Run main function with all arguments

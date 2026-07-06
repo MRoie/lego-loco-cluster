@@ -454,7 +454,7 @@ class KubernetesDiscovery {
 
       return statefulSets;
     } catch (error) {
-      logger.error('Failed to get StatefulSets info:', error.message);
+      logger.error('Failed to get StatefulSets info', { error: error.message });
       return {};
     }
   }

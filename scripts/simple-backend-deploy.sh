@@ -5,7 +5,7 @@ set -e
 
 # Configuration
 IMAGE_NAME="loco-backend"
-IMAGE_TAG="latest"
+IMAGE_TAG="${IMAGE_TAG:-dev-$(date +%Y%m%d-%H%M%S)}"
 NAMESPACE="loco"
 
 # Colors for output
@@ -72,7 +72,7 @@ spec:
       containers:
       - name: backend
         image: ${IMAGE_NAME}:${IMAGE_TAG}
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3001
         env:
