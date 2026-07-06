@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
+const breakerManager = require('./circuitBreaker');
 
 class KubernetesDiscovery {
   constructor() {
@@ -16,6 +17,11 @@ class KubernetesDiscovery {
     this.discoveryStrategy = process.env.DISCOVERY_STRATEGY || 'auto';
     this.serviceName = process.env.EMULATOR_SERVICE_NAME || 'loco-loco-emulator';
     this.endpointsWatchRequest = null;
+
+    // Last-known-good API responses, served as circuit-breaker fallbacks so
+    // the dashboard keeps rendering while the Kubernetes API is unavailable
+    this.lastGood = { podsAndStatefulSets: null, services: null };
+    this.breakers = null; // created lazily once the k8s client is initialized
 
     // Initialize asynchronously
     this.init().catch(error => {
@@ -145,12 +151,29 @@ class KubernetesDiscovery {
 
       logger.info(`API call parameters:`, { pods: listPodsParams, statefulSets: listStatefulSetsParams });
 
-      // Execute both API calls in parallel for efficiency
-      // The newer Kubernetes client expects an object with namespace and other options
-      const [podsResponse, statefulSetsResponse] = await Promise.all([
-        this.k8sApi.listNamespacedPod({ namespace, labelSelector }),
-        this.k8sAppsApi.listNamespacedStatefulSet({ namespace, labelSelector })
-      ]);
+      // Execute both API calls in parallel for efficiency, behind a circuit
+      // breaker: when the k8s API is failing, serve the last-known-good
+      // response instead of cascading errors to the dashboard.
+      const listBreaker = breakerManager.createBreaker(
+        'k8s-list-pods-statefulsets',
+        (ns, sel) => Promise.all([
+          this.k8sApi.listNamespacedPod({ namespace: ns, labelSelector: sel }),
+          this.k8sAppsApi.listNamespacedStatefulSet({ namespace: ns, labelSelector: sel })
+        ]),
+        {
+          fallback: breakerManager.createCacheFallback(
+            () => this.lastGood.podsAndStatefulSets,
+            'last-known pods/statefulsets'
+          ),
+        }
+      );
+      const listResult = await listBreaker.fire(namespace, labelSelector);
+      if (!listResult) {
+        logger.warn('Kubernetes API unavailable and no cached pods/statefulsets yet');
+        return [];
+      }
+      const [podsResponse, statefulSetsResponse] = listResult;
+      this.lastGood.podsAndStatefulSets = listResult;
 
       // Handle both old (response.body) and new (response directly) client-node formats
       const podsBody = podsResponse?.body || podsResponse;
@@ -302,7 +325,20 @@ class KubernetesDiscovery {
         labelSelector: labelSelector
       };
 
-      const servicesResponse = await this.k8sApi.listNamespacedService(listServicesParams);
+      const servicesBreaker = breakerManager.createBreaker(
+        'k8s-list-services',
+        (params) => this.k8sApi.listNamespacedService(params),
+        {
+          fallback: breakerManager.createCacheFallback(
+            () => this.lastGood.services,
+            'last-known services'
+          ),
+        }
+      );
+      const servicesResponse = await servicesBreaker.fire(listServicesParams);
+      if (servicesResponse) {
+        this.lastGood.services = servicesResponse;
+      }
 
       // Handle both old (response.body) and new (response directly) client-node formats
       const body = servicesResponse?.body || servicesResponse;
