@@ -11,7 +11,7 @@ Based on the comprehensive test suite results, the system is **80% functional** 
 ## 🚨 **CRITICAL FIXES (Priority 1)**
 
 ### **Task 1.1: Fix Backend Kubernetes Service Discovery**
-**Status**: 🔴 **BLOCKING**  
+**Status**: ✅ **FIXED on main** (namespace handling rewritten; RCA in docs/RCA_KUBERNETES_DISCOVERY.md)  
 **Assignee**: Backend Team  
 **Estimated Time**: 2-3 hours  
 **Impact**: Frontend cannot display emulator instances
@@ -78,7 +78,7 @@ kubectl logs -n loco loco-loco-backend-xxx | grep "discovery"
 ---
 
 ### **Task 1.2: Fix Emulator QEMU Startup**
-**Status**: 🔴 **BLOCKING**  
+**Status**: ✅ **FIXED on main** (namespace handling rewritten; RCA in docs/RCA_KUBERNETES_DISCOVERY.md)  
 **Assignee**: DevOps/Emulator Team  
 **Estimated Time**: 4-6 hours  
 **Impact**: Core emulator functionality not working
@@ -584,12 +584,12 @@ kubectl exec -n loco loco-loco-emulator-0 -- pgrep qemu-system-x86_64
 ## 📊 **IMPLEMENTATION ROADMAP**
 
 ### **Week 1: Critical Fixes**
-- [ ] Task 1.1: Fix Backend Kubernetes Service Discovery
+- [x] Task 1.1: Fix Backend Kubernetes Service Discovery (fixed on main; RCA in docs/RCA_KUBERNETES_DISCOVERY.md)
 - [ ] Task 1.2: Fix Emulator QEMU Startup
 - [ ] Task 1.3: Add Missing Service Labels
 
 ### **Week 2: Monitoring & Logging**
-- [ ] Task 2.1: Implement Structured Logging
+- [x] Task 2.1: Implement Structured Logging (winston logger wired via #89/#94)
 - [ ] Task 2.2: Add Prometheus Metrics
 - [ ] Task 2.3: Enhanced Health Checks
 
