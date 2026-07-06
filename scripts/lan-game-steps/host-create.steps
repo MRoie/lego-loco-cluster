@@ -1,0 +1,41 @@
+# Instance 0: from the Lego Loco main menu, host a TCP LAN game.
+# Layout reference: 1024x768, savevm tag "mainmenu" taken at the main menu
+# (docs/LAN_MULTIPLAYER_AND_GHCR_RUNBOOK.md §2.4). The multiplayer briefcase
+# is the two-figure case; the pencil button creates a game.
+0 loadvm mainmenu
+0 sleep 5
+0 dump host-mainmenu
+# Park the cursor at a known corner, then click the multiplayer briefcase
+0 hmp mouse_move -3000 -3000
+0 sleep 1
+0 hmp mouse_move 512 430
+0 sleep 1
+0 hmp mouse_button 1
+0 hmp mouse_button 0
+0 sleep 4
+0 dump host-multiplayer-menu
+# Create game (pencil, upper action button on the right panel)
+0 hmp mouse_move -3000 -3000
+0 sleep 1
+0 hmp mouse_move 828 410
+0 sleep 1
+0 hmp mouse_button 1
+0 hmp mouse_button 0
+0 sleep 4
+0 dump host-create-dialog
+# Select TCP transport and confirm (green check)
+0 hmp mouse_move -3000 -3000
+0 sleep 1
+0 hmp mouse_move 512 400
+0 sleep 1
+0 hmp mouse_button 1
+0 hmp mouse_button 0
+0 sleep 2
+0 hmp mouse_move -3000 -3000
+0 sleep 1
+0 hmp mouse_move 620 520
+0 sleep 1
+0 hmp mouse_button 1
+0 hmp mouse_button 0
+0 sleep 6
+0 dump host-lobby
