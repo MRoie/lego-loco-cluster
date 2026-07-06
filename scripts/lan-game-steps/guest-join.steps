@@ -1,0 +1,40 @@
+# Instance 1: from the Lego Loco main menu, join the hosted TCP game.
+# Coordinates recorded during the original proof session (scripts/qmp-steps.txt):
+# join = binoculars, lower red button ~(828,490) at 1024x768.
+1 loadvm mainmenu
+1 sleep 5
+1 dump guest-mainmenu
+# Click the multiplayer briefcase
+1 hmp mouse_move -3000 -3000
+1 sleep 1
+1 hmp mouse_move 512 430
+1 sleep 1
+1 hmp mouse_button 1
+1 hmp mouse_button 0
+1 sleep 4
+1 dump guest-multiplayer-menu
+# Join game (binoculars, lower red button)
+1 hmp mouse_move -3000 -3000
+1 sleep 1
+1 hmp mouse_move 828 490
+1 sleep 1
+1 hmp mouse_button 1
+1 hmp mouse_button 0
+1 sleep 4
+1 dump guest-join-dialog
+# Select TCP transport and confirm (green check)
+1 hmp mouse_move -3000 -3000
+1 sleep 1
+1 hmp mouse_move 512 400
+1 sleep 1
+1 hmp mouse_button 1
+1 hmp mouse_button 0
+1 sleep 2
+1 hmp mouse_move -3000 -3000
+1 sleep 1
+1 hmp mouse_move 620 520
+1 sleep 1
+1 hmp mouse_button 1
+1 hmp mouse_button 0
+1 sleep 8
+1 dump guest-searching-or-lobby

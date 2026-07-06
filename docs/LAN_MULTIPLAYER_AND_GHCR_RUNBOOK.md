@@ -10,6 +10,33 @@
 
 ---
 
+## Quickstart (one command)
+
+Once the network-ready emulator image exists locally (built + baked per §2),
+the whole flow is wrapped by a single script:
+
+```bash
+# Cluster up → build/load images → deploy 2-instance LAN → drive both guests
+# into a TCP multiplayer game → capture proof screendumps under proof/
+scripts/start-lan-game.sh
+
+# Also record the dashboard's progressive loading as video evidence:
+scripts/start-lan-game.sh --record
+
+# Reuse an existing cluster/images, deploy-and-wait only (no in-game steps):
+scripts/start-lan-game.sh --skip-cluster --skip-build --skip-game
+```
+
+The in-game choreography lives in editable step files
+(`scripts/lan-game-steps/{host-create,guest-join}.steps`) run by
+`scripts/lan-game-steps.py` — a data-driven QMP runner (`hmp` / `loadvm` /
+`sleep` / `dump`). If the guests lack a baked `mainmenu` savevm, `loadvm`
+degrades gracefully and the script continues from whatever state the guests
+booted into. The manual bring-up below (§1–§5) is the source of truth those
+step files were recorded from.
+
+---
+
 ## 0. TL;DR / mental model
 
 - Each emulator pod runs **QEMU (`qemu-system-i386`, TCG)** booting a Win98 SE qcow2.

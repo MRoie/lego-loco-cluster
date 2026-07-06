@@ -6,11 +6,13 @@ metadata:
 spec:
   serviceName: {{ include "loco.fullname" . }}-emulator
   replicas: {{ .Values.replicas }}
-  # Zero-downtime rolling update strategy
+  # Zero-downtime rolling update strategy.
+  # NOTE: rollingUpdate.maxUnavailable is intentionally omitted — for
+  # StatefulSets it requires the MaxUnavailableStatefulSet feature gate
+  # (alpha, k8s >=1.24) and fails `helm upgrade`/`kubectl apply` validation
+  # outright on older clusters (Docker Desktop 1.19, kind 1.27).
   updateStrategy:
     type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
   selector:
     matchLabels:
       app: {{ include "loco.fullname" . }}-emulator
