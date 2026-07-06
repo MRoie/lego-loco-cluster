@@ -1,0 +1,16 @@
+spec:
+  template:
+    spec:
+      volumes:
+      - name: win98-cd
+        hostPath:
+          path: /opt/win98se.iso
+          type: File
+      containers:
+      - name: emulator
+        env:
+        - name: QEMU_EXTRA_ARGS
+          value: "-drive file=/images/win98se.iso,format=raw,media=cdrom,readonly=on,if=ide,index=2"
+        volumeMounts:
+        - name: win98-cd
+          mountPath: /images/win98se.iso

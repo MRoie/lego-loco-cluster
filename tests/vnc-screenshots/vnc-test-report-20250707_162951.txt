@@ -1,0 +1,23 @@
+=== VNC Cluster Connectivity Test Report ===
+Generated: Mon Jul  7 16:29:51 EDT 2025
+
+[0;32m[2025-07-07 16:29:51][0m Starting VNC cluster connectivity tests...
+[0;32m[2025-07-07 16:29:51][0m Checking minikube status...
+[0;32m[2025-07-07 16:29:52] SUCCESS:[0m Minikube is running
+[0;32m[2025-07-07 16:29:52][0m Checking cluster status...
+NAME                                  READY   STATUS              RESTARTS       AGE    IP            NODE       NOMINATED NODE   READINESS GATES
+loco-loco-backend-8cbc68c94-29dqg     1/1     Running             0              2d2h   10.244.0.13   minikube   <none>           <none>
+loco-loco-emulator-0                  0/1     ContainerCreating   0              2d2h   <none>        minikube   <none>           <none>
+loco-loco-frontend-6d98b96875-lpnsc   1/1     Running             0              2d2h   10.244.0.12   minikube   <none>           <none>
+loco-loco-vr-d7dc686d5-r2nmw          0/1     CrashLoopBackOff    281 (3m ago)   2d2h   10.244.0.11   minikube   <none>           <none>
+nfs-server-54c74bdf78-kwcg6           1/1     Running             2 (33s ago)    81s    10.244.0.16   minikube   <none>           <none>
+
+[0;32m[2025-07-07 16:29:52][0m Checking services...
+NAME                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
+loco-loco-backend    NodePort    10.100.156.242   <none>        3001:32707/TCP               2d2h
+loco-loco-emulator   ClusterIP   None             <none>        5901/TCP                     2d2h
+loco-loco-frontend   NodePort    10.96.146.180    <none>        3000:31771/TCP               2d2h
+loco-loco-vr         ClusterIP   10.103.115.221   <none>        3000/TCP                     2d2h
+nfs-server           ClusterIP   10.105.165.138   <none>        2049/TCP,20048/TCP,111/TCP   2m1s
+
+[0;32m[2025-07-07 16:29:52][0m Getting frontend service URL...

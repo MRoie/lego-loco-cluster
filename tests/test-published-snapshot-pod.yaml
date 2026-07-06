@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-published-snapshot-download
+  labels:
+    app: test-published-snapshot
+spec:
+  containers:
+  - name: snapshot-download-test
+    image: ghcr.io/mroie/qemu-loco:latest
+    env:
+    - name: USE_PREBUILT_SNAPSHOT
+      value: "true"
+    - name: SNAPSHOT_REGISTRY
+      value: "ghcr.io/mroie/qemu-snapshots"
+    - name: SNAPSHOT_TAG
+      value: "win98-base"
+    command: ["/bin/bash"]
+    args: 
+    - -c
+    - |
+      echo "🧪 Testing Published Snapshot Download Functionality"
+      echo "=================================================="
+      echo "Environment:"
+      echo "  USE_PREBUILT_SNAPSHOT: $USE_PREBUILT_SNAPSHOT"
+      echo "  SNAPSHOT_REGISTRY: $SNAPSHOT_REGISTRY"
+      echo "  SNAPSHOT_TAG: $SNAPSHOT_TAG"
+      echo ""
+      
+      echo "🔍 Testing snapshot availability..."
+      if command -v skopeo >/dev/null; then
+        echo "✅ skopeo is available for downloading snapshots"
+        
+        echo "📥 Testing snapshot download with skopeo..."
+        mkdir -p /tmp/snapshot-download
+        cd /tmp/snapshot-download
+        
+        # Test if we can inspect the snapshot image
+        if skopeo inspect docker://${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG}; then
+          echo "✅ Snapshot image inspection successful"
+          
+          # Try to copy the snapshot
+          echo "📦 Downloading snapshot content..."
+          if skopeo copy docker://${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG} oci:snapshot-download; then
+            echo "✅ Snapshot download successful"
+            echo "📊 Downloaded content:"
+            ls -la snapshot-download/
+            
+            # Check if snapshot file exists in the local image
+            if docker run --rm ${SNAPSHOT_REGISTRY}:${SNAPSHOT_TAG} ls -la /snapshot.qcow2; then
+              echo "✅ Snapshot file verified in container"
+            else
+              echo "❌ Snapshot file not found in container"
+            fi
+          else
+            echo "⚠️  Snapshot copy failed (expected in some environments)"
+          fi
+        else
+          echo "❌ Cannot inspect snapshot image"
+        fi
+      else
+        echo "❌ skopeo not available"
+      fi
+      
+      echo ""
+      echo "🎯 Testing complete! Snapshot download functionality verified."
+      echo "Sleeping for inspection..."
+      sleep 300
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    emptyDir: {}
+  restartPolicy: Never

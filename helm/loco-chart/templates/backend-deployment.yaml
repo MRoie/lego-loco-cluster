@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "loco.fullname" . }}-backend
+  namespace: {{ include "loco.namespace" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "loco.fullname" . }}-backend
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/part-of: lego-loco-cluster
+  template:
+    metadata:
+      labels:
+        app: {{ include "loco.fullname" . }}-backend
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: lego-loco-cluster
+        app.kubernetes.io/name: lego-loco-backend
+    spec:
+      {{- if .Values.rbac.create }}
+      serviceAccountName: {{ include "loco.fullname" . }}-backend
+      {{- end }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      containers:
+      - name: backend
+        image: {{ include "loco.image" (dict "root" . "image" .Values.backend.image "tag" .Values.backend.tag) }}
+        imagePullPolicy: {{ .Values.backend.imagePullPolicy | default "IfNotPresent" }}
+        env:
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: EMULATOR_SERVICE_NAME
+          value: "{{ include "loco.fullname" . }}-emulator"
+        - name: DISCOVERY_MODE
+          value: "kubernetes-endpoints"
+        {{- if .Values.backend.env }}
+        {{- range $key, $value := .Values.backend.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- end }}
+        ports:
+        - containerPort: {{ .Values.backend.servicePort }}
+        - containerPort: 5000
+          protocol: UDP
+          name: video-udp
+        - containerPort: 5001
+          protocol: UDP
+          name: audio-udp
+        resources:
+          {{- toYaml .Values.backend.resources | nindent 10 }}
+        startupProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.backend.servicePort }}
+          timeoutSeconds: 15
+          failureThreshold: 60
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.backend.servicePort }}
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+          periodSeconds: 20
+          failureThreshold: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: {{ .Values.backend.servicePort }}
+          initialDelaySeconds: 5
+          timeoutSeconds: 15
+          periodSeconds: 15
+          failureThreshold: 10
+        volumeMounts:
+        - name: instances-config
+          mountPath: /app/config/instances.json
+          subPath: instances.json
+        - name: status-config
+          mountPath: /app/config/status.json
+          subPath: status.json
+        - name: webrtc-config
+          mountPath: /app/config/webrtc.json
+          subPath: webrtc.json
+        - name: vnc-config
+          mountPath: /app/config/vnc.json
+          subPath: vnc.json
+      volumes:
+      - name: instances-config
+        configMap:
+          name: {{ include "loco.fullname" . }}-instances
+      - name: status-config
+        configMap:
+          name: {{ include "loco.fullname" . }}-status
+      - name: webrtc-config
+        configMap:
+          name: {{ include "loco.fullname" . }}-webrtc-config
+      - name: vnc-config
+        configMap:
+          name: {{ include "loco.fullname" . }}-vnc-config

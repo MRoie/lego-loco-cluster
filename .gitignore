@@ -1,0 +1,70 @@
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+frontend/dist/
+*.log
+backend/logs/
+package-lock.json
+containers/**/win98.*
+*.tar.gz
+images/*.tar.gz
+images/*
+compose/*.tar
+talosctl
+k8s-tests/logs/
+
+# Large Win98 rebuild source artifacts (staged locally, not tracked in git)
+containers/*.iso
+containers/*.zip
+containers/win98_loco_qemu.qcow2
+
+# Large local emulator artifacts
+containers/qemu-softgpu/softgpu.iso
+
+# Local VNC/QMP proof captures
+vnc_*.png
+qdump*.png
+
+# Local emulator/debug captures
+/*.png
+/*.ppm
+/tools/*.png
+/tools/*.ppm
+/docs/proof/
+
+# Local generated/debug files
+__pycache__/
+**/__pycache__/
+/logs/*-audit.json
+/--port
+/nul
+/CUsersroieAppDataLocalTemploco-id-test/
+ 
+# Transient debug output from helper scripts 
+scripts/*-result.txt 
+scripts/merge-status.txt 
+.kube-config
+.bin/helm.exe
+.bin/helm.zip
+.bin/kind.exe
+.bin/kubectl.exe
+.bin/helm-extract/windows-amd64/helm.exe
+.bin/helm-extract/windows-amd64/LICENSE
+.bin/helm-extract/windows-amd64/README.md
+
+# Local bake artifacts and screenshot output (large binaries)
+containers/qemu-softgpu/tmp-bake/
+scripts/out/
+__pycache__/
+
+.vscode/settings.json
+
+# Captured tool/session output — never commit
+*_out.txt
+*_log.txt
+*_results.txt
+*.stackdump
+*.bmp
+/kind
+/kind.exe
+/.vscode/

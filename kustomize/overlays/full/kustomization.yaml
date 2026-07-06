@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+bases:
+  - ../../base
+
+helmCharts:
+  - name: loco
+    releaseName: loco
+    namespace: loco-prod
+    path: ../../../helm/loco-chart
+    valuesInline:
+      replicas: 9
+      emulator:
+        env:
+          BRIDGE: "loco-br"
+          DISK: "/images/win98.qcow2"
+          DISPLAY_NUM: "99"
+          USE_PREBUILT_SNAPSHOT: "false"
+          GUEST_GATEWAY: "192.168.10.1"
+          GUEST_NETMASK: "255.255.255.0"
+          WORKGROUP: "LOCOLAND"

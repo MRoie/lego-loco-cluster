@@ -1,0 +1,33 @@
+=== docker images === 
+REPOSITORY                                      TAG                                        IMAGE ID       CREATED             SIZE
+ghcr.io/mroie/lego-loco-cluster/win98-softgpu   latest                                     92c19a2ab333   8 minutes ago       9.61GB
+ghcr.io/mroie/lego-loco-cluster/win98-softgpu   win98-rebuild-20260704                     92c19a2ab333   8 minutes ago       9.61GB
+ghcr.io/mroie/lego-loco-cluster/win98-softgpu   <none>                                     4ca44a328aa2   50 minutes ago      7.66GB
+<none>                                          <none>                                     143fdb6c5788   About an hour ago   5.71GB
+ghcr.io/mroie/lego-loco-cluster/win98-softgpu   win98-rebuild-20260703                     a569a2d63d83   10 hours ago        3.75GB
+win98-rebuild-local                             latest                                     597b027cf910   15 hours ago        2GB
+win98-softgpu-local                             latest                                     84a66bb7e13b   16 hours ago        2GB
+<none>                                          <none>                                     707478a2926d   16 hours ago        2GB
+<none>                                          <none>                                     98aa678579a0   16 hours ago        2GB
+<none>                                          <none>                                     00aaa7681db4   7 days ago          2GB
+<none>                                          <none>                                     cec2ffda8fff   7 days ago          2GB
+<none>                                          <none>                                     9adeaf0a7a48   7 days ago          2GB
+<none>                                          <none>                                     29e4ce01eee5   7 days ago          2GB
+<none>                                          <none>                                     c504ff900c44   7 days ago          1.81GB
+qemu-interactive                                latest                                     295af5e15195   7 days ago          1.81GB
+alpine                                          latest                                     d529dd0c6e55   2 weeks ago         8.42MB
+ghcr.io/mroie/lego-loco-cluster/win98-softgpu   <none>                                     4006995c00f0   5 months ago        1.8GB
+ghcr.io/mroie/lego-loco-cluster/win98-softgpu   3dca1f1fd98a86528c2140ae3d484e959244ed5b   a8922e0bcac6   12 months ago       1.8GB
+ 
+=== minikube version === 
+'minikube' is not recognized as an internal or external command,
+operable program or batch file.
+ 
+=== minikube status === 
+'minikube' is not recognized as an internal or external command,
+operable program or batch file.
+ 
+=== docker context ls === 
+NAME                TYPE                DESCRIPTION                               DOCKER ENDPOINT                  KUBERNETES ENDPOINT   ORCHESTRATOR
+default *           moby                Current DOCKER_HOST based configuration   npipe:////./pipe/docker_engine                         swarm
+DONE 

@@ -1,0 +1,69 @@
+name: Build CI Base Image
+
+on:
+  push:
+    paths:
+      - '.github/Dockerfile.ci'
+      - '.github/workflows/build-ci-image.yml'
+    branches: [ "main", "copilot/fix-55" ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: lego-loco-cluster-ci
+
+jobs:
+  build-ci-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/mroie/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value={{branch}},enable=true
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: .github/Dockerfile.ci
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          
+      - name: Test CI image
+        run: |
+          echo "Testing CI base image functionality"
+          # Use the first tag from the build (works for any branch)
+          IMAGE_TAG=$(echo '${{ steps.meta.outputs.tags }}' | head -n1)
+          echo "Testing image: $IMAGE_TAG"
+          docker run --rm "$IMAGE_TAG" \
+            bash -c "
+              echo 'Testing installed packages...'
+              kubectl version --client=true
+              helm version --short
+              minikube version --short
+              node --version
+              npm --version
+              docker --version || echo 'Docker client not available in image (expected)'
+              echo 'CI base image test completed successfully'
+            "

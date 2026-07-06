@@ -1,0 +1,90 @@
+# Minimal setup for quick testing - just frontend, backend, and one emulator
+services:
+  # Local Docker Registry
+  registry:
+    image: registry:2
+    container_name: loco-registry-minimal
+    ports:
+      - "5500:5000"  # Changed from 5000 to avoid conflict with GStreamer
+    environment:
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /data
+    volumes:
+      - registry_data:/data
+    networks:
+      - loco-network
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: loco-frontend-minimal
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3001
+      - BACKEND_HOST=backend
+      - BACKEND_PORT=3001
+      - FRONTEND_PORT=3000
+    depends_on:
+      - backend
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: loco-backend-minimal
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - CONFIG_DIR=/app/config
+    volumes:
+      - ./config:/app/config:ro
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+  # Single QEMU Emulator for testing
+  emulator:
+    build:
+      context: ./containers/qemu
+      dockerfile: Dockerfile
+    container_name: loco-emulator-minimal
+    ports:
+      - "5901:5901"  # VNC
+      - "6080:6080"  # noVNC web interface
+      - "7000:5000"  # GStreamer video stream
+    environment:
+      - BRIDGE=loco-br
+      - TAP_IF=tap0
+      - DISK=/images/win98.qcow2
+      - USE_PREBUILT_SNAPSHOT=true
+      - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
+      - SNAPSHOT_TAG=win98-base
+      - DISPLAY_NUM=99
+    volumes:
+      - ./images:/images:ro
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+    networks:
+      - loco-network
+    restart: unless-stopped
+
+volumes:
+  registry_data:
+    driver: local
+
+networks:
+  loco-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

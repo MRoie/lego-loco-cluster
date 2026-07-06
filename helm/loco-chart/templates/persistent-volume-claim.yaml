@@ -1,0 +1,21 @@
+{{- if .Values.emulator.diskPVC }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.emulator.diskPVC }}
+  namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: lego-loco-cluster
+    app.kubernetes.io/name: lego-loco-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.storage.class }}
+  storageClassName: {{ .Values.storage.class }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.diskSize | default "10Gi" }}
+  volumeName: {{ .Values.emulator.diskPVC }}-pv
+{{- end }}

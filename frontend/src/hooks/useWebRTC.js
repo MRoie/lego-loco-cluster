@@ -1,0 +1,409 @@
+import { useEffect, useRef, useState } from "react";
+import { createLogger } from "../utils/logger";
+
+const logger = createLogger('useWebRTC');
+
+/**
+ * Establish a WebRTC connection for the given target instance ID.
+ * Returns a video ref, current audio level, and connection quality metrics for UI binding.
+ */
+export default function useWebRTC(targetId) {
+  // <video> element that will display the incoming stream
+  const videoRef = useRef(null);
+  // simple numeric audio meter 0-1 updated from Web Audio API
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [loading, setLoading] = useState(true);
+  // Previous stats snapshot for delta calculations
+  const prevStatsRef = useRef({});
+  // Connection quality metrics (extended with detailed RTCStats)
+  const [connectionQuality, setConnectionQuality] = useState({
+    bitrate: 0,
+    packetLoss: 0,
+    latency: 0,
+    frameRate: 0,
+    resolution: null,
+    connectionState: 'disconnected',
+    codec: null,
+    audioCodec: null,
+    jitter: 0,
+    bandwidth: { inbound: 0, outbound: 0 }
+  });
+
+  useEffect(() => {
+    if (!targetId) return;
+    let cancelled = false;
+    let reconnectTimer = null;
+    let statsTimer = null;
+    let reconnectAttempt = 0;
+    const MAX_RECONNECT_ATTEMPTS = 50;
+    const BASE_DELAY = 1000;
+    const MAX_DELAY = 30000;
+
+    const scheduleReconnect = () => {
+      if (cancelled || reconnectTimer) return;
+      if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+        logger.error('WebRTC signaling: max reconnect attempts reached', { targetId });
+        return;
+      }
+      setLoading(true);
+      const exponential = BASE_DELAY * Math.pow(2, reconnectAttempt);
+      const jitter = Math.random() * 0.3 * exponential;
+      const delay = Math.min(exponential + jitter, MAX_DELAY);
+      reconnectAttempt++;
+      logger.info('Scheduling WebRTC reconnect', { targetId, attempt: reconnectAttempt, delayMs: Math.round(delay) });
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connect();
+      }, delay);
+    };
+
+    // Monitor WebRTC stats for quality metrics
+    const monitorStats = (pc) => {
+      if (!pc || cancelled) return;
+      
+      statsTimer = setInterval(async () => {
+        try {
+          if (pc.connectionState === 'closed') return;
+          const stats = await pc.getStats();
+          const qualityMetrics = extractQualityMetrics(stats);
+          setConnectionQuality(prev => ({
+            ...prev,
+            ...qualityMetrics,
+            connectionState: pc.connectionState
+          }));
+        } catch (error) {
+          logger.warn('Failed to get WebRTC stats', { targetId, error: error.message });
+        }
+      }, 2000); // Update stats every 2 seconds
+    };
+
+    // Extract quality metrics from RTCStats
+    const extractQualityMetrics = (stats) => {
+      const metrics = {
+        bitrate: 0,
+        packetLoss: 0,
+        latency: 0,
+        frameRate: 0,
+        resolution: null,
+        codec: null,
+        audioCodec: null,
+        jitter: 0,
+        bandwidth: { inbound: 0, outbound: 0 }
+      };
+
+      // Collect codec lookup table from codec-type reports
+      const codecMap = {};
+      stats.forEach((report) => {
+        if (report.type === 'codec') {
+          codecMap[report.id] = report.mimeType;
+        }
+      });
+
+      stats.forEach((report) => {
+        // --- Inbound video RTP ---
+        if (report.type === 'inbound-rtp' && report.kind === 'video') {
+          const prev = prevStatsRef.current[report.id] || {};
+          // Bitrate calculation using delta bytes and delta time
+          if (
+            typeof report.bytesReceived === 'number' &&
+            typeof report.timestamp === 'number' &&
+            typeof prev.bytesReceived === 'number' &&
+            typeof prev.timestamp === 'number'
+          ) {
+            const deltaBytes = report.bytesReceived - prev.bytesReceived;
+            const deltaTimeMs = report.timestamp - prev.timestamp;
+            if (deltaBytes > 0 && deltaTimeMs > 0) {
+              const bps = Math.round((deltaBytes * 8) / (deltaTimeMs / 1000));
+              metrics.bitrate = bps;
+              metrics.bandwidth.inbound = Math.round(deltaBytes / (deltaTimeMs / 1000));
+            }
+          }
+          // Frame rate calculation using delta frames and delta time
+          if (
+            typeof report.framesDecoded === 'number' &&
+            typeof report.timestamp === 'number' &&
+            typeof prev.framesDecoded === 'number' &&
+            typeof prev.timestamp === 'number'
+          ) {
+            const deltaFrames = report.framesDecoded - prev.framesDecoded;
+            const deltaTimeMs = report.timestamp - prev.timestamp;
+            if (deltaFrames > 0 && deltaTimeMs > 0) {
+              metrics.frameRate = Math.round(deltaFrames / (deltaTimeMs / 1000));
+            }
+          }
+          // Save resolution
+          if (report.frameWidth && report.frameHeight) {
+            metrics.resolution = `${report.frameWidth}x${report.frameHeight}`;
+          }
+          // Packet loss calculation
+          if (typeof report.packetsLost === 'number' && typeof report.packetsReceived === 'number') {
+            const totalPackets = report.packetsLost + report.packetsReceived;
+            metrics.packetLoss = totalPackets > 0
+              ? Math.round((report.packetsLost / totalPackets) * 10000) / 100
+              : 0;
+          }
+          // Jitter (seconds → ms)
+          if (typeof report.jitter === 'number') {
+            metrics.jitter = Math.round(report.jitter * 1000);
+          }
+          // Video codec from codecId reference
+          if (report.codecId && codecMap[report.codecId]) {
+            metrics.codec = codecMap[report.codecId];
+          }
+          // Store current values for next interval
+          prevStatsRef.current[report.id] = {
+            bytesReceived: report.bytesReceived,
+            framesDecoded: report.framesDecoded,
+            timestamp: report.timestamp
+          };
+        }
+
+        // --- Inbound audio RTP ---
+        if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+          if (report.codecId && codecMap[report.codecId]) {
+            metrics.audioCodec = codecMap[report.codecId];
+          }
+        }
+
+        // --- Outbound RTP (video) for outbound bandwidth ---
+        if (report.type === 'outbound-rtp' && report.kind === 'video') {
+          const prev = prevStatsRef.current[report.id] || {};
+          if (
+            typeof report.bytesSent === 'number' &&
+            typeof report.timestamp === 'number' &&
+            typeof prev.bytesSent === 'number' &&
+            typeof prev.timestamp === 'number'
+          ) {
+            const deltaBytes = report.bytesSent - prev.bytesSent;
+            const deltaTimeMs = report.timestamp - prev.timestamp;
+            if (deltaBytes > 0 && deltaTimeMs > 0) {
+              metrics.bandwidth.outbound = Math.round(deltaBytes / (deltaTimeMs / 1000));
+            }
+          }
+          prevStatsRef.current[report.id] = {
+            bytesSent: report.bytesSent,
+            timestamp: report.timestamp
+          };
+        }
+
+        // --- Candidate pair (latency) ---
+        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+          if (typeof report.currentRoundTripTime === 'number') {
+            metrics.latency = Math.round(report.currentRoundTripTime * 1000); // Convert to ms
+          }
+        }
+      });
+
+      return metrics;
+    };
+
+    async function connect() {
+      setLoading(true);
+      // Fetch optional ICE server configuration. In a Kubernetes cluster we
+      // typically don't need external STUN/TURN servers, so this defaults to an
+      // empty array when the config isn't present.
+      const iceServers = await fetch("/api/config/webrtc")
+        .then((r) => r.json())
+        .then((cfg) => cfg.iceServers || [])
+        .catch((e) => {
+          logger.error("Failed to load WebRTC config", { targetId, error: e.message });
+          return [];
+        });
+
+      if (cancelled) return;
+
+      const wsProto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${wsProto}://${location.host}/signal`);
+      const pc = new RTCPeerConnection({ iceServers });
+
+        let audioCtx;
+        let analyser;
+
+        const dataArr = new Uint8Array(128);
+
+        function startMeter(stream) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const source = audioCtx.createMediaStreamSource(stream);
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+          const tick = () => {
+            if (!analyser) return;
+            analyser.getByteFrequencyData(dataArr);
+            const sum = dataArr.reduce((s, v) => s + v, 0);
+            setAudioLevel(sum / dataArr.length / 255);
+            requestAnimationFrame(tick);
+          };
+          tick();
+        }
+
+        pc.ontrack = (ev) => {
+          if (videoRef.current) {
+            // Accumulate tracks into a single MediaStream instead of
+            // replacing srcObject each time (video and audio arrive as
+            // separate streams from werift)
+            if (!videoRef.current.srcObject) {
+              videoRef.current.srcObject = new MediaStream();
+            }
+            videoRef.current.srcObject.addTrack(ev.track);
+            videoRef.current
+              .play()
+              .catch((e) => logger.error("Video play failed", { targetId, error: e.message }));
+          }
+          // Start audio meter only when audio track arrives
+          if (ev.track.kind === 'audio' && !audioCtx) {
+            startMeter(new MediaStream([ev.track]));
+          }
+          setLoading(false);
+        };
+
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) {
+            ws.send(
+              JSON.stringify({
+                type: "signal",
+                target: targetId,
+                data: candidate,
+              }),
+            );
+          }
+        };
+
+        ws.onopen = async () => {
+          reconnectAttempt = 0; // reset backoff on successful connection
+          ws.send(JSON.stringify({ type: "register" }));
+          // Add recvonly transceivers so the SDP offer includes video and audio
+          // m= sections. Without these, the server cannot send media back.
+          pc.addTransceiver('video', { direction: 'recvonly' });
+          pc.addTransceiver('audio', { direction: 'recvonly' });
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(
+            JSON.stringify({
+              type: "signal",
+              target: targetId,
+              data: pc.localDescription,
+            }),
+          );
+        };
+
+        ws.onerror = (e) => {
+          logger.error("WebSocket error", { targetId, error: e.message || 'WebSocket connection error' });
+        };
+
+        ws.onclose = () => {
+          logger.debug("WebSocket closed", { targetId });
+          scheduleReconnect();
+        };
+
+        pc.onconnectionstatechange = () => {
+          setConnectionQuality(prev => ({
+            ...prev,
+            connectionState: pc.connectionState
+          }));
+          
+          if (pc.connectionState === 'connected') {
+            // Start monitoring stats when connected
+            monitorStats(pc);
+          } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+            logger.info('Peer connection lost, reconnecting', { targetId, connectionState: pc.connectionState });
+            if (statsTimer) {
+              clearInterval(statsTimer);
+              statsTimer = null;
+            }
+            ws.close();
+            pc.close();
+            scheduleReconnect();
+          }
+        };
+
+        // Queue ICE candidates that arrive before remote description is set
+        const pendingCandidates = [];
+
+        ws.onmessage = async (ev) => {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === "signal" && msg.data) {
+            if (msg.data.sdp) {
+              await pc.setRemoteDescription(
+                new RTCSessionDescription(msg.data),
+              );
+              // Flush any queued ICE candidates now that remote desc is set
+              for (const c of pendingCandidates) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(c));
+                } catch (e) {
+                  logger.warn("Failed to add queued ICE candidate", { targetId, error: e.message });
+                }
+              }
+              pendingCandidates.length = 0;
+
+              if (msg.data.type === "offer") {
+                const ans = await pc.createAnswer();
+                await pc.setLocalDescription(ans);
+                ws.send(
+                  JSON.stringify({
+                    type: "signal",
+                    target: msg.from || targetId,
+                    data: pc.localDescription,
+                  }),
+                );
+              }
+            } else if (msg.data.candidate) {
+              // Queue candidate if remote description not yet set
+              if (!pc.remoteDescription) {
+                pendingCandidates.push(msg.data);
+              } else {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(msg.data));
+                } catch (e) {
+                  logger.warn("Failed to add ICE candidate", { targetId, error: e.message });
+                }
+              }
+            }
+          }
+        };
+
+        return () => {
+          if (statsTimer) {
+            clearInterval(statsTimer);
+            statsTimer = null;
+          }
+          ws.close();
+          pc.close();
+          if (audioCtx) audioCtx.close();
+        };
+      }
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (statsTimer) {
+        clearInterval(statsTimer);
+        statsTimer = null;
+      }
+      if (videoRef.current) videoRef.current.srcObject = null;
+      // Reset quality metrics
+      setConnectionQuality({
+        bitrate: 0,
+        packetLoss: 0,
+        latency: 0,
+        frameRate: 0,
+        resolution: null,
+        connectionState: 'disconnected',
+        codec: null,
+        audioCodec: null,
+        jitter: 0,
+        bandwidth: { inbound: 0, outbound: 0 }
+      });
+      prevStatsRef.current = {};
+    };
+  }, [targetId]);
+
+  // Expose stats as both `stats` (new API) and `connectionQuality` (backward compat)
+  return { videoRef, audioLevel, loading, connectionQuality, stats: connectionQuality };
+}

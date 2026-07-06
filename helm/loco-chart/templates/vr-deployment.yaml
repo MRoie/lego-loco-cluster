@@ -1,0 +1,52 @@
+{{- if and .Values.vr (ne (toString .Values.vr.enabled) "false") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "loco.fullname" . }}-vr
+  namespace: {{ include "loco.namespace" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "loco.fullname" . }}-vr
+      app.kubernetes.io/component: vr
+      app.kubernetes.io/part-of: lego-loco-cluster
+  template:
+    metadata:
+      labels:
+        app: {{ include "loco.fullname" . }}-vr
+        app.kubernetes.io/component: vr
+        app.kubernetes.io/part-of: lego-loco-cluster
+        app.kubernetes.io/name: lego-loco-vr
+    spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      containers:
+      - name: vr-frontend
+        image: {{ include "loco.image" (dict "root" . "image" .Values.vr.image "tag" .Values.vr.tag) }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: {{ .Values.vr.servicePort }}
+        resources:
+          {{- toYaml .Values.vr.resources | nindent 10 }}
+        env:
+        - name: VITE_DEFAULT_VR
+          value: "true"
+        - name: BACKEND_HOST
+          value: "{{ include "loco.fullname" . }}-backend"
+        - name: BACKEND_PORT
+          value: "{{ .Values.backend.servicePort }}"
+        - name: FRONTEND_PORT
+          value: "{{ .Values.vr.servicePort }}"
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/nginx/html/config
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "loco.fullname" . }}-instances
+{{- end }}

@@ -1,0 +1,14 @@
+emulator:
+  image: qemu-loco
+  tag: latest
+  imagePullPolicy: Never  # Use the loaded image from Kind
+  usePrebuiltSnapshot: true
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+  env:
+    USE_PREBUILT_SNAPSHOT: "true"
+    SNAPSHOT_REGISTRY: "ghcr.io/mroie/qemu-snapshots"
+    SNAPSHOT_TAG: "win98-base"
+    DISK_SIZE: "2G"
+    # Use published image
+    QEMU_IMAGE_SOURCE: "published"

@@ -1,0 +1,27 @@
+{
+  "enableSpatialAudio": true,
+  "translation": "full",
+  "quality": "high",
+  "hardware": {
+    "machine": "pc",
+    "cpu": "pentium2",
+    "memory_mb": 512,
+    "disk_size": "2G",
+    "disk_format": "qcow2",
+    "disk_interface": "ide",
+    "vga": "vmware",
+    "nic": "ne2k_pci",
+    "audio": "sb16",
+    "audio_backend": "pa"
+  },
+  "display": {
+    "vnc_base_port": 5900,
+    "vnc_display_offset": 1,
+    "resolution": "1024x768",
+    "color_depth": 16
+  },
+  "health": {
+    "port": 8080,
+    "check_interval_seconds": 30
+  }
+}

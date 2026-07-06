@@ -1,0 +1,299 @@
+replicas: 2
+namespace: loco
+
+#imageRepo: "ghcr.io/mroie"
+# Storage configuration for minikube with hostPath
+storage:
+  class: "standard"  # minikube default storage class
+  nfsSize: "10Gi"
+  diskSize: "10Gi"
+  
+  # Storage strategy configuration
+  strategy:
+    # Option 1: HostPath Direct Mounts (ENABLED by default for minikube)
+    hostPath:
+      enabled: true  # Changed from false to true
+      path: "/tmp/loco-art-shared"
+      createOnStartup: true
+      permissions: "777"
+    
+    # Option 8: Hybrid Storage with Multiple Backends
+    hybrid:
+      enabled: false  # Disabled by default
+      primary: "hostPath"  # Changed from "nfs"
+      fallback: "emptyDir"
+      
+      # NFS configuration
+      nfs:
+        enabled: false  # Changed from true
+        server: "nfs-server"
+        path: "/exports/art"
+      
+      # EmptyDir configuration
+      emptyDir:
+        enabled: false
+        medium: ""
+        sizeLimit: "10Gi"
+      
+      # ConfigMap configuration
+      configMap:
+        enabled: false
+        name: "loco-art-config"
+        dataKey: "art-data"
+
+# Image pull secrets for private registries
+# Uncomment and configure as needed
+imagePullSecrets: []
+  # - ghcr-secret        # GitHub Container Registry
+  # - jfrog-secret       # JFrog Artifactory
+  # - custom-registry    # Custom registry
+
+# RBAC configuration for Kubernetes service discovery
+rbac:
+  create: true  # Create service account and RBAC for backend auto-discovery
+
+# Ingress configuration for centralized routing
+ingress:
+  enabled: true  # Enable Ingress for production deployments
+  className: nginx  # Use nginx ingress controller
+  annotations:
+    # Enable WebSocket support
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+# Registry configurations for different environments
+registryConfig:
+  # GitHub Container Registry
+  ghcr:
+    enabled: false
+    secretName: "ghcr-secret"
+    server: "ghcr.io"
+
+  # JFrog Artifactory
+  jfrog:
+    enabled: false
+    secretName: "jfrog-secret"
+    server: ""  # e.g., "your-company.jfrog.io"
+
+emulator:
+  # NOTE: replica count is set at top-level 'replicas' field (used by StatefulSet template)
+  
+  # Image configuration
+  image: qemu-loco-softgpu
+  tag: v28-qemu3dfx
+  imagePullPolicy: Never  # Use local images for minikube
+  serviceType: ClusterIP
+  servicePort: 5901
+  healthPort: 8080
+  diskPVC: win98-disk
+  diskReadOnly: false
+
+  # Snapshot configuration - disabled since disk image is built-in
+  usePrebuiltSnapshot: false
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+
+  # Health checks configuration
+  probes:
+    startup:
+      enabled: true
+      path: /health
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 30
+    liveness:
+      enabled: true
+      path: /
+      initialDelaySeconds: 60
+      periodSeconds: 15
+      timeoutSeconds: 10
+      failureThreshold: 3
+    readiness:
+      enabled: true
+      path: /
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+  # --- Storage Strategy Options ---
+  # Option A: Fully Persistent (Standard Dev) - Requires local win98.qcow2 in Docker image
+  # diskPVC: "win98-disk"
+  # usePrebuiltSnapshot: false
+
+  # Option B: Ephemeral/Cloud (CI/Test) - Downloads snapshot, no persistence
+  # diskPVC: ""
+  # usePrebuiltSnapshot: true
+
+  # Current Default: Option A setup
+  diskPVC: "win98-disk"
+  diskReadOnly: false
+
+  # Snapshot configuration
+  usePrebuiltSnapshot: false
+  snapshotRegistry: "ghcr.io/mroie/qemu-snapshots"
+  snapshotTag: "win98-base"
+  # Optional named branch for modular overlays, e.g. base-install,
+  # lego-loco, multiplayer-ready, loco-menu, or lobby-ready.
+  # Empty keeps the legacy /images/win98_instance_N.qcow2 path.
+  snapshotBranch: ""
+  snapshotDir: "/images/snapshots"
+  snapshotMode: "persistent" # persistent or ephemeral
+  snapshotReset: false
+  qemuLoadVm: "" # optional internal VM-state snapshot to load at QEMU start
+
+  # CPU resources for emulator pods
+  resources:
+    limits:
+      cpu: "4"
+      memory: "2Gi"
+    requests:
+      cpu: "1"
+      memory: "1Gi"
+
+  # Hardware acceleration. Keep disabled for Docker Desktop/kind nodes that do
+  # not expose /dev/kvm; enable this on a Linux/WSL2 node with KVM available.
+  kvm:
+    enabled: false
+    hostPath: /dev/kvm
+  dri:
+    enabled: false
+    hostPath: /dev/dri
+  nodeSelector: {}
+    # loco.dev/kvm: "true"
+    # loco.dev/gpu-dri: "true"
+  tolerations: []
+  affinity: {}
+  
+  # Additional environment variables
+  env:
+    BRIDGE: "loco-br"
+    CDROM_MODE: "qemu3dfx"
+    DISK: "/images/win98.qcow2"
+    DISPLAY_NUM: "99"
+    QEMU_ACCEL: "auto"
+    QEMU_TCG_OPTS: "thread=multi,tb-size=1024"
+    QEMU_MEMORY: "512"
+    QEMU_SMP: "1"
+    QEMU_RENDER_BACKEND: "qemu3dfx"
+    QEMU_3DFX_VGA: "vmware"
+    QEMU_DISPLAY_OPTS: "sdl,gl=on"
+    QEMU_FULLSCREEN: "true"
+    USE_PREBUILT_SNAPSHOT: "false"
+    # Per-instance network identity (derived from INSTANCE_INDEX in entrypoint)
+    # BRIDGE_IP/GUEST_GATEWAY default to 192.168.10.(200 + INSTANCE_INDEX)
+    # to avoid duplicate bridge IPs on the shared VXLAN LAN.
+    GUEST_NETMASK: "255.255.255.0"
+    WORKGROUP: "LOCOLAND"
+    # Shared L2 LAN networking for DirectPlay multiplayer
+    NETWORK_MODE: "socket"          # socket | vxlan | macvlan | user | bridge
+    SOCKET_PORT: "4444"             # QEMU socket networking port
+    SOCKET_MASTER_HOST: ""          # Auto-computed by StatefulSet ordinal
+    # LOADVM_TAG: ""               # Set to VM snapshot tag for fast startup (<45s)
+
+backend:
+  image: lego-loco-backend
+  tag: v15-agents
+  imagePullPolicy: Never  # Use local images
+  servicePort: 3001
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+frontend:
+  image: lego-loco-frontend
+  tag: latest
+  imagePullPolicy: Never  # Use local images
+  servicePort: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  env:
+    BACKEND_HOST: "loco-loco-backend"
+    BACKEND_PORT: "3001"
+    FRONTEND_PORT: "3000"
+
+git:
+  userName: "Loco Watcher"
+  userEmail: "watcher@example.com"
+
+artRes:
+  nfs:
+    server: nfs-server.loco.svc.cluster.local
+    path: /exports/art
+
+vr:
+  enabled: true
+  image: lego-loco-frontend
+  tag: latest
+  imagePullPolicy: Never  # Use local images
+  servicePort: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  buildArgs:
+    VITE_DEFAULT_VR: "true"
+
+# VNC implementation configuration
+vnc:
+  implementation: "novnc"  # Options: "novnc" or "react-vnc"
+  fallbackEnabled: true    # Enable automatic fallback to react-vnc if NoVNC fails
+  maxRetries: 3           # Number of retries before falling back
+
+# RBAC configuration for Kubernetes service discovery
+rbac:
+  create: true  # Create service account and RBAC for backend auto-discovery
+
+# Ingress configuration for centralized routing
+ingress:
+  enabled: true  # Enable Ingress
+  className: nginx  # Use nginx ingress controller
+  annotations:
+    # Enable WebSocket support
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    
+# NetworkPolicy for game ports (DirectPlay, NetBIOS between emulator pods)
+networkPolicy:
+  enabled: true
+  gamePorts:
+    directPlay: 2300          # TCP/UDP — DirectPlay game traffic
+    directPlayDiscovery: 47624 # TCP — DirectPlay session discovery
+    netbios:
+      enabled: true
+      ports:
+        - 137
+        - 138
+        - 139
+
+# Prometheus monitoring integration (requires Prometheus Operator CRDs)
+monitoring:
+  enabled: false                # Set to true after deploying kube-prometheus-stack
+  prometheusRelease: "kube-prometheus"  # Must match the Helm release name of the Prometheus Operator
+  scrapeInterval: "15s"
+  scrapeTimeout: "10s"
+  grafana:
+    dashboards:
+      enabled: false            # Set to true to deploy Grafana dashboard ConfigMaps (requires sidecar)
+
+stunner:
+  enabled: false  # Disabled for minikube
+
+# NFS server disabled for minikube (using hostPath instead)
+nfs:
+  enabled: false
+  size: 10Gi
+  image: itsthenetwork/nfs-server-alpine:latest

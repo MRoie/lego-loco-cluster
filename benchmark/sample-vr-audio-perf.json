@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "exportedAt": "2026-02-10T18:30:00.000Z",
+  "sampleCount": 15,
+  "durationMs": 3000,
+  "summary": {
+    "totalSamples": 15,
+    "durationMs": 3000,
+    "audioLatency": {
+      "min": 2.67,
+      "max": 5.33,
+      "avg": 3.56,
+      "p50": 3.2,
+      "p95": 5.1,
+      "p99": 5.33
+    },
+    "monoUsed": false,
+    "contextStates": ["running"]
+  },
+  "samples": [
+    {
+      "timestamp": "2026-02-10T18:29:57.000Z",
+      "elapsedMs": 0,
+      "audioContextTime": 0.0,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0, "y": 1.6, "z": 3 },
+      "listenerOrientation": {
+        "forwardX": 0, "forwardY": 0, "forwardZ": -1,
+        "upX": 0, "upY": 1, "upZ": 0
+      },
+      "rigPosition": { "x": 0, "y": 1.6, "z": 3 },
+      "outputLatencyMs": 2.67,
+      "activeTile": 0,
+      "mono": false,
+      "tiles": [
+        { "id": "loco-1", "volume": 1.0, "position": { "x": -1.4, "y": 1.0, "z": -3 } },
+        { "id": "loco-2", "volume": 0.2, "position": { "x": 0, "y": 1.0, "z": -3 } },
+        { "id": "loco-3", "volume": 0.2, "position": { "x": 1.4, "y": 1.0, "z": -3 } },
+        { "id": "loco-4", "volume": 0.2, "position": { "x": -1.4, "y": 0, "z": -3 } },
+        { "id": "loco-5", "volume": 0.2, "position": { "x": 0, "y": 0, "z": -3 } },
+        { "id": "loco-6", "volume": 0.2, "position": { "x": 1.4, "y": 0, "z": -3 } },
+        { "id": "loco-7", "volume": 0.2, "position": { "x": -1.4, "y": -1.0, "z": -3 } },
+        { "id": "loco-8", "volume": 0.2, "position": { "x": 0, "y": -1.0, "z": -3 } },
+        { "id": "loco-9", "volume": 0.2, "position": { "x": 1.4, "y": -1.0, "z": -3 } }
+      ]
+    },
+    {
+      "timestamp": "2026-02-10T18:29:57.200Z",
+      "elapsedMs": 200,
+      "audioContextTime": 0.2,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0, "y": 1.6, "z": 3 },
+      "rigPosition": { "x": 0, "y": 1.6, "z": 3 },
+      "outputLatencyMs": 2.67,
+      "activeTile": 0,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:57.400Z",
+      "elapsedMs": 400,
+      "audioContextTime": 0.4,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0, "y": 1.6, "z": 3 },
+      "rigPosition": { "x": 0, "y": 1.6, "z": 3 },
+      "outputLatencyMs": 3.2,
+      "activeTile": 0,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:57.600Z",
+      "elapsedMs": 600,
+      "audioContextTime": 0.6,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.1, "y": 1.6, "z": 2.9 },
+      "rigPosition": { "x": 0.1, "y": 1.6, "z": 2.9 },
+      "outputLatencyMs": 3.2,
+      "activeTile": 0,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:57.800Z",
+      "elapsedMs": 800,
+      "audioContextTime": 0.8,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.2, "y": 1.6, "z": 2.8 },
+      "rigPosition": { "x": 0.2, "y": 1.6, "z": 2.8 },
+      "outputLatencyMs": 2.67,
+      "activeTile": 1,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:58.000Z",
+      "elapsedMs": 1000,
+      "audioContextTime": 1.0,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.2, "y": 1.6, "z": 2.8 },
+      "rigPosition": { "x": 0.2, "y": 1.6, "z": 2.8 },
+      "outputLatencyMs": 3.56,
+      "activeTile": 1,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:58.200Z",
+      "elapsedMs": 1200,
+      "audioContextTime": 1.2,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.3, "y": 1.6, "z": 2.7 },
+      "rigPosition": { "x": 0.3, "y": 1.6, "z": 2.7 },
+      "outputLatencyMs": 3.2,
+      "activeTile": 1,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:58.400Z",
+      "elapsedMs": 1400,
+      "audioContextTime": 1.4,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.3, "y": 1.6, "z": 2.7 },
+      "rigPosition": { "x": 0.3, "y": 1.6, "z": 2.7 },
+      "outputLatencyMs": 3.56,
+      "activeTile": 1,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:58.600Z",
+      "elapsedMs": 1600,
+      "audioContextTime": 1.6,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.4, "y": 1.6, "z": 2.6 },
+      "rigPosition": { "x": 0.4, "y": 1.6, "z": 2.6 },
+      "outputLatencyMs": 4.0,
+      "activeTile": 2,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:58.800Z",
+      "elapsedMs": 1800,
+      "audioContextTime": 1.8,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.4, "y": 1.6, "z": 2.6 },
+      "rigPosition": { "x": 0.4, "y": 1.6, "z": 2.6 },
+      "outputLatencyMs": 3.56,
+      "activeTile": 2,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:59.000Z",
+      "elapsedMs": 2000,
+      "audioContextTime": 2.0,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.5, "y": 1.6, "z": 2.5 },
+      "rigPosition": { "x": 0.5, "y": 1.6, "z": 2.5 },
+      "outputLatencyMs": 5.33,
+      "activeTile": 2,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:59.200Z",
+      "elapsedMs": 2200,
+      "audioContextTime": 2.2,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.5, "y": 1.6, "z": 2.5 },
+      "rigPosition": { "x": 0.5, "y": 1.6, "z": 2.5 },
+      "outputLatencyMs": 4.0,
+      "activeTile": 2,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:59.400Z",
+      "elapsedMs": 2400,
+      "audioContextTime": 2.4,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.5, "y": 1.6, "z": 2.5 },
+      "rigPosition": { "x": 0.5, "y": 1.6, "z": 2.5 },
+      "outputLatencyMs": 3.56,
+      "activeTile": 3,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:59.600Z",
+      "elapsedMs": 2600,
+      "audioContextTime": 2.6,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.4, "y": 1.6, "z": 2.6 },
+      "rigPosition": { "x": 0.4, "y": 1.6, "z": 2.6 },
+      "outputLatencyMs": 3.2,
+      "activeTile": 3,
+      "mono": false,
+      "tiles": []
+    },
+    {
+      "timestamp": "2026-02-10T18:29:59.800Z",
+      "elapsedMs": 3000,
+      "audioContextTime": 3.0,
+      "audioContextState": "running",
+      "listenerPosition": { "x": 0.4, "y": 1.6, "z": 2.6 },
+      "rigPosition": { "x": 0.4, "y": 1.6, "z": 2.6 },
+      "outputLatencyMs": 5.1,
+      "activeTile": 3,
+      "mono": false,
+      "tiles": []
+    }
+  ]
+}

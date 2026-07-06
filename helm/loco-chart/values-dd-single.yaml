@@ -1,0 +1,104 @@
+# Single-instance overlay for Docker Desktop's built-in Kubernetes.
+# Priority: validate ONE emulator with NIC driver installed + clean snapshot
+# before revisiting multi-node/kind clustering. Images already sit in the
+# local Docker Engine store that Docker Desktop K8s shares, so no image
+# load/pull step is needed (imagePullPolicy: Never).
+replicas: 1
+namespace: loco
+
+storage:
+  class: "standard"
+  strategy:
+    hostPath:
+      enabled: false
+    hybrid:
+      enabled: true
+      primary: "emptyDir"
+      emptyDir:
+        enabled: true
+        medium: ""
+        sizeLimit: "512Mi"
+
+imagePullSecrets: []
+
+rbac:
+  create: true
+
+ingress:
+  enabled: false
+
+vr:
+  enabled: false
+
+monitoring:
+  enabled: false
+
+emulator:
+  image: lego-loco-emulator
+  tag: lan-test-flat
+  imagePullPolicy: Never
+  diskPVC: ""
+  diskReadOnly: false
+  usePrebuiltSnapshot: false
+  resources:
+    limits:
+      cpu: "3"
+      memory: "2Gi"
+    requests:
+      cpu: "0.5"
+      memory: "1Gi"
+  kvm:
+    enabled: false
+  dri:
+    enabled: false
+  probes:
+    startup:
+      enabled: true
+      path: /health
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 15
+      failureThreshold: 60
+    liveness:
+      enabled: true
+      path: /
+      initialDelaySeconds: 60
+      periodSeconds: 20
+      timeoutSeconds: 30
+      failureThreshold: 10
+    readiness:
+      enabled: true
+      path: /
+      initialDelaySeconds: 30
+      periodSeconds: 15
+      timeoutSeconds: 15
+      failureThreshold: 10
+  env:
+    BRIDGE: "loco-br"
+    CDROM_MODE: "softgpu"
+    DISK: "/images/win98.qcow2"
+    DISPLAY_NUM: "99"
+    QEMU_ACCEL: "auto"
+    QEMU_TCG_OPTS: "thread=multi,tb-size=1024"
+    QEMU_MEMORY: "512"
+    QEMU_SMP: "1"
+    QEMU_RENDER_BACKEND: "vmware"
+    USE_PREBUILT_SNAPSHOT: "false"
+    GUEST_NETMASK: "255.255.255.0"
+    WORKGROUP: "LOCOLAND"
+
+backend:
+  image: lego-loco-backend
+  tag: local
+  imagePullPolicy: Never
+
+frontend:
+  image: lego-loco-frontend
+  tag: local
+  imagePullPolicy: Never
+
+networkPolicy:
+  enabled: false
+
+nfs:
+  enabled: false

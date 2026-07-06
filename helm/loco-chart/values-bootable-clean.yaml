@@ -1,0 +1,35 @@
+replicas: 1
+namespace: default
+
+imageRepo: ""
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+
+emulator:
+  image: qemu-bootable
+  tag: latest
+  imagePullPolicy: Never
+  servicePort: 5901
+  diskReadOnly: false
+  diskPVC: "bootable-disk"
+  # Environment variables for the bootable emulator
+  env:
+    CREATE_BOOTABLE_DISK: "true"
+    DISK_SIZE: "2G"
+  # Use pre-built snapshots
+  usePrebuiltSnapshot: false
+
+backend:
+  image: loco-backend
+  tag: latest
+  imagePullPolicy: Never
+  servicePort: 3001
+  serviceType: NodePort
+
+frontend:
+  image: loco-frontend
+  tag: latest
+  imagePullPolicy: Never
+  servicePort: 3000
+  serviceType: NodePort

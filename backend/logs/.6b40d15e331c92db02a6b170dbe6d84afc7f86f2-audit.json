@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/runner/work/lego-loco-cluster/lego-loco-cluster/backend/logs/.6b40d15e331c92db02a6b170dbe6d84afc7f86f2-audit.json",
+    "files": [
+        {
+            "date": 1754766786430,
+            "name": "/home/runner/work/lego-loco-cluster/lego-loco-cluster/backend/logs/application-2025-08-09.log",
+            "hash": "4d0001f210eb384d185aefca118c44e817d017b99864536dec919b8819181bb3"
+        },
+        {
+            "date": 1755158635096,
+            "name": "/home/runner/work/lego-loco-cluster/lego-loco-cluster/backend/logs/application-2025-08-14.log",
+            "hash": "b636c8e8319ea8a8ac29f928ee0fbc6e3c681fccbb19de4c36beeb0ffbe613f6"
+        }
+    ],
+    "hashType": "sha256"
+}

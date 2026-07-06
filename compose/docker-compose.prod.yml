@@ -1,0 +1,59 @@
+# Production configuration with all 9 emulators
+services:
+  registry:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  frontend:
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    environment:
+      - NODE_ENV=production
+
+  backend:
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    environment:
+      - NODE_ENV=production
+
+  # Resource limits for emulators
+  emulator-0: &emulator-template
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  emulator-1:
+    <<: *emulator-template
+  emulator-2:
+    <<: *emulator-template
+  emulator-3:
+    <<: *emulator-template
+  emulator-4:
+    <<: *emulator-template
+  emulator-5:
+    <<: *emulator-template
+  emulator-6:
+    <<: *emulator-template
+  emulator-7:
+    <<: *emulator-template
+  emulator-8:
+    <<: *emulator-template

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "instance-0",
+    "streamUrl": "http://emulator-0:6080",
+    "vncUrl": "emulator-0:5901",
+    "videoStreamUrl": "http://emulator-0:5000",
+    "localStreamUrl": "http://localhost:6080",
+    "localVncUrl": "vnc://localhost:5901",
+    "localVideoStreamUrl": "http://localhost:7000",
+    "status": "ready"
+  },
+  {
+    "id": "instance-1",
+    "streamUrl": "http://emulator-1:6080",
+    "vncUrl": "emulator-1:5901",
+    "videoStreamUrl": "http://emulator-1:5000",
+    "localStreamUrl": "http://localhost:6081",
+    "localVncUrl": "vnc://localhost:5902",
+    "localVideoStreamUrl": "http://localhost:7001",
+    "status": "ready"
+  },
+  {
+    "id": "instance-2",
+    "streamUrl": "http://emulator-2:6080",
+    "vncUrl": "emulator-2:5901",
+    "videoStreamUrl": "http://emulator-2:5000",
+    "localStreamUrl": "http://localhost:6082",
+    "localVncUrl": "vnc://localhost:5903",
+    "localVideoStreamUrl": "http://localhost:7002",
+    "status": "ready"
+  },
+  {
+    "id": "instance-3",
+    "streamUrl": "http://emulator-3:6080",
+    "vncUrl": "emulator-3:5901",
+    "videoStreamUrl": "http://emulator-3:5000",
+    "localStreamUrl": "http://localhost:6083",
+    "localVncUrl": "vnc://localhost:5904",
+    "localVideoStreamUrl": "http://localhost:7003",
+    "status": "ready"
+  },
+  {
+    "id": "instance-4",
+    "streamUrl": "http://emulator-4:6080",
+    "vncUrl": "emulator-4:5901",
+    "videoStreamUrl": "http://emulator-4:5000",
+    "localStreamUrl": "http://localhost:6084",
+    "localVncUrl": "vnc://localhost:5905",
+    "localVideoStreamUrl": "http://localhost:7004",
+    "status": "ready"
+  },
+  {
+    "id": "instance-5",
+    "streamUrl": "http://emulator-5:6080",
+    "vncUrl": "emulator-5:5901",
+    "videoStreamUrl": "http://emulator-5:5000",
+    "localStreamUrl": "http://localhost:6085",
+    "localVncUrl": "vnc://localhost:5906",
+    "localVideoStreamUrl": "http://localhost:7005",
+    "status": "ready"
+  },
+  {
+    "id": "instance-6",
+    "streamUrl": "http://emulator-6:6080",
+    "vncUrl": "emulator-6:5901",
+    "videoStreamUrl": "http://emulator-6:5000",
+    "localStreamUrl": "http://localhost:6086",
+    "localVncUrl": "vnc://localhost:5907",
+    "localVideoStreamUrl": "http://localhost:7006",
+    "status": "ready"
+  },
+  {
+    "id": "instance-7",
+    "streamUrl": "http://emulator-7:6080",
+    "vncUrl": "emulator-7:5901",
+    "videoStreamUrl": "http://emulator-7:5000",
+    "localStreamUrl": "http://localhost:6087",
+    "localVncUrl": "vnc://localhost:5908",
+    "localVideoStreamUrl": "http://localhost:7007",
+    "status": "ready"
+  },
+  {
+    "id": "instance-8",
+    "streamUrl": "http://emulator-8:6080",
+    "vncUrl": "emulator-8:5901",
+    "videoStreamUrl": "http://emulator-8:5000",
+    "localStreamUrl": "http://localhost:6088",
+    "localVncUrl": "vnc://localhost:5909",
+    "localVideoStreamUrl": "http://localhost:7008",
+    "status": "ready"
+  }
+]
