@@ -186,6 +186,11 @@ emulator:
     # to avoid duplicate bridge IPs on the shared VXLAN LAN.
     GUEST_NETMASK: "255.255.255.0"
     WORKGROUP: "LOCOLAND"
+    # Shared L2 LAN networking for DirectPlay multiplayer
+    NETWORK_MODE: "socket"          # socket | vxlan | macvlan | user | bridge
+    SOCKET_PORT: "4444"             # QEMU socket networking port
+    SOCKET_MASTER_HOST: ""          # Auto-computed by StatefulSet ordinal
+    # LOADVM_TAG: ""               # Set to VM snapshot tag for fast startup (<45s)
 
 backend:
   image: lego-loco-backend

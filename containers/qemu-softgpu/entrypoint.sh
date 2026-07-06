@@ -208,6 +208,7 @@ setup_guest_l2_mesh() {
   fi
   ip link set "$VXLAN_IF" master "$BRIDGE" 2>/dev/null || log_warning "Failed to add $VXLAN_IF to bridge $BRIDGE"
   ip link set "$VXLAN_IF" up 2>/dev/null || log_warning "Failed to bring up $VXLAN_IF"
+  GUEST_MESH_ACTIVE=true
 
   (
     set +e
@@ -590,6 +591,20 @@ log_success "Network setup complete - Bridge: $BRIDGE, TAP: $TAP_IF"
 setup_guest_l2_mesh
 start_guest_dhcp
 
+# Fallback: when the VXLAN guest mesh is unavailable (no k8s pod identity,
+# e.g. docker-compose) and NETWORK_MODE=socket is requested, join the QEMU
+# multicast socket LAN from PR #90 so guests still share an L2 segment.
+EXTRA_LAN_NET_ARGS=""
+TAP_NIC_MAC="$GUEST_MAC"
+if [ "${GUEST_MESH_ACTIVE:-false}" != "true" ] && [ "${NETWORK_MODE:-bridge}" = "socket" ]; then
+  MCAST_GROUP=${MCAST_GROUP:-230.0.0.1}
+  MCAST_PORT=${MCAST_PORT:-1234}
+  EXTRA_LAN_NET_ARGS="-netdev socket,id=lan0,mcast=${MCAST_GROUP}:${MCAST_PORT} -device ne2k_pci,netdev=lan0,mac=${GUEST_MAC}"
+  # The host-side TAP NIC needs a distinct MAC once the socket NIC uses GUEST_MAC
+  TAP_NIC_MAC=$(printf '52:54:00:10:01:%02x' "${INSTANCE_INDEX:-0}")
+  log_info "Guest mesh inactive + NETWORK_MODE=socket: joining mcast socket LAN ${MCAST_GROUP}:${MCAST_PORT}"
+fi
+
 # === STEP 4: Disk Image Setup ===
 # Default path keeps existing deployments compatible. When SNAPSHOT_BRANCH is
 # set, the branch owns a shared parent disk and each pod gets a writable child.
@@ -923,7 +938,8 @@ qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
   -M pc -cpu "$QEMU_CPU" \
   -m "$QEMU_MEMORY" -smp "$QEMU_SMP" -hda "$SNAPSHOT_NAME" \
   $QEMU_LOADVM_ARGS \
-  -net nic,model=ne2k_pci,macaddr=$GUEST_MAC -net tap,ifname=$TAP_IF,script=no,downscript=no \
+  -net nic,model=ne2k_pci,macaddr=$TAP_NIC_MAC -net tap,ifname=$TAP_IF,script=no,downscript=no \
+  $EXTRA_LAN_NET_ARGS \
   -device sb16,audiodev=snd0 \
   $QEMU_VGA_ARGS $QEMU_DISPLAY_ARGS $QEMU_FULLSCREEN_ARGS \
   $FLOPPY_OPT \

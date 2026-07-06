@@ -1,0 +1,4 @@
+instance,status,samples,avg_fps,min_fps,max_fps,avg_latency_ms,avg_cpu_pct,docker_cpu_pct,docker_mem_mb,mem_usage_pct,qemu_healthy,display_active,network_ok,replicas
+direct-loco-loco-emulator-0.loco-loco-emulator.loco.svc.cluster.local,healthy,12,25,25,25,201.7,9.9,0,0,3.2,True,True,True,3
+direct-loco-loco-emulator-1.loco-loco-emulator.loco.svc.cluster.local,healthy,12,25,25,25,201.0,10.5,0,0,3.2,True,True,True,3
+direct-loco-loco-emulator-2.loco-loco-emulator.loco.svc.cluster.local,healthy,12,25,25,25,223.4,10.6,0,0,3.2,True,True,True,3

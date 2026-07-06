@@ -7,8 +7,9 @@ set -euo pipefail
 # Configuration
 HEALTH_PORT=${HEALTH_PORT:-8080}
 HEALTH_LOG="/tmp/health.log"
-VNC_DISPLAY=${VNC_DISPLAY:-:1}
+VNC_DISPLAY=${VNC_DISPLAY:-:${DISPLAY_NUM:-1}}
 AUDIO_DEVICE=${AUDIO_DEVICE:-pulse}
+TAP_IF=${TAP_IF:-tap0}
 
 # Logging function
 log() {
@@ -17,7 +18,7 @@ log() {
 
 # Get QEMU process health
 get_qemu_health() {
-    local qemu_pid=$(pgrep qemu-system-i386 || echo "")
+    local qemu_pid=$(pgrep -f qemu-system-i386 || echo "")
     if [ -z "$qemu_pid" ]; then
         echo "false"
         return
@@ -48,7 +49,7 @@ get_video_health() {
         if xdpyinfo -display "$VNC_DISPLAY" >/dev/null 2>&1; then
             display_active="true"
             # Estimate frame rate by checking X server activity
-            local x_activity=$(xwininfo -display "$VNC_DISPLAY" -root -stats 2>/dev/null | grep -c "window" || echo "0")
+            local x_activity=$(xwininfo -display "$VNC_DISPLAY" -root -stats 2>/dev/null | grep -c "window" || true)
             if [ "$x_activity" -gt 0 ]; then
                 frame_rate=15  # Conservative estimate when X is active
             fi
@@ -99,7 +100,7 @@ get_audio_health() {
     # Check ALSA devices as fallback
     local alsa_devices=0
     if command -v aplay >/dev/null 2>&1; then
-        alsa_devices=$(aplay -l 2>/dev/null | grep -c "card " || echo "0")
+        alsa_devices=$(aplay -l 2>/dev/null | grep -c "card " || true)
     fi
     
     audio_health=$(cat <<EOF
@@ -123,7 +124,7 @@ get_system_performance() {
     local load_average=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | tr -d ',' || echo "0")
     
     # Check for QEMU specific performance
-    local qemu_pid=$(pgrep qemu-system-i386 || echo "")
+    local qemu_pid=$(pgrep -f qemu-system-i386 || echo "")
     local qemu_cpu="0"
     local qemu_memory="0"
     
@@ -159,15 +160,15 @@ get_network_health() {
         bridge_status="true"
     fi
     
-    if ip link show tap0 >/dev/null 2>&1; then
+    if ip link show "$TAP_IF" >/dev/null 2>&1; then
         tap_status="true"
     fi
     
     # Get basic network statistics
-    local tx_packets=$(cat /sys/class/net/tap0/statistics/tx_packets 2>/dev/null || echo "0")
-    local rx_packets=$(cat /sys/class/net/tap0/statistics/rx_packets 2>/dev/null || echo "0")
-    local tx_errors=$(cat /sys/class/net/tap0/statistics/tx_errors 2>/dev/null || echo "0")
-    local rx_errors=$(cat /sys/class/net/tap0/statistics/rx_errors 2>/dev/null || echo "0")
+    local tx_packets=$(cat /sys/class/net/$TAP_IF/statistics/tx_packets 2>/dev/null || echo "0")
+    local rx_packets=$(cat /sys/class/net/$TAP_IF/statistics/rx_packets 2>/dev/null || echo "0")
+    local tx_errors=$(cat /sys/class/net/$TAP_IF/statistics/tx_errors 2>/dev/null || echo "0")
+    local rx_errors=$(cat /sys/class/net/$TAP_IF/statistics/rx_errors 2>/dev/null || echo "0")
     
     network_health=$(cat <<EOF
 {
@@ -221,21 +222,21 @@ serve_health_endpoint() {
     log "Starting health monitoring HTTP server on port $HEALTH_PORT"
     
     while true; do
-        # Generate health data fresh for each request
-        local health_report
-        health_report=$(generate_health_report)
-        
-        # Serve one HTTP response per connection
-        # Note: nc -l PORT (no -p) is required for netcat-openbsd on Ubuntu 22.04
         {
-            echo -e "HTTP/1.1 200 OK\r"
-            echo -e "Content-Type: application/json\r"
-            echo -e "Access-Control-Allow-Origin: *\r"
-            echo -e "Connection: close\r"
-            echo -e "Content-Length: ${#health_report}\r"
-            echo -e "\r"
+            local health_report=$(generate_health_report)
+            
+            # Simple HTTP response
+            echo "HTTP/1.1 200 OK"
+            echo "Content-Type: application/json"
+            echo "Access-Control-Allow-Origin: *"
+            echo "Content-Length: ${#health_report}"
+            echo ""
             echo "$health_report"
-        } | nc -l "$HEALTH_PORT" >/dev/null 2>&1 || true
+        } | timeout 10 nc -l -p "$HEALTH_PORT" -w 1 >/dev/null 2>&1 || true
+
+        # The timeout bounds staleness: without it nc blocks until the next
+        # client and serves them a report generated when the previous one left
+        sleep 0.2
     done
 }
 

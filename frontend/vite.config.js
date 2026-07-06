@@ -43,5 +43,9 @@ export default defineConfig({
   },
   define: {
     global: 'globalThis'
+  },
+  test: {
+    // The utils tests exercise window/CustomEvent/WebSocket — they need a DOM
+    environment: 'jsdom'
   }
 });

@@ -1,8 +1,10 @@
-import React, { useEffect, useState, Suspense, lazy } from "react";
+import React, { useEffect, useState, useCallback, Suspense, lazy } from "react";
 import { useActive } from "./ActiveContext";
 import { motion, AnimatePresence } from "framer-motion";
 import InstanceCard from "./components/InstanceCard";
 import DiscoveryStatus from "./components/DiscoveryStatus";
+import BenchmarkOverlay from "./components/BenchmarkOverlay";
+import FullscreenViewer from "./components/FullscreenViewer";
 import { fetchLiveInstances } from "./api/discovery";
 
 const VRScene = lazy(() => import(/* webpackChunkName: "vr" */ "./VRScene"));
@@ -15,6 +17,7 @@ export default function App() {
   const [instances, setInstances] = useState([]);
   const [provisionedInstances, setProvisionedInstances] = useState([]);
   const [discoveryStatus, setDiscoveryStatus] = useState(null);
+  const [showBenchmark, setShowBenchmark] = useState(true);
   const [hotkeys, setHotkeys] = useState({});
   const [active, setActive] = useState(0);
   const [zoom, setZoom] = useState(1);
@@ -23,6 +26,28 @@ export default function App() {
   const [status, setStatus] = useState({});
   const [focused, setFocused] = useState(null);
   const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(false);
+  const [fullscreenInstance, setFullscreenInstance] = useState(null);
+
+  // Enter fullscreen control mode for an instance
+  const enterFullscreen = useCallback((instance) => {
+    setFullscreenInstance(instance);
+  }, []);
+
+  // Exit fullscreen control mode
+  const exitFullscreen = useCallback(() => {
+    setFullscreenInstance(null);
+  }, []);
+
+  // Global Escape key to exit fullscreen
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && fullscreenInstance) {
+        exitFullscreen();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [fullscreenInstance, exitFullscreen]);
 
   const postActive = (id) => {
     setActiveIds([id]);
@@ -166,11 +191,27 @@ export default function App() {
 
   return (
     <div className="min-h-screen lego-background text-black relative">
+      {/* Live Benchmark Overlay */}
+      <BenchmarkOverlay
+        visible={showBenchmark && !vrMode}
+        onToggle={() => setShowBenchmark(false)}
+      />
+
       {!vrMode && (
         <>
           {/* Transparent Header with VR Button */}
           <div className="absolute top-0 right-0 z-10 p-4">
             <div className="flex items-center space-x-4">
+              {/* Benchmark toggle */}
+              {!showBenchmark && (
+                <button
+                  onClick={() => setShowBenchmark(true)}
+                  className="bg-black/60 text-green-400 text-xs font-mono px-2 py-1 rounded border border-green-500/30 hover:bg-black/80"
+                  title="Show Benchmark Overlay"
+                >
+                  📊 BENCH
+                </button>
+              )}
               {/* Discovery Status */}
               <DiscoveryStatus status={discoveryStatus} />
               {/* VR Button */}
@@ -195,7 +236,7 @@ export default function App() {
 
           {/* 3x3 Grid Container */}
           <div className="lego-grid-container">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 md:gap-8 lg:gap-10 max-w-7xl mx-auto w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-6 max-w-7xl mx-auto w-full">
               {gridInstances.map((instance, index) => (
                 <motion.div
                   key={index}
@@ -212,6 +253,7 @@ export default function App() {
                         setActive(index);
                         postActive(displayInstances[index].id);
                       }}
+                      onFullscreen={() => enterFullscreen(instance)}
                     />
                   ) : (
                     <motion.div
@@ -244,6 +286,17 @@ export default function App() {
 
         </>
       )}
+
+      {/* Fullscreen Control Mode */}
+      <AnimatePresence>
+        {fullscreenInstance && !vrMode && (
+          <FullscreenViewer
+            instance={fullscreenInstance}
+            onExit={exitFullscreen}
+            showBenchmark={showBenchmark}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {vrMode && (

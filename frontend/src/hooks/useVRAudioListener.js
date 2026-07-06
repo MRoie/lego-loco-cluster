@@ -4,6 +4,29 @@ import { useEffect, useRef } from 'react';
 const LISTENER_RAMP_TIME = 0.05;
 
 /**
+ * Derive the Web Audio listener forward/up vectors from a camera quaternion.
+ * Forward is the camera's -Z axis rotated by q (negated third matrix column);
+ * up is the rotated +Y axis (second column).
+ *
+ * @param {{x:number,y:number,z:number,w:number}} q
+ * @returns {{forward:[number,number,number], up:[number,number,number]}}
+ */
+export function quaternionToListenerVectors(q) {
+  return {
+    forward: [
+      -2 * (q.x * q.z + q.w * q.y),
+      -2 * (q.y * q.z - q.w * q.x),
+      -(1 - 2 * (q.x * q.x + q.y * q.y)),
+    ],
+    up: [
+      2 * (q.x * q.y - q.w * q.z),
+      1 - 2 * (q.x * q.x + q.z * q.z),
+      2 * (q.y * q.z + q.w * q.x),
+    ],
+  };
+}
+
+/**
  * Keeps the Web Audio API listener in sync with the A-Frame camera rig
  * so that spatial audio sources are perceived relative to the user's
  * head position and orientation in VR.
@@ -40,14 +63,8 @@ export default function useVRAudioListener(ctx, rigSelector = '#rig', intervalMs
       const cam = rig.querySelector('[camera]');
       if (cam && cam.object3D) {
         const q = cam.object3D.quaternion;
-        // Forward vector (-Z in WebGL)
-        const fx = 2 * (q.x * q.z + q.w * q.y);
-        const fy = 2 * (q.y * q.z - q.w * q.x);
-        const fz = 1 - 2 * (q.x * q.x + q.y * q.y);
-        // Up vector (+Y)
-        const ux = 2 * (q.x * q.y - q.w * q.z);
-        const uy = 1 - 2 * (q.x * q.x + q.z * q.z);
-        const uz = 2 * (q.y * q.z + q.w * q.x);
+        const { forward: [fx, fy, fz], up: [ux, uy, uz] } =
+          quaternionToListenerVectors(q);
 
         if (listener.forwardX) {
           const t = ctx.currentTime + LISTENER_RAMP_TIME;

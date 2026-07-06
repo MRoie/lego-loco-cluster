@@ -20,31 +20,13 @@ log_info() {
 
 # Configuration with defaults
 BRIDGE=${BRIDGE:-loco-br}
-
-# --- Instance Identity Derivation (K2 contract: POD_NAME via downward API) ---
-# Priority: POD_NAME ordinal > INSTANCE_INDEX env > default 0
-if [ -n "${POD_NAME:-}" ]; then
-  INSTANCE_INDEX=${POD_NAME##*-}
-fi
-INSTANCE_INDEX=${INSTANCE_INDEX:-0}
-GUEST_HOSTNAME=${GUEST_HOSTNAME:-LOCO-0${INSTANCE_INDEX}}
-GUEST_IP=${GUEST_IP:-192.168.10.$((10 + INSTANCE_INDEX))}
-GUEST_MAC=${GUEST_MAC:-52:54:00:10:00:0${INSTANCE_INDEX}}
-TAP_IF=${TAP_IF:-tap${INSTANCE_INDEX}}
-GUEST_GATEWAY=${GUEST_GATEWAY:-192.168.10.1}
-GUEST_NETMASK=${GUEST_NETMASK:-255.255.255.0}
-WORKGROUP=${WORKGROUP:-LOCOLAND}
-
+TAP_IF=${TAP_IF:-tap0}
 DISK=${DISK:-/images/win98.qcow2}
 SNAPSHOT_REGISTRY=${SNAPSHOT_REGISTRY:-ghcr.io/mroie/qemu-snapshots}
 SNAPSHOT_TAG=${SNAPSHOT_TAG:-win98-base}
 USE_PREBUILT_SNAPSHOT=${USE_PREBUILT_SNAPSHOT:-true}
 
 log_info "Starting QEMU emulator container with configuration:"
-log_info "  INSTANCE_INDEX=$INSTANCE_INDEX (from POD_NAME=${POD_NAME:-<unset>})"
-log_info "  GUEST_HOSTNAME=$GUEST_HOSTNAME"
-log_info "  GUEST_IP=$GUEST_IP"
-log_info "  GUEST_MAC=$GUEST_MAC"
 log_info "  BRIDGE=$BRIDGE"
 log_info "  TAP_IF=$TAP_IF"
 log_info "  DISK=$DISK"
@@ -111,67 +93,36 @@ else
 fi
 
 # === STEP 3: Network Setup ===
-log_info "Setting up isolated TAP bridge..."
+# Use shared L2 networking when NETWORK_MODE is set, otherwise fall back to isolated bridge
+NETWORK_MODE=${NETWORK_MODE:-bridge}
+log_info "Network mode: $NETWORK_MODE"
 
-# Clean up any existing interfaces first
-log_info "Cleaning up existing network interfaces..."
-if ip link show "$TAP_IF" &>/dev/null; then
-  log_info "Removing existing TAP interface: $TAP_IF"
-  ip link delete "$TAP_IF" || true
-fi
-
-if ip link show "$BRIDGE" &>/dev/null; then
-  log_info "Removing existing bridge: $BRIDGE"
-  ip link delete "$BRIDGE" || true
-fi
-
-# Create bridge
-log_info "Creating bridge: $BRIDGE"
-if ip link add name "$BRIDGE" type bridge; then
-  log_success "Bridge $BRIDGE created"
+if [ -f /usr/local/bin/setup-lan-network.sh ] && [ "$NETWORK_MODE" != "bridge" ]; then
+  log_info "Using shared LAN networking (setup-lan-network.sh)..."
+  source /usr/local/bin/setup-lan-network.sh
+  log_success "Shared LAN network configured — QEMU_NET_ARGS set"
 else
-  log_error "Failed to create bridge $BRIDGE"
-  exit 1
-fi
+  log_info "Setting up isolated TAP bridge (legacy mode)..."
 
-if ip addr add 192.168.10.1/24 dev "$BRIDGE"; then
-  log_success "IP address assigned to bridge $BRIDGE"
-else
-  log_error "Failed to assign IP to bridge $BRIDGE"
-  exit 1
-fi
+  # Clean up any existing interfaces first
+  if ip link show "$TAP_IF" &>/dev/null; then
+    ip link delete "$TAP_IF" || true
+  fi
+  if ip link show "$BRIDGE" &>/dev/null; then
+    ip link delete "$BRIDGE" || true
+  fi
 
-if ip link set "$BRIDGE" up; then
-  log_success "Bridge $BRIDGE is up"
-else
-  log_error "Failed to bring up bridge $BRIDGE"
-  exit 1
-fi
+  ip link add name "$BRIDGE" type bridge
+  ip addr add 192.168.10.1/24 dev "$BRIDGE"
+  ip link set "$BRIDGE" up
 
-# Create TAP interface
-log_info "Creating TAP interface: $TAP_IF"
-if ip tuntap add "$TAP_IF" mode tap; then
-  log_success "TAP interface $TAP_IF created"
-else
-  log_error "Failed to create TAP interface $TAP_IF"
-  exit 1
-fi
+  ip tuntap add "$TAP_IF" mode tap
+  ip link set "$TAP_IF" master "$BRIDGE"
+  ip link set "$TAP_IF" up
 
-if ip link set "$TAP_IF" master "$BRIDGE"; then
-  log_success "TAP interface $TAP_IF added to bridge $BRIDGE"
-else
-  log_error "Failed to add TAP interface to bridge"
-  exit 1
+  QEMU_NET_ARGS="-net nic,model=ne2k_pci -net tap,ifname=$TAP_IF,script=no,downscript=no"
+  log_success "Network setup complete - Bridge: $BRIDGE, TAP: $TAP_IF"
 fi
-
-if ip link set "$TAP_IF" up; then
-  log_success "TAP interface $TAP_IF is up"
-else
-  log_error "Failed to bring up TAP interface $TAP_IF"
-  exit 1
-fi
-
-log_success "Network setup complete - Bridge: $BRIDGE, TAP: $TAP_IF"
 
 # === STEP 4: Disk Image Setup ===
 # Create a unique snapshot for this instance to avoid file locking issues
@@ -262,35 +213,31 @@ fi
 
 # === STEP 5: QEMU Startup ===
 log_info "Starting QEMU emulator..."
-
-# Auto-detect KVM or fall back to TCG
-ACCEL_FLAG="-accel tcg"
-if [ -e /dev/kvm ] && [ -w /dev/kvm ]; then
-  ACCEL_FLAG="-accel kvm"
-  log_info "KVM acceleration available — using KVM"
-else
-  log_info "KVM not available — using TCG (software emulation)"
-fi
-
-log_info "QEMU command: qemu-system-i386 $ACCEL_FLAG -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
+log_info "QEMU command: qemu-system-i386 -M pc -cpu pentium2 -m 512 -hda $SNAPSHOT_NAME ..."
 
 # Add debugging to see what we're actually booting from
 log_info "Checking disk image contents..."
 qemu-img info "$SNAPSHOT_NAME" | while read line; do log_info "  $line"; done
 
+# QMP socket for computer-use agent
+QMP_SOCKET="/tmp/qmp-${INSTANCE_ID:-0}.sock"
+QEMU_EXTRA_ARGS="-qmp unix:$QMP_SOCKET,server,nowait"
+if [ -n "${LOADVM_TAG:-}" ]; then
+  QEMU_EXTRA_ARGS="$QEMU_EXTRA_ARGS -loadvm $LOADVM_TAG"
+fi
+
 qemu-system-i386 \
-  $ACCEL_FLAG \
   -M pc -cpu pentium2 \
   -m 512 -hda "$SNAPSHOT_NAME" \
-  -net nic,model=ne2k_pci,macaddr=$GUEST_MAC -net tap,ifname=$TAP_IF,script=no,downscript=no \
+  $QEMU_NET_ARGS \
   -device sb16,audiodev=snd0 \
   -vga std -display vnc=0.0.0.0:1 \
   -audiodev pa,id=snd0 \
   -rtc base=localtime \
-  -boot order=c,menu=on \
+  -boot order=dc,menu=on,splash-time=5000 \
   -no-shutdown \
   -no-reboot \
-  -monitor none &
+  $QEMU_EXTRA_ARGS &
 
 EMU_PID=$!
 log_info "QEMU started with PID: $EMU_PID"

@@ -11,6 +11,7 @@ images/*.tar.gz
 images/*
 compose/*.tar
 talosctl
+k8s-tests/logs/
 
 # Large Win98 rebuild source artifacts (staged locally, not tracked in git)
 containers/*.iso
@@ -54,3 +55,16 @@ scripts/merge-status.txt
 # Local bake artifacts and screenshot output (large binaries)
 containers/qemu-softgpu/tmp-bake/
 scripts/out/
+__pycache__/
+
+.vscode/settings.json
+
+# Captured tool/session output — never commit
+*_out.txt
+*_log.txt
+*_results.txt
+*.stackdump
+*.bmp
+/kind
+/kind.exe
+/.vscode/

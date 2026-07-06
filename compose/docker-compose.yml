@@ -66,8 +66,9 @@ services:
   # Backend Service
   backend:
     build:
-      context: ../backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: production
     container_name: loco-backend
     ports:
       - "3001:3001"
@@ -75,7 +76,7 @@ services:
       - NODE_ENV=development
       - CONFIG_DIR=/app/config
     volumes:
-      - ./config:/app/config:ro
+      - ../config:/app/config:ro
     networks:
       - loco-network
     restart: unless-stopped
@@ -95,6 +96,8 @@ services:
       - "5901:5901"  # VNC
       - "6080:6080"  # noVNC web interface
       - "7000:5000"  # GStreamer video stream
+      - "4444:4444"  # LAN socket networking (master)
+      - "8080:8080"  # Health monitor
     environment:
       - BRIDGE=loco-br
       - TAP_IF=tap0
@@ -103,6 +106,10 @@ services:
       - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
       - SNAPSHOT_TAG=win98-base
       - DISPLAY_NUM=99
+      - NETWORK_MODE=socket
+      - INSTANCE_ID=0
+      - SOCKET_MASTER_HOST=loco-emulator-0
+      - SOCKET_PORT=4444
     volumes:
       - ./images:/images:ro
       - /dev/net/tun:/dev/net/tun
@@ -129,6 +136,7 @@ services:
       - "5902:5901"  # VNC
       - "6081:6080"  # noVNC web interface
       - "7001:5000"  # GStreamer video stream
+      - "8081:8080"  # Health monitor
     environment:
       - BRIDGE=loco-br
       - TAP_IF=tap1
@@ -137,6 +145,10 @@ services:
       - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
       - SNAPSHOT_TAG=win98-base
       - DISPLAY_NUM=100
+      - NETWORK_MODE=socket
+      - INSTANCE_ID=1
+      - SOCKET_MASTER_HOST=loco-emulator-0
+      - SOCKET_PORT=4444
     volumes:
       - ./images:/images:ro
       - /dev/net/tun:/dev/net/tun
@@ -157,6 +169,7 @@ services:
       - "5903:5901"  # VNC
       - "6082:6080"  # noVNC web interface
       - "7002:5000"  # GStreamer video stream
+      - "8082:8080"  # Health monitor
     environment:
       - BRIDGE=loco-br
       - TAP_IF=tap2
@@ -165,6 +178,10 @@ services:
       - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
       - SNAPSHOT_TAG=win98-base
       - DISPLAY_NUM=101
+      - NETWORK_MODE=socket
+      - INSTANCE_ID=2
+      - SOCKET_MASTER_HOST=loco-emulator-0
+      - SOCKET_PORT=4444
     volumes:
       - ./images:/images:ro
       - /dev/net/tun:/dev/net/tun
@@ -185,6 +202,7 @@ services:
       - "5904:5901"  # VNC
       - "6083:6080"  # noVNC web interface
       - "7003:5000"  # GStreamer video stream
+      - "8083:8080"  # Health monitor
     environment:
       - BRIDGE=loco-br
       - TAP_IF=tap3
@@ -193,6 +211,10 @@ services:
       - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
       - SNAPSHOT_TAG=win98-base
       - DISPLAY_NUM=102
+      - NETWORK_MODE=socket
+      - INSTANCE_ID=3
+      - SOCKET_MASTER_HOST=loco-emulator-0
+      - SOCKET_PORT=4444
     volumes:
       - ./images:/images:ro
       - /dev/net/tun:/dev/net/tun
@@ -213,6 +235,7 @@ services:
       - "5905:5901"  # VNC
       - "6084:6080"  # noVNC web interface
       - "7004:5000"  # GStreamer video stream
+      - "8084:8080"  # Health monitor
     environment:
       - BRIDGE=loco-br
       - TAP_IF=tap4
@@ -221,6 +244,10 @@ services:
       - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
       - SNAPSHOT_TAG=win98-base
       - DISPLAY_NUM=103
+      - NETWORK_MODE=socket
+      - INSTANCE_ID=4
+      - SOCKET_MASTER_HOST=loco-emulator-0
+      - SOCKET_PORT=4444
     volumes:
       - ./images:/images:ro
       - /dev/net/tun:/dev/net/tun
@@ -241,6 +268,7 @@ services:
       - "5906:5901"  # VNC
       - "6085:6080"  # noVNC web interface
       - "7005:5000"  # GStreamer video stream
+      - "8085:8080"  # Health monitor
     environment:
       - BRIDGE=loco-br
       - TAP_IF=tap5
@@ -249,6 +277,10 @@ services:
       - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
       - SNAPSHOT_TAG=win98-base
       - DISPLAY_NUM=104
+      - NETWORK_MODE=socket
+      - INSTANCE_ID=5
+      - SOCKET_MASTER_HOST=loco-emulator-0
+      - SOCKET_PORT=4444
     volumes:
       - ./images:/images:ro
       - /dev/net/tun:/dev/net/tun
@@ -269,6 +301,7 @@ services:
       - "5907:5901"  # VNC
       - "6086:6080"  # noVNC web interface
       - "7006:5000"  # GStreamer video stream
+      - "8086:8080"  # Health monitor
     environment:
       - BRIDGE=loco-br
       - TAP_IF=tap6
@@ -277,6 +310,10 @@ services:
       - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
       - SNAPSHOT_TAG=win98-base
       - DISPLAY_NUM=105
+      - NETWORK_MODE=socket
+      - INSTANCE_ID=6
+      - SOCKET_MASTER_HOST=loco-emulator-0
+      - SOCKET_PORT=4444
     volumes:
       - ./images:/images:ro
       - /dev/net/tun:/dev/net/tun
@@ -297,6 +334,7 @@ services:
       - "5908:5901"  # VNC
       - "6087:6080"  # noVNC web interface
       - "7007:5000"  # GStreamer video stream
+      - "8087:8080"  # Health monitor
     environment:
       - BRIDGE=loco-br
       - TAP_IF=tap7
@@ -305,6 +343,10 @@ services:
       - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
       - SNAPSHOT_TAG=win98-base
       - DISPLAY_NUM=106
+      - NETWORK_MODE=socket
+      - INSTANCE_ID=7
+      - SOCKET_MASTER_HOST=loco-emulator-0
+      - SOCKET_PORT=4444
     volumes:
       - ./images:/images:ro
       - /dev/net/tun:/dev/net/tun
@@ -325,6 +367,7 @@ services:
       - "5909:5901"  # VNC
       - "6088:6080"  # noVNC web interface
       - "7008:5000"  # GStreamer video stream
+      - "8088:8080"  # Health monitor
     environment:
       - BRIDGE=loco-br
       - TAP_IF=tap8
@@ -333,6 +376,10 @@ services:
       - SNAPSHOT_REGISTRY=ghcr.io/mroie/qemu-snapshots
       - SNAPSHOT_TAG=win98-base
       - DISPLAY_NUM=107
+      - NETWORK_MODE=socket
+      - INSTANCE_ID=8
+      - SOCKET_MASTER_HOST=loco-emulator-0
+      - SOCKET_PORT=4444
     volumes:
       - ./images:/images:ro
       - /dev/net/tun:/dev/net/tun

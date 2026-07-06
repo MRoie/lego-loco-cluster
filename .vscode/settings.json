@@ -1,7 +1,0 @@
-{
-    "makefile.configureOnOpen": false,
-    "chat.tools.terminal.autoApprove": {
-        "cp": true,
-        "docker compose": true
-    }
-}
