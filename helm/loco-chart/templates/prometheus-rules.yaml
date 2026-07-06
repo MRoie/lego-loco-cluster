@@ -1,0 +1,169 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "loco.fullname" . }}-alerts
+  namespace: {{ include "loco.namespace" . }}
+  labels:
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: lego-loco-cluster
+    release: {{ .Values.monitoring.prometheusRelease | default "kube-prometheus" }}
+spec:
+  groups:
+    - name: loco-emulator
+      rules:
+        # Alert when an emulator instance is unhealthy for more than 5 minutes
+        - alert: EmulatorDown
+          expr: up{job=~".*emulator.*"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            team: sre
+          annotations:
+            summary: "Emulator instance {{ "{{" }} $labels.instance {{ "}}" }} is down"
+            description: >-
+              Emulator pod {{ "{{" }} $labels.pod {{ "}}" }} in namespace
+              {{ "{{" }} $labels.namespace {{ "}}" }} has been unreachable for
+              more than 5 minutes.
+            runbook_url: "https://github.com/mroie/lego-loco-cluster/docs/MONITORING.md"
+
+        # Alert when high packet loss degrades stream quality
+        - alert: HighPacketLoss
+          expr: |
+            rate(vnc_bytes_transferred_total{direction="rx"}[5m]) == 0
+              and on(instance_id)
+            rate(vnc_bytes_transferred_total{direction="tx"}[5m]) > 0
+          for: 2m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "High packet loss for instance {{ "{{" }} $labels.instance_id {{ "}}" }}"
+            description: >-
+              VNC stream to instance {{ "{{" }} $labels.instance_id {{ "}}" }}
+              is transmitting but not receiving data, indicating severe packet loss.
+
+    - name: loco-backend
+      rules:
+        # Alert when Kubernetes discovery has not refreshed recently
+        - alert: DiscoveryStale
+          expr: |
+            time() - loco_discovery_last_refresh_timestamp_seconds > 120
+          for: 2m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Instance discovery is stale"
+            description: >-
+              The backend auto-discovery loop has not refreshed for over 2
+              minutes. New or removed pods may not be detected.
+
+        # Alert when backend is returning errors
+        - alert: BackendHighErrorRate
+          expr: |
+            sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count[5m]))
+            > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Backend error rate exceeds 5%"
+            description: >-
+              The backend service is returning server errors at a rate above
+              5% over the last 5 minutes.
+
+    - name: loco-pod-health
+      rules:
+        # Pod restart looping: more than 3 restarts in 15 minutes
+        - alert: PodRestartLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="{{ include "loco.namespace" . }}"}[15m]) > 3
+          for: 0m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Pod {{ "{{" }} $labels.pod {{ "}}" }} is restart-looping"
+            description: >-
+              Container {{ "{{" }} $labels.container {{ "}}" }} in pod
+              {{ "{{" }} $labels.pod {{ "}}" }} has restarted more than 3
+              times in the last 15 minutes.
+            runbook_url: "https://github.com/mroie/lego-loco-cluster/docs/MONITORING.md"
+
+        # All emulator instances are down
+        - alert: AllInstancesDown
+          expr: |
+            count(up{job=~".*emulator.*"} == 1) == 0
+              or absent(up{job=~".*emulator.*"})
+          for: 2m
+          labels:
+            severity: critical
+            team: sre
+          annotations:
+            summary: "All emulator instances are down"
+            description: >-
+              Zero healthy emulator instances have been detected for more
+              than 2 minutes. The entire cluster is unavailable.
+            runbook_url: "https://github.com/mroie/lego-loco-cluster/docs/MONITORING.md"
+
+        # High memory usage relative to limit
+        - alert: HighMemoryUsage
+          expr: |
+            (container_memory_working_set_bytes{namespace="{{ include "loco.namespace" . }}"}
+             / container_spec_memory_limit_bytes{namespace="{{ include "loco.namespace" . }}"})
+            > 0.9
+          for: 5m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Container {{ "{{" }} $labels.container {{ "}}" }} memory > 90% of limit"
+            description: >-
+              Container {{ "{{" }} $labels.container {{ "}}" }} in pod
+              {{ "{{" }} $labels.pod {{ "}}" }} is using
+              {{ "{{" }} $value | humanizePercentage {{ "}}" }} of its memory
+              limit. It may be OOM-killed soon.
+
+    - name: loco-stream-quality
+      rules:
+        # Average packet loss across all instances exceeds 5%
+        - alert: StreamQualityDegraded
+          expr: |
+            avg(
+              rate(stream_packets_lost_total[5m])
+              / (rate(stream_packets_received_total[5m]) + rate(stream_packets_lost_total[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Stream quality degraded — avg packet loss > 5%"
+            description: >-
+              The average packet loss rate across all emulator streams has
+              exceeded 5% for the last 5 minutes. Users may experience
+              visual artifacts and increased latency.
+
+    - name: loco-disk-health
+      rules:
+        # QCOW2 disk image health check failure (if metric is exposed)
+        - alert: DiskImageCorruption
+          expr: |
+            qemu_disk_health_check_ok == 0
+          for: 5m
+          labels:
+            severity: critical
+            team: sre
+          annotations:
+            summary: "QCOW2 disk health check failing for {{ "{{" }} $labels.pod {{ "}}" }}"
+            description: >-
+              The QCOW2 disk image health check on pod
+              {{ "{{" }} $labels.pod {{ "}}" }} has been failing for more than
+              5 minutes. The image may be corrupted — consider reverting to
+              a known-good snapshot.
+            runbook_url: "https://github.com/mroie/lego-loco-cluster/docs/STORAGE_STRATEGY.md"
+{{- end }}

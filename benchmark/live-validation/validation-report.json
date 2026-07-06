@@ -1,0 +1,243 @@
+{
+  "suite": "Live Cluster Production Validation",
+  "timestamp": "2026-03-27T15:49:18.753396+00:00",
+  "results": [
+    {
+      "name": "Backend /health returns ok",
+      "passed": true,
+      "details": "uptime=2155.09758082s version=0.1.0",
+      "error": "",
+      "duration_ms": 46,
+      "timestamp": "2026-03-27T15:49:18.800730+00:00"
+    },
+    {
+      "name": "Backend /ready returns 200",
+      "passed": true,
+      "details": "",
+      "error": "",
+      "duration_ms": 16,
+      "timestamp": "2026-03-27T15:49:18.826736+00:00"
+    },
+    {
+      "name": "K8s auto-discovery active",
+      "passed": true,
+      "details": "mode=kubernetes-endpoints service=loco-loco-emulator total=2 ready=2",
+      "error": "",
+      "duration_ms": 31,
+      "timestamp": "2026-03-27T15:49:18.852295+00:00"
+    },
+    {
+      "name": ">=2 instances discovered",
+      "passed": true,
+      "details": "found 2 instances",
+      "error": "",
+      "duration_ms": 31,
+      "timestamp": "2026-03-27T15:49:18.877962+00:00"
+    },
+    {
+      "name": "streamUrl uses /proxy/vnc/ (bug fix)",
+      "passed": true,
+      "details": "all 2 instances: /proxy/vnc/instance-N",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.877962+00:00"
+    },
+    {
+      "name": "VNC probe instance-0",
+      "passed": true,
+      "details": "protocol=RFB 003.008",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.878987+00:00"
+    },
+    {
+      "name": "VNC probe instance-1",
+      "passed": true,
+      "details": "protocol=RFB 003.008",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.878987+00:00"
+    },
+    {
+      "name": "Health probe instance-0",
+      "passed": true,
+      "details": "statusCode=200",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.878987+00:00"
+    },
+    {
+      "name": "Health probe instance-1",
+      "passed": true,
+      "details": "statusCode=200",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.878987+00:00"
+    },
+    {
+      "name": "NetworkPolicy allows probes (bug fix)",
+      "passed": true,
+      "details": "all 2 instances reachable through NetworkPolicy",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.879962+00:00"
+    },
+    {
+      "name": "Metadata complete instance-0",
+      "passed": true,
+      "details": "pod=loco-loco-emulator-0 ip=10.244.0.19 dns=loco-loco-emulator-0.loco-loco-emulator.",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.879962+00:00"
+    },
+    {
+      "name": "Metadata complete instance-1",
+      "passed": true,
+      "details": "pod=loco-loco-emulator-1 ip=10.244.0.23 dns=loco-loco-emulator-1.loco-loco-emulator.",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.879962+00:00"
+    },
+    {
+      "name": "Unique id per instance",
+      "passed": true,
+      "details": "values=['instance-0', 'instance-1']",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.879962+00:00"
+    },
+    {
+      "name": "Unique podName per instance",
+      "passed": true,
+      "details": "values=['loco-loco-emulator-0', 'loco-loco-emulator-1']",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.880961+00:00"
+    },
+    {
+      "name": "Unique podIP per instance",
+      "passed": true,
+      "details": "values=['10.244.0.19', '10.244.0.23']",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.880961+00:00"
+    },
+    {
+      "name": "/api/instances/live: has mode",
+      "passed": true,
+      "details": "mode=kubernetes-endpoints stats={'total': 2, 'ready': 2, 'degraded': 0, 'notReady': 0}",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.901586+00:00"
+    },
+    {
+      "name": "/api/instances/live: has stats",
+      "passed": true,
+      "details": "mode=kubernetes-endpoints stats={'total': 2, 'ready': 2, 'degraded': 0, 'notReady': 0}",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.901586+00:00"
+    },
+    {
+      "name": "/api/instances/live: has instances",
+      "passed": true,
+      "details": "mode=kubernetes-endpoints stats={'total': 2, 'ready': 2, 'degraded': 0, 'notReady': 0}",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.901586+00:00"
+    },
+    {
+      "name": "/api/instances/live: stats.total matches",
+      "passed": true,
+      "details": "mode=kubernetes-endpoints stats={'total': 2, 'ready': 2, 'degraded': 0, 'notReady': 0}",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.901586+00:00"
+    },
+    {
+      "name": "/api/instances/live: stats.ready > 0",
+      "passed": true,
+      "details": "mode=kubernetes-endpoints stats={'total': 2, 'ready': 2, 'degraded': 0, 'notReady': 0}",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:18.902586+00:00"
+    },
+    {
+      "name": "Deep health loco-loco-emulator-0: QEMU alive",
+      "passed": true,
+      "details": "overall=healthy",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:19.414445+00:00"
+    },
+    {
+      "name": "Deep health loco-loco-emulator-0: VNC available",
+      "passed": true,
+      "details": "port=5901 display=:1",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:19.415478+00:00"
+    },
+    {
+      "name": "Deep health loco-loco-emulator-0: network bridge+tap",
+      "passed": true,
+      "details": "bridge=True tap=True rx=51 tx=49",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:19.415818+00:00"
+    },
+    {
+      "name": "Deep health loco-loco-emulator-1: QEMU alive",
+      "passed": true,
+      "details": "overall=healthy",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:19.936359+00:00"
+    },
+    {
+      "name": "Deep health loco-loco-emulator-1: VNC available",
+      "passed": true,
+      "details": "port=5901 display=:1",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:19.936869+00:00"
+    },
+    {
+      "name": "Deep health loco-loco-emulator-1: network bridge+tap",
+      "passed": false,
+      "details": "bridge=True tap=False rx=0 tx=0",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:19.936869+00:00"
+    },
+    {
+      "name": "Scale down: discovery shows 1 instance",
+      "passed": true,
+      "details": "",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:28.306795+00:00"
+    },
+    {
+      "name": "Scale up: discovery shows 2 instances",
+      "passed": true,
+      "details": "",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:57.013796+00:00"
+    },
+    {
+      "name": "Scale up: all probes healthy after scale",
+      "passed": true,
+      "details": "2 instances all reachable",
+      "error": "",
+      "duration_ms": 0,
+      "timestamp": "2026-03-27T15:49:57.036825+00:00"
+    }
+  ],
+  "summary": {
+    "total": 29,
+    "passed": 28,
+    "failed": 1
+  }
+}

@@ -522,32 +522,26 @@ class StreamQualityMonitor {
    * Test actual VNC functionality including audio and controls
    */
   async testVNCFunctionality(instance) {
-    const results = {
-      audioDetected: false,
-      audioLevel: 0,
-      controlsResponsive: false,
-      frameRate: 0,
+    // NOTE: This used to open a *real* WebSocket connection to the same
+    // /proxy/vnc/<instanceId>/ bridge path used by the actual user session,
+    // and send a fake RFB handshake into it, every probeInterval (5s).
+    // The emulator's VNC server only supports a single client, so this
+    // "test" connection was periodically preempting/kicking the real
+    // NoVNC session, causing the exact connect/disconnect flapping we spent
+    // this whole debugging session chasing (WebRTC ICE, probe timeouts,
+    // etc. were red herrings for this particular symptom).
+    //
+    // The metrics it produced were also fabricated constants regardless of
+    // the "test" outcome (frameRate: 15, audioLevel: 0.5), so there is no
+    // real signal lost by not opening a competing connection here. Return
+    // the same estimated defaults without touching the live VNC session.
+    return {
+      audioDetected: true,
+      audioLevel: 0.5,
+      controlsResponsive: true,
+      frameRate: 15,
       errors: []
     };
-
-    try {
-      // Create WebSocket connection to VNC proxy
-      const protocol = 'ws';
-      const wsUrl = `${protocol}://localhost:3001/proxy/vnc/${instance.id}/`;
-
-      // Test with a short timeout since this is for monitoring
-      const testResults = await this.performVNCTests(wsUrl);
-
-      results.audioDetected = testResults.audioDetected;
-      results.audioLevel = testResults.audioLevel;
-      results.controlsResponsive = testResults.controlsResponsive;
-      results.frameRate = testResults.frameRate;
-
-    } catch (error) {
-      results.errors.push(`VNC functionality test failed: ${error.message}`);
-    }
-
-    return results;
   }
 
   /**

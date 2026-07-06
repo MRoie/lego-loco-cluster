@@ -19,6 +19,28 @@ import QualityIndicator from './QualityIndicator';
  */
 export default function InstanceCard({ instance, isActive, onClick, onFullscreen }) {
   const { videoRef, loading, audioLevel, connectionQuality } = useWebRTC(instance.id);
+  // Only trust the WebRTC <video> element once the peer connection has
+  // actually reached 'connected'. `loading` alone is unreliable: it flips
+  // to false the moment a single track arrives via ontrack, even if ICE
+  // later fails/disconnects and no further frames ever flow. That left the
+  // UI stuck on a permanently black <video> instead of falling back to the
+  // (working) NoVNC viewer. Falling back whenever the connection isn't
+  // actively healthy fixes this without touching the WebRTC path itself.
+  //
+  // In environments where WebRTC media can't traverse (e.g. ICE candidates
+  // pointing at cluster-internal pod IPs that the browser can't reach), the
+  // peer connection can flap connecting -> connected -> failed repeatedly.
+  // Naively re-showing <video> on every transient 'connected' blip causes
+  // VNCViewerSwitcher/NoVNCViewer to unmount+remount in lockstep, which kills
+  // and reopens the otherwise-stable NoVNC connection over and over. Once
+  // we've seen the WebRTC connection fail for this instance, stick with the
+  // NoVNC fallback for the rest of this component's lifetime instead of
+  // fighting back and forth.
+  const webrtcFailedRef = useRef(false);
+  if (connectionQuality.connectionState === 'failed' || connectionQuality.connectionState === 'disconnected') {
+    webrtcFailedRef.current = true;
+  }
+  const webrtcHealthy = !loading && connectionQuality.connectionState === 'connected' && !webrtcFailedRef.current;
   const { recording, startRecording, stopRecording } = useInstanceRecorder(
     videoRef, 'webm', instance.id || 'instance'
   );
@@ -286,7 +308,7 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
             ) : (
               /* Real Instance: WebRTC Video or Fallback VNC */
               <>
-                {!loading ? (
+                {webrtcHealthy ? (
                   <video
                     ref={videoRef}
                     className="w-full h-full object-contain bg-black"

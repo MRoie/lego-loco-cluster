@@ -219,3 +219,52 @@ node scripts/record-spatial-audio.js --duration 8000 --out benchmark/
 Supported export formats in the VR scene UI: **WebM**, **MP4**, **MKV**,
 **GIF**, **MP3**. See `frontend/src/utils/mediaExport.js` for the format
 registry and MIME negotiation logic.
+
+---
+
+## Agent Team System
+
+This project is organized into **11 specialized agent teams**, each with a pi.dev skill and a VS Code Copilot agent. See [TEAM.md](TEAM.md) for the full roster, task assignments, and dependency graph.
+
+### Team Roster
+| Lead | pi.dev | VS Code | Domain | Tests Owned |
+|------|--------|---------|--------|-------------|
+| Backend | `/skill:backend-express` | `@backend-lead` | Express, WebSocket, API | 7 Jest + 5 Node + 1 Python E2E |
+| Frontend | `/skill:frontend-react` | `@frontend-lead` | React 19, Vite, Tailwind | 4 Vitest + 2 Playwright |
+| Infrastructure | `/skill:k8s-infra` | `@k8s-lead` | Kubernetes, Helm, Docker | 6 K8s bash + 3 Python E2E + 1 CI |
+| SRE/Monitoring | `/skill:sre-monitoring` | `@sre-lead` | Prometheus, health, recovery | 3 SRE bash + 1 chaos Python |
+| QA/Testing | `/skill:qa-testing` | `@qa-lead` | Playwright, Jest, E2E | ALL 74 files (test strategy owner) |
+| Stream Quality | `/skill:stream-quality` | `@stream-lead` | WebRTC, VNC, codecs | 5 VNC Node + 1 Playwright + 3 recordings |
+| VR/WebXR | `/skill:vr-webxr` | `@vr-lead` | A-Frame, spatial audio, WebXR | 2 Vitest + 4 Playwright + 1 recording |
+| LAN Manager | `/skill:lan-manager` | `@lan-lead` | Network, multiplayer, ports | 5 K8s bash + 1 Playwright |
+| Emulation | `/skill:qemu-emulation` | `@emulation-lead` | QEMU, SoftGPU, PulseAudio | 2 SRE bash + 1 chaos Python + 1 debug |
+| Win98 Computer Use | `/skill:win98-computer-use` | `@win98-lead` | Image building, drivers, game nav | 5 snapshot bash + 5 YAML manifests |
+| Design | `/skill:lego-design` | `@design-lead` | Lego design, UI/UX, a11y | 2 Playwright (visual regression) |
+
+### Verified Test Results (live KIND cluster)
+| Suite | Result | Command |
+|-------|--------|---------|
+| CI validation | 14/14 PASS | `bash scripts/ci-validate-cluster.sh` |
+| Live cluster validation | 28/29 PASS | `python tests/e2e/live-cluster-validation.test.py` |
+| WebSocket test | ALL PASS | `bash k8s-tests/test-websocket.sh` |
+| Game ports test | PASS | `bash k8s-tests/test-game-ports.sh` |
+
+### Knowledge System
+All agents write findings to `docs/knowledge/<domain>/`. See [docs/knowledge/README.md](docs/knowledge/README.md) for the Knowledge Protocol.
+
+### Test Execution Protocol
+Every agent MUST run their owned tests after making changes:
+1. Run domain-specific unit tests first (fast feedback)
+2. Run integration/E2E tests that touch changed code
+3. Run `bash scripts/ci-validate-cluster.sh` for any K8s/Helm changes
+4. Check `.github/instructions/tests.instructions.md` for the full test catalog
+
+### Pi.dev Quick Start
+```bash
+npm install -g @mariozechner/pi-coding-agent
+pi                        # Start in project root
+/team                     # List all leads
+/skill:lan-manager        # Load LAN networking skill
+/blockers                 # Show known blockers
+/knowledge emulation      # Show emulation findings
+```

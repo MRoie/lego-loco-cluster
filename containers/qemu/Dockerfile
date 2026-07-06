@@ -21,6 +21,9 @@ COPY setup-lan-network.sh /usr/local/bin/setup-lan-network.sh
 RUN sed -i 's/\r$//' /entrypoint.sh /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh /usr/local/bin/download_snapshot.sh /usr/local/bin/setup-lan-network.sh && \
     chmod +x /entrypoint.sh /usr/local/bin/watch_art_res.sh /usr/local/bin/health-monitor.sh /usr/local/bin/download_snapshot.sh /usr/local/bin/setup-lan-network.sh
 
+# ---- Create required directories ----
+RUN mkdir -p /images /opt/builtin-images
+
 # ---- Expose health monitoring port ----
 EXPOSE 8080
 

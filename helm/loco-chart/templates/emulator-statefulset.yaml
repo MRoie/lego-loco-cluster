@@ -30,6 +30,18 @@ spec:
         - name: {{ . }}
       {{- end }}
       {{- end }}
+      {{- with .Values.emulator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.emulator.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.emulator.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       
       # Init containers for storage and disk image initialization
       initContainers:
@@ -107,7 +119,34 @@ spec:
       - name: emulator
         image: {{ include "loco.image" (dict "root" . "image" .Values.emulator.image "tag" .Values.emulator.tag) }}
         imagePullPolicy: {{ .Values.emulator.imagePullPolicy }}
+        command:
+        - /entrypoint.sh
         env:
+        # Pod identity from downward API — entrypoint derives INSTANCE_INDEX, GUEST_IP, GUEST_MAC, TAP_IF, GUEST_HOSTNAME
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: EMULATOR_SERVICE_NAME
+          value: "{{ include "loco.fullname" . }}-emulator"
+        - name: EMULATOR_REPLICAS
+          value: "{{ .Values.replicas }}"
+        - name: ENABLE_GUEST_L2_MESH
+          value: "true"
+        - name: ENABLE_IDENTITY_FLOPPY
+          value: "true"
+        - name: VXLAN_ID
+          value: "42"
+        - name: VXLAN_PORT
+          value: "4789"
         {{- if .Values.emulator.env }}
         {{- range $key, $value := .Values.emulator.env }}
         {{- if ne $key "SOCKET_MASTER_HOST" }}
@@ -124,6 +163,16 @@ spec:
         - name: SNAPSHOT_TAG
           value: {{ .Values.emulator.snapshotTag | quote }}
         {{- end }}
+        - name: SNAPSHOT_BRANCH
+          value: {{ .Values.emulator.snapshotBranch | default "" | quote }}
+        - name: SNAPSHOT_DIR
+          value: {{ .Values.emulator.snapshotDir | default "/images/snapshots" | quote }}
+        - name: SNAPSHOT_MODE
+          value: {{ .Values.emulator.snapshotMode | default "persistent" | quote }}
+        - name: SNAPSHOT_RESET
+          value: {{ ternary "true" "false" (.Values.emulator.snapshotReset | default false) | quote }}
+        - name: QEMU_LOADVM
+          value: {{ .Values.emulator.qemuLoadVm | default "" | quote }}
         - name: VIDEO_DEST_HOST
           value: "{{ include "loco.fullname" . }}-backend"
         - name: VIDEO_DEST_PORT
@@ -209,6 +258,14 @@ spec:
           readOnly: {{ .Values.emulator.diskReadOnly }}
         - name: dev-net-tun
           mountPath: /dev/net/tun
+        {{- if .Values.emulator.kvm.enabled }}
+        - name: dev-kvm
+          mountPath: /dev/kvm
+        {{- end }}
+        {{- if .Values.emulator.dri.enabled }}
+        - name: dev-dri
+          mountPath: /dev/dri
+        {{- end }}
         
         {{- if .Values.storage.strategy.hostPath.enabled }}
         # Option 1: HostPath Direct Mounts
@@ -260,6 +317,18 @@ spec:
         hostPath:
           path: /dev/net/tun
           type: CharDevice
+      {{- if .Values.emulator.kvm.enabled }}
+      - name: dev-kvm
+        hostPath:
+          path: {{ .Values.emulator.kvm.hostPath | default "/dev/kvm" }}
+          type: CharDevice
+      {{- end }}
+      {{- if .Values.emulator.dri.enabled }}
+      - name: dev-dri
+        hostPath:
+          path: {{ .Values.emulator.dri.hostPath | default "/dev/dri" }}
+          type: Directory
+      {{- end }}
       
       {{- if .Values.storage.strategy.hostPath.enabled }}
       # Option 1: HostPath Direct Mounts

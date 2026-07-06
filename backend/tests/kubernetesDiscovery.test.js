@@ -1,12 +1,8 @@
-let KubernetesDiscovery;
+const KubernetesDiscovery = require('../services/kubernetesDiscovery');
 
 describe('KubernetesDiscovery', () => {
   let discovery;
 
-  beforeAll(async () => {
-    const mod = await import('../services/kubernetesDiscovery');
-    KubernetesDiscovery = mod.default || mod.KubernetesDiscovery || mod;
-  });
   beforeEach(() => {
     discovery = new KubernetesDiscovery();
   });
@@ -101,7 +97,7 @@ describe('KubernetesDiscovery', () => {
   test('should handle API parameter object format', () => {
     // Test that we're using the correct parameter format for k8s client v1.3.0+
     const namespace = 'test-namespace';
-    const labelSelector = 'app.kubernetes.io/component=emulator';
+    const labelSelector = 'app.kubernetes.io/component=emulator,app.kubernetes.io/part-of=lego-loco-cluster';
     
     const listPodsParams = {
       namespace: namespace,

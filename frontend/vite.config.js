@@ -23,7 +23,12 @@ export default defineConfig({
     target: 'esnext',
     rollupOptions: {
       output: {
-        format: 'es'
+        format: 'es',
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          vr: ['aframe'],
+          animation: ['framer-motion'],
+        }
       }
     }
   },

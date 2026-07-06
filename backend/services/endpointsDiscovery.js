@@ -196,7 +196,7 @@ class EndpointsDiscovery {
         const vncPort = this.mapPorts(ports).vnc || 5901;
         const healthPort = this.mapPorts(ports).health || 8080;
 
-        instance.streamUrl = `http://localhost:${6080 + instanceNumber}/vnc${instanceNumber}`;
+        instance.streamUrl = `/proxy/vnc/instance-${instanceNumber}`;
         instance.vncUrl = `${instance.addresses.dnsName}:${vncPort}`;
         instance.healthUrl = `http://${address.ip}:${healthPort}`;
 

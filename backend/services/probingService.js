@@ -25,15 +25,24 @@ class ProbingService {
             };
         }
 
-        const vncPort = instance.ports?.vnc || 5901;
         const healthPort = instance.ports?.health || 8080;
 
-        const [vncResult, healthResult] = await Promise.all([
-            this.checkVnc(ip, vncPort),
-            this.checkHttp(`http://${ip}:${healthPort}/health`)
-        ]);
+        // NOTE: This used to also open a raw TCP connection directly to the
+        // emulator's VNC port (5901) every discovery cycle (every 30s) to
+        // read the RFB banner, then immediately destroy the socket. The
+        // emulator's own /health endpoint already checks VNC availability
+        // internally via a passive `netstat -ln` listen-check (see
+        // containers/qemu-softgpu/health-monitor.sh), so this was a fully
+        // redundant probe that also happened to open a real second
+        // connection to a VNC server that only supports one client -
+        // contributing to the periodic session drops we were chasing.
+        // Rely on the health endpoint alone; don't touch the VNC port.
+        const healthResult = await this.checkHttp(`http://${ip}:${healthPort}/health`);
+        const vncResult = healthResult.status === 'ok'
+            ? { status: 'ok', protocolVersion: 'inferred-from-health' }
+            : { status: 'unknown', error: 'Health check did not succeed' };
 
-        const isReachable = vncResult.status === 'ok' || healthResult.status === 'ok';
+        const isReachable = healthResult.status === 'ok';
 
         return {
             reachable: isReachable,

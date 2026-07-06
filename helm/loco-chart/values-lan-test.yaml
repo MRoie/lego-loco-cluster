@@ -1,0 +1,107 @@
+# Overlay for local kind-based 2-instance LAN networking test.
+replicas: 2
+namespace: loco
+
+storage:
+  class: "standard"
+  strategy:
+    hostPath:
+      enabled: false
+    hybrid:
+      enabled: true
+      primary: "emptyDir"
+      emptyDir:
+        enabled: true
+        medium: ""
+        sizeLimit: "512Mi"
+
+imagePullSecrets: []
+
+rbac:
+  create: true
+
+ingress:
+  enabled: false
+
+vr:
+  enabled: false
+
+monitoring:
+  enabled: false
+
+emulator:
+  image: lego-loco-emulator
+  tag: lan-test-flat
+  imagePullPolicy: Never
+  diskPVC: ""
+  diskReadOnly: false
+  usePrebuiltSnapshot: false
+  resources:
+    limits:
+      cpu: "3"
+      memory: "2Gi"
+    requests:
+      cpu: "0.5"
+      memory: "1Gi"
+  kvm:
+    enabled: false
+  dri:
+    enabled: false
+  # This is a single dev machine running kind + Docker Desktop + two full
+  # QEMU/GStreamer emulator pipelines + frontend/backend all at once, which
+  # is heavy resource contention. The default probe timeouts (10s/3 failures
+  # for liveness) are tuned for a real cluster with dedicated node resources
+  # and were causing the kubelet to kill+restart emulator-1 mid-session on
+  # transient CPU starvation, even though the health server was up and fine.
+  # Loosen them substantially for this local LAN test overlay only.
+  probes:
+    startup:
+      enabled: true
+      path: /health
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 15
+      failureThreshold: 60
+    liveness:
+      enabled: true
+      path: /
+      initialDelaySeconds: 60
+      periodSeconds: 20
+      timeoutSeconds: 30
+      failureThreshold: 10
+    readiness:
+      enabled: true
+      path: /
+      initialDelaySeconds: 30
+      periodSeconds: 15
+      timeoutSeconds: 15
+      failureThreshold: 10
+  env:
+    BRIDGE: "loco-br"
+    CDROM_MODE: "softgpu"
+    DISK: "/images/win98.qcow2"
+    DISPLAY_NUM: "99"
+    QEMU_ACCEL: "auto"
+    QEMU_TCG_OPTS: "thread=multi,tb-size=1024"
+    QEMU_MEMORY: "512"
+    QEMU_SMP: "1"
+    QEMU_RENDER_BACKEND: "vmware"
+    USE_PREBUILT_SNAPSHOT: "false"
+    GUEST_NETMASK: "255.255.255.0"
+    WORKGROUP: "LOCOLAND"
+
+backend:
+  image: lego-loco-backend
+  tag: local
+  imagePullPolicy: Never
+
+frontend:
+  image: lego-loco-frontend
+  tag: local
+  imagePullPolicy: Never
+
+networkPolicy:
+  enabled: true
+
+nfs:
+  enabled: false
