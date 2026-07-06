@@ -5,7 +5,8 @@ import InstanceCard from "./components/InstanceCard";
 import DiscoveryStatus from "./components/DiscoveryStatus";
 import BenchmarkOverlay from "./components/BenchmarkOverlay";
 import FullscreenViewer from "./components/FullscreenViewer";
-import { fetchLiveInstances } from "./api/discovery";
+import useProgressiveLoading from "./hooks/useProgressiveLoading";
+import AppLoadingOverlay from "./components/AppLoadingOverlay";
 
 const VRScene = lazy(() => import(/* webpackChunkName: "vr" */ "./VRScene"));
 const QualityDashboard = lazy(() => import(/* webpackChunkName: "dashboard" */ "./components/QualityDashboard"));
@@ -14,16 +15,21 @@ const QualityDashboard = lazy(() => import(/* webpackChunkName: "dashboard" */ "
 // Main dashboard component showing the 3×3 grid of instances
 export default function App() {
   const { activeIds, setActiveIds } = useActive();
-  const [instances, setInstances] = useState([]);
-  const [provisionedInstances, setProvisionedInstances] = useState([]);
-  const [discoveryStatus, setDiscoveryStatus] = useState(null);
+  const {
+    instances,
+    provisionedInstances,
+    discoveryStatus,
+    hotkeys,
+    status,
+    loadingStates,
+    errors: loadingErrors,
+    isCriticalDataLoaded,
+  } = useProgressiveLoading();
   const [showBenchmark, setShowBenchmark] = useState(true);
-  const [hotkeys, setHotkeys] = useState({});
   const [active, setActive] = useState(0);
   const [zoom, setZoom] = useState(1);
   const defaultVr = import.meta.env.VITE_DEFAULT_VR === 'true';
   const [vrMode, setVrMode] = useState(defaultVr);
-  const [status, setStatus] = useState({});
   const [focused, setFocused] = useState(null);
   const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(false);
   const [fullscreenInstance, setFullscreenInstance] = useState(null);
@@ -53,56 +59,6 @@ export default function App() {
     setActiveIds([id]);
   };
 
-  // Fetch instance list and hotkey mapping from the backend
-  useEffect(() => {
-    const loadInstances = () => {
-      // Load live instances with metadata
-      fetchLiveInstances()
-        .then((data) => {
-          setInstances(data.instances || []);
-          setDiscoveryStatus(data);
-
-          // Also update provisioned list (filter client-side or fetch separate if needed)
-          // For now, we'll assume provisioned are those with status='ready' or explicit flag
-          const provisioned = (data.instances || []).filter(i => i.provisioned || i.status === 'ready');
-          setProvisionedInstances(provisioned);
-        })
-        .catch((e) => console.error("Failed to fetch live instances", e));
-    };
-
-    // Initial load
-    loadInstances();
-
-    fetch("/api/config/hotkeys")
-      .then((r) => r.json())
-      .then(setHotkeys)
-      .catch((e) => console.error("Failed to fetch hotkeys", e));
-
-    const interval = setInterval(() => {
-      fetch("/api/status")
-        .then((r) => r.json())
-        .then(setStatus)
-        .catch(() => { });
-
-      // Refresh instances periodically
-      loadInstances();
-    }, 5000);
-
-    fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => { });
-
-    // Listen for discovery refresh events
-    const handleDiscoveryRefresh = () => {
-      console.log('Discovery refreshed, reloading instances');
-      loadInstances();
-    };
-
-    window.addEventListener('discoveryRefreshed', handleDiscoveryRefresh);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('discoveryRefreshed', handleDiscoveryRefresh);
-    };
-  }, []);
 
   // Update active index when activeIds or instances change
   useEffect(() => {
@@ -191,6 +147,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen lego-background text-black relative">
+      {/* Initial-load overlay (progressive loading, concept from #74) */}
+      <AppLoadingOverlay
+        isVisible={loadingStates.initialLoad}
+        loadingStates={loadingStates}
+        isCriticalDataLoaded={isCriticalDataLoaded}
+        errors={loadingErrors}
+      />
       {/* Live Benchmark Overlay */}
       <BenchmarkOverlay
         visible={showBenchmark && !vrMode}
