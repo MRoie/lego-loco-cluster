@@ -654,6 +654,35 @@ app.get("/api/quality/summary", (req, res) => {
 });
 
 // ==========================================
+// Circuit Breaker Observability API
+// ==========================================
+
+/**
+ * Get state and metrics for every circuit breaker protecting external calls.
+ * @route GET /api/circuit-breakers
+ */
+app.get("/api/circuit-breakers", (req, res) => {
+  const breakerManager = require("./services/circuitBreaker");
+  res.json({
+    summary: breakerManager.getSummary(),
+    breakers: breakerManager.getAllMetrics(),
+  });
+});
+
+/**
+ * Get metrics for one circuit breaker by name.
+ * @route GET /api/circuit-breakers/:name
+ */
+app.get("/api/circuit-breakers/:name", (req, res) => {
+  const breakerManager = require("./services/circuitBreaker");
+  const metrics = breakerManager.getMetrics(req.params.name);
+  if (!metrics) {
+    return res.status(404).json({ error: `Unknown circuit breaker: ${req.params.name}` });
+  }
+  res.json(metrics);
+});
+
+// ==========================================
 // LAN Topology Dashboard API
 // ==========================================
 
