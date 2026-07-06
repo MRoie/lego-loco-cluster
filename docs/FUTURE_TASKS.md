@@ -152,7 +152,7 @@ a future Codex prompt.
     - Uploads benchmark artifacts with 30-day retention.
     - Fails PR if performance degrades beyond limits.
 
-16. **Reticulum Mesh Integration**
+25. **Reticulum Mesh Integration** (design-stage; docs + benchmark merged via #92)
     - Integrate [Reticulum](https://reticulum.network/) for encrypted pod-to-pod communication.
     - Deploy rnsd sidecar with AutoInterface on the loco-network bridge.
     - Game-state synchronisation via QMP relay.
@@ -160,7 +160,7 @@ a future Codex prompt.
     - Integration test: `k8s-tests/test-reticulum.sh`.
     - See `docs/design/RETICULUM_INTEGRATION.md` and `docs/design/RETICULUM_WASM_PORTABILITY.md`.
 
-12. **Smooth & Accessible 3D Sound Integration** (✅ DONE)
+26. **Smooth & Accessible 3D Sound Integration** (✅ DONE — merged via #89)
     - `useSpatialAudio` hook enhanced with HRTF distance model, smooth
       `linearRampToValueAtTime` transitions, and accessible mono fallback.
     - Shared `AudioContext` across all VR tiles to avoid browser context limits.
