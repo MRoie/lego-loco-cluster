@@ -81,3 +81,7 @@ m5stack-lens/flasher/firmware/
 # Golden image qcow2 staged for pushing (large, pull from GHCR instead)
 containers/win98-loco-golden-*.qcow2
 containers/win98-loco-golden-*.qcow2.sha256
+
+# Packaged bundles
+/build/
+*.zip
