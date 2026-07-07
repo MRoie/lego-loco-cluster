@@ -105,7 +105,13 @@ for a in "$@"; do [ "$a" = "--no-image" ] && WANT_IMAGE=0; done
 echo "== Loco Lens — Termux install =="
 if command -v pkg >/dev/null 2>&1; then
   echo "[1/4] Installing Termux packages..."
-  pkg install -y qemu-system-i386-headless qemu-utils nodejs python netcat-openbsd procps coreutils skopeo
+  # Essentials only. NOTE: skopeo is NOT in Termux repos — fetch-image.sh uses
+  # plain curl against the registry instead, so it's not needed here.
+  pkg install -y qemu-system-i386-headless qemu-utils nodejs python \
+    netcat-openbsd procps coreutils curl tar || {
+      echo "   Some packages failed; retrying core set..." >&2
+      pkg install -y qemu-system-i386-headless qemu-utils nodejs python curl tar || true
+    }
 else
   echo "WARNING: 'pkg' not found — not Termux? Skipping package install." >&2
 fi
@@ -138,39 +144,67 @@ echo "Watch: ws://<phone-ip>:3001/ws/lens/local"
 EOF
 chmod +x "$BUNDLE/install.sh"
 
-# --- Golden image fetch (skopeo → extract qcow2 from the OCI carrier) --------
+# --- Golden image fetch (plain curl vs the GHCR v2 API — no skopeo) ---------
 cat > "$BUNDLE/fetch-image.sh" <<'EOF'
 #!/usr/bin/env bash
-# Pull the Win98+Loco golden image from GHCR and place the qcow2 at
-# ~/loco-runtime/images/win98.qcow2. Public images pull anonymously; for a
-# private image set GHCR_TOKEN (+ optional GHCR_USER, default MRoie).
+# Pull the Win98+Loco golden image from GHCR using only curl + python + tar
+# (skopeo is NOT in Termux repos) and place the qcow2 at
+# ~/loco-runtime/images/win98.qcow2.
 #
 #   bash fetch-image.sh [IMAGE_REF] [DEST_QCOW2]
+# Public images pull anonymously; for a private one set GHCR_TOKEN (a PAT,
+# + optional GHCR_USER, default MRoie).
 set -e
 IMAGE="${1:-ghcr.io/mroie/lego-loco-cluster/win98-loco-golden:safe512-v1}"
 DEST="${2:-$HOME/loco-runtime/images/win98.qcow2}"
 mkdir -p "$(dirname "$DEST")"
+[ -f "$DEST" ] && { echo "Image already present: $DEST"; exit 0; }
 
-if [ -f "$DEST" ]; then echo "Image already present: $DEST"; exit 0; fi
-if ! command -v skopeo >/dev/null 2>&1; then
-  pkg install -y skopeo >/dev/null 2>&1 || { echo "skopeo not available (pkg install skopeo)"; exit 1; }
+command -v curl >/dev/null 2>&1 || { echo "curl required (pkg install curl)"; exit 1; }
+PY="$(command -v python3 || command -v python || true)"
+[ -n "$PY" ] || { echo "python required (pkg install python)"; exit 1; }
+
+ref="${IMAGE#ghcr.io/}"; repo="${ref%:*}"; tag="${ref##*:}"
+REG="https://ghcr.io"
+ACCEPT='Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json'
+
+echo "Resolving $repo:$tag ..."
+if [ -n "${GHCR_TOKEN:-}" ]; then
+  TOKEN=$(curl -fsSL -u "${GHCR_USER:-MRoie}:${GHCR_TOKEN}" \
+    "$REG/token?service=ghcr.io&scope=repository:${repo}:pull" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['token'])")
+else
+  TOKEN=$(curl -fsSL "$REG/token?service=ghcr.io&scope=repository:${repo}:pull" | "$PY" -c "import sys,json;print(json.load(sys.stdin)['token'])")
 fi
+AUTH="Authorization: Bearer $TOKEN"
+
+MAN=$(curl -fsSL -H "$AUTH" -H "$ACCEPT" "$REG/v2/$repo/manifests/$tag")
+# Multi-arch index → pick a sub-manifest (payload is arch-neutral) and re-fetch.
+SUB=$(printf '%s' "$MAN" | "$PY" -c "
+import sys,json
+m=json.load(sys.stdin)
+if 'manifests' in m:
+    c=[x for x in m['manifests'] if x.get('platform',{}).get('architecture') in ('amd64','arm64')]
+    print((c[0] if c else m['manifests'][0])['digest'])
+else:
+    print('')
+")
+[ -n "$SUB" ] && MAN=$(curl -fsSL -H "$AUTH" -H "$ACCEPT" "$REG/v2/$repo/manifests/$SUB")
+
+LAYER=$(printf '%s' "$MAN" | "$PY" -c "
+import sys,json
+m=json.load(sys.stdin); ls=m.get('layers',[])
+print(max(ls,key=lambda l:l.get('size',0))['digest'] if ls else '')
+")
+[ -n "$LAYER" ] || { echo "no layers in manifest (is $IMAGE published?)"; exit 1; }
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-CREDS=()
-[ -n "${GHCR_TOKEN:-}" ] && CREDS=(--src-creds "${GHCR_USER:-MRoie}:${GHCR_TOKEN}")
-
-echo "Pulling $IMAGE (this is ~500 MB)..."
-skopeo copy "${CREDS[@]}" --override-os linux "docker://$IMAGE" "oci-archive:$TMP/img.tar"
+echo "Downloading layer (~500 MB)..."
+curl -fSL -H "$AUTH" "$REG/v2/$repo/blobs/$LAYER" -o "$TMP/layer.blob"
 
 echo "Extracting qcow2..."
-tar -xf "$TMP/img.tar" -C "$TMP"
-# Single-layer scratch carrier: the qcow2 layer is by far the largest blob.
-LAYER="$(ls -S "$TMP"/blobs/sha256/* 2>/dev/null | head -1)"
-[ -n "$LAYER" ] || { echo "no image layers found"; exit 1; }
-QC="$(tar -tf "$LAYER" 2>/dev/null | grep -E '\.qcow2(\.builtin)?$' | head -1 || true)"
+QC="$( (tar -tzf "$TMP/layer.blob" 2>/dev/null || tar -tf "$TMP/layer.blob") | grep -E '\.qcow2(\.builtin)?$' | head -1 || true)"
 [ -n "$QC" ] || { echo "no qcow2 in the image layer"; exit 1; }
-tar -xf "$LAYER" -C "$TMP" "$QC"
+tar -xzf "$TMP/layer.blob" -C "$TMP" "$QC" 2>/dev/null || tar -xf "$TMP/layer.blob" -C "$TMP" "$QC"
 mv "$TMP/$QC" "$DEST"
 echo "Placed golden image at $DEST"
 EOF
