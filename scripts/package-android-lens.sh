@@ -76,28 +76,105 @@ EOF
 cat > "$BUNDLE/install.sh" <<'EOF'
 #!/usr/bin/env bash
 # One-command Termux setup for the Loco Lens.
+#
+#   bash install.sh              # setup + try to download the golden image
+#   bash install.sh --no-image   # skip the image download
+#   SKIP_IMAGE=1 bash install.sh
 set -e
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Android shared storage (/storage/emulated, /sdcard) is FUSE/sdcardfs: it has
+# no symlink or exec-bit support, so `npm install` fails there (EACCES symlink).
+# Relocate the bundle into Termux $HOME (real ext4) and continue from there.
+case "$SELF" in
+  /storage/*|/sdcard/*|/mnt/*)
+    DEST="$HOME/loco-lens-android"
+    echo "Shared storage detected ($SELF)."
+    echo ">> Copying bundle to $DEST (npm symlinks need the ext4 home fs)..."
+    mkdir -p "$DEST"
+    cp -a "$SELF"/. "$DEST"/
+    exec bash "$DEST/install.sh" "$@"
+    ;;
+esac
+HERE="$SELF"
+
+WANT_IMAGE=1
+for a in "$@"; do [ "$a" = "--no-image" ] && WANT_IMAGE=0; done
+[ "${SKIP_IMAGE:-0}" = "1" ] && WANT_IMAGE=0
+
 echo "== Loco Lens — Termux install =="
 if command -v pkg >/dev/null 2>&1; then
-  echo "[1/3] Installing Termux packages..."
-  pkg install -y qemu-system-i386-headless qemu-utils nodejs python netcat-openbsd procps coreutils
+  echo "[1/4] Installing Termux packages..."
+  pkg install -y qemu-system-i386-headless qemu-utils nodejs python netcat-openbsd procps coreutils skopeo
 else
   echo "WARNING: 'pkg' not found — not Termux? Skipping package install." >&2
 fi
-echo "[2/3] Installing lens-server node deps (fetches sharp for this arch)..."
-( cd "$HERE/lens" && npm install --no-audit --no-fund )
+
+echo "[2/4] Installing lens-server node deps..."
+if ! ( cd "$HERE/lens" && npm install --no-audit --no-fund ); then
+  echo "   npm install failed; retrying without optional deps (sharp) + --no-bin-links..."
+  ( cd "$HERE/lens" && npm install --no-audit --no-fund --omit=optional --no-bin-links ) || \
+    echo "   WARNING: node deps incomplete — the lens may run raw-frame-only." >&2
+fi
+
 chmod +x "$HERE"/*.sh "$HERE"/qemu/*.sh "$HERE"/qemu/image/*.sh 2>/dev/null || true
 mkdir -p "$HOME/loco-runtime/run" "$HOME/loco-runtime/images" "$HOME/loco-runtime/state"
-echo "[3/3] Done."
+
+echo "[3/4] Golden image..."
+if [ "$WANT_IMAGE" = "1" ]; then
+  if ! bash "$HERE/fetch-image.sh"; then
+    echo "   Image not fetched (not published yet, or needs GHCR_TOKEN)."
+    echo "   Provide it manually at ~/loco-runtime/images/win98.qcow2, or re-run:"
+    echo "     bash $HERE/fetch-image.sh"
+  fi
+else
+  echo "   Skipped (--no-image). Put the qcow2 at ~/loco-runtime/images/win98.qcow2."
+fi
+
+echo "[4/4] Done."
 echo
-echo "Next:"
-echo "  1. Put your golden qcow2 at ~/loco-runtime/images/win98.qcow2"
-echo "     (pull from GHCR, or copy win98-loco-golden-safe512.qcow2 there)."
-echo "  2. Start the emulator:   $HERE/run-all.sh"
-echo "  3. Point the M5Stack watch at ws://<phone-ip>:3001/ws/lens/local"
+echo "Run:   $HERE/run-all.sh"
+echo "Watch: ws://<phone-ip>:3001/ws/lens/local"
 EOF
 chmod +x "$BUNDLE/install.sh"
+
+# --- Golden image fetch (skopeo → extract qcow2 from the OCI carrier) --------
+cat > "$BUNDLE/fetch-image.sh" <<'EOF'
+#!/usr/bin/env bash
+# Pull the Win98+Loco golden image from GHCR and place the qcow2 at
+# ~/loco-runtime/images/win98.qcow2. Public images pull anonymously; for a
+# private image set GHCR_TOKEN (+ optional GHCR_USER, default MRoie).
+#
+#   bash fetch-image.sh [IMAGE_REF] [DEST_QCOW2]
+set -e
+IMAGE="${1:-ghcr.io/mroie/lego-loco-cluster/win98-loco-golden:safe512-v1}"
+DEST="${2:-$HOME/loco-runtime/images/win98.qcow2}"
+mkdir -p "$(dirname "$DEST")"
+
+if [ -f "$DEST" ]; then echo "Image already present: $DEST"; exit 0; fi
+if ! command -v skopeo >/dev/null 2>&1; then
+  pkg install -y skopeo >/dev/null 2>&1 || { echo "skopeo not available (pkg install skopeo)"; exit 1; }
+fi
+
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+CREDS=()
+[ -n "${GHCR_TOKEN:-}" ] && CREDS=(--src-creds "${GHCR_USER:-MRoie}:${GHCR_TOKEN}")
+
+echo "Pulling $IMAGE (this is ~500 MB)..."
+skopeo copy "${CREDS[@]}" --override-os linux "docker://$IMAGE" "oci-archive:$TMP/img.tar"
+
+echo "Extracting qcow2..."
+tar -xf "$TMP/img.tar" -C "$TMP"
+# Single-layer scratch carrier: the qcow2 layer is by far the largest blob.
+LAYER="$(ls -S "$TMP"/blobs/sha256/* 2>/dev/null | head -1)"
+[ -n "$LAYER" ] || { echo "no image layers found"; exit 1; }
+QC="$(tar -tf "$LAYER" 2>/dev/null | grep -E '\.qcow2(\.builtin)?$' | head -1 || true)"
+[ -n "$QC" ] || { echo "no qcow2 in the image layer"; exit 1; }
+tar -xf "$LAYER" -C "$TMP" "$QC"
+mv "$TMP/$QC" "$DEST"
+echo "Placed golden image at $DEST"
+EOF
+chmod +x "$BUNDLE/fetch-image.sh"
 
 # --- Convenience runners ----------------------------------------------------
 cat > "$BUNDLE/run-lens.sh" <<'EOF'
@@ -136,18 +213,25 @@ full-screen front; the lens server taps the same VNC for the watch crop.
 
 ## Install (one command)
 ```bash
-unzip loco-lens-android.zip && cd loco-lens-android
+unzip loco-lens-android.zip        # or: tar -xzf loco-lens-android.tar.gz
+cd loco-lens-android
 bash install.sh
 ```
-This installs QEMU + Node in Termux and the lens-server deps (incl. the arm64
-`sharp` build).
+Installs QEMU + Node in Termux, the lens-server deps, and downloads the golden
+image from GHCR. `bash install.sh --no-image` to skip the download.
 
-## Provide the image
-The Win98+Loco golden qcow2 is NOT in this zip (it's ~500 MB). Put it at:
-```
-~/loco-runtime/images/win98.qcow2
-```
-Pull it from GHCR (once published) or copy it over (adb push / a file manager).
+> **Important — don't run from `/sdcard` / `Download`.** Android shared storage
+> can't create symlinks, so `npm install` fails there (`EACCES symlink`). You do
+> NOT need `sudo`. install.sh auto-detects this and copies the bundle to
+> `~/loco-lens-android` (Termux's ext4 home) before installing — just re-run it
+> from there if prompted, or unzip into `$HOME` to begin with:
+> `cd ~ && unzip /sdcard/Download/loco-lens-android.zip && cd loco-lens-android && bash install.sh`
+
+## The image
+`install.sh` pulls the ~500 MB golden qcow2 from GHCR via `skopeo` to
+`~/loco-runtime/images/win98.qcow2`. If it isn't published yet (or is private),
+set `GHCR_TOKEN` and re-run `bash fetch-image.sh`, or copy the qcow2 there
+manually (adb push / a file manager into `~/loco-runtime/images/`).
 
 ## Run
 ```bash
@@ -160,8 +244,8 @@ Just the lens (emulator already running): `./run-lens.sh`
 Multiple local instances: `LENS_INSTANCES='local=127.0.0.1:5901,second=127.0.0.1:5902' ./run-lens.sh`
 
 ## Notes
-- `sharp` is optional; if it fails to build, the lens falls back to raw frames
-  and still works.
+- `sharp` is optional; if it fails to build, install falls back to raw frames
+  and the lens still works.
 - Keep VNC bound to localhost unless behind a secure transport.
 - Firmware + flasher for the watch live in the repo under `m5stack-lens/`.
 EOF
