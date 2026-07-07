@@ -1,9 +1,9 @@
 {
-  "artifact": "win98-loco-golden-safe512.qcow2",
+  "artifact": "golden-clean.qcow2",
   "profile": "safe512",
-  "sha256": "01df3852686993e6f387994e2769e6507b8c0655c3b5fa2d0511caf255ebdfd4",
+  "sha256": "9e8ad542963335b2b8d7955d8b2d6c99315724860c863e3448bc30d1e4f4c058",
   "virtualSizeBytes": 2147483648,
-  "diskSizeBytes": 516825600,
+  "diskSizeBytes": 516825088,
   "format": "qcow2",
   "standalone": true,
   "sealedNote": "Seal only after a clean Win98 shutdown (no ScanDisk on next boot)."

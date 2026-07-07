@@ -5,7 +5,7 @@ ScanDisk + a recurring PnP Monitor wizard + a Tray3d crash) was turned into a
 clean, sealed golden image — reproducibly and headlessly (QMP, no GUI human).
 
 Result (measured 2026-07-07): `win98-loco-golden:safe512-v1`
-- sha256 `01df3852686993e6f387994e2769e6507b8c0655c3b5fa2d0511caf255ebdfd4`
+- sha256 `9e8ad542963335b2b8d7955d8b2d6c99315724860c863e3448bc30d1e4f4c058`
 - 516 MB compressed, standalone qcow2, `qemu-img check` clean (leaks repaired).
 - Boots **straight to the Windows desktop**: no ScanDisk, no driver wizard, no
   Tray3d crash (evidence: `evidence/fixed-clean-boot-t60.png`, `...-t160.png`).
