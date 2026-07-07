@@ -1,0 +1,67 @@
+# Fixing a dirty snapshot into a clean golden image
+
+How the `emulator-snapshot:hostgame` / `:joingame` qcow2 (which booted into
+ScanDisk + a recurring PnP Monitor wizard + a Tray3d crash) was turned into a
+clean, sealed golden image — reproducibly and headlessly (QMP, no GUI human).
+
+Result (measured 2026-07-07): `win98-loco-golden:safe512-v1`
+- sha256 `01df3852686993e6f387994e2769e6507b8c0655c3b5fa2d0511caf255ebdfd4`
+- 516 MB compressed, standalone qcow2, `qemu-img check` clean (leaks repaired).
+- Boots **straight to the Windows desktop**: no ScanDisk, no driver wizard, no
+  Tray3d crash (evidence: `evidence/fixed-clean-boot-t60.png`, `...-t160.png`).
+
+## Root causes (see GHCR-SNAPSHOT-VALIDATION.md)
+1. Captured from a dirty (running) state → "Windows was not properly shut down"
+   → ScanDisk every boot, and a corrupted registry.
+2. The PnP "Plug and Play Monitor" driver was never committed (every prior boot
+   was ephemeral `-snapshot`), so the Add-New-Hardware wizard recurred.
+3. `Tray3d.exe` (SoftGPU 3dfx tray applet) crashes under `-vga std` (no 3dfx).
+
+## Procedure (what the fix run did)
+
+1. **Boot WRITABLE** (persistent, not `-snapshot`) so changes stick:
+   ```
+   qemu-system-i386 -M pc -cpu pentium3 -m 512 -smp 1 \
+     -blockdev driver=file,filename=work.qcow2,node-name=lf,auto-read-only=off \
+     -blockdev driver=qcow2,file=lf,node-name=ld \
+     -device ide-hd,drive=ld,bus=ide.0,unit=0 \
+     -vga std -display vnc=127.0.0.1:1 -qmp unix:/tmp/qmp.sock,server,nowait -no-shutdown
+   ```
+2. **Let ScanDisk finish.** Windows' Registry Checker then reported a corrupt
+   registry and restored a good backup → Enter to restart (this clears the
+   corruption). Drive via QMP: `sendkey ret`.
+3. **Complete the PnP Monitor wizard** (drives via QMP `sendkey`): Next →
+   "Search for the best driver" → **uncheck "Floppy disk drives"** (Space) so it
+   doesn't stall on empty A: → Next → it finds `C:\WINDOWS\INF\MONITOR.INF`
+   (built-in, no CD) → Next → Finish. Now committed; it won't recur.
+4. **Disable Tray3d offline** (it launches from an HKLM Run key; the exe crashes).
+   Rename it so Windows silently skips the missing target:
+   ```
+   guestfish -a work.qcow2 : run : mount /dev/sda1 / \
+     : mv /WINDOWS/SYSTEM/TRAY3D.EXE /WINDOWS/SYSTEM/TRAY3D.EX_
+   ```
+   NOTE: an offline FAT edit re-sets the volume-dirty flag, so do this BEFORE the
+   final clean boot, not after.
+5. **One more writable boot** so that ScanDisk pass clears the offline-edit
+   dirtiness, and confirm the desktop is clean (no wizard, no Tray3d).
+6. **Clean shutdown** via the Start menu (QMP): `ctrl-esc`, `up`, `ret`, `ret`.
+   QMP `query-status` must report `"status": "shutdown"` — that clean powerdown
+   clears the dirty flag so the next cold boot skips ScanDisk.
+7. **Seal**: `image/seal-golden-image.sh work.qcow2 out/win98-loco-golden-safe512.qcow2 safe512`
+8. **Verify**: boot the sealed image `-snapshot` and screendump — desktop appears
+   with no ScanDisk / wizard / crash.
+
+Helper used for headless driving: `image/qmp-drive.py` (screendump / sendkey /
+keyseq / mouse / powerdown / wait-shutdown).
+
+## Publishing (requires a token with `write:packages`)
+```
+docker build -t ghcr.io/mroie/lego-loco-cluster/win98-loco-golden:safe512-v1 <ctx>   # FROM scratch + COPY win98.qcow2.builtin
+docker push  ghcr.io/mroie/lego-loco-cluster/win98-loco-golden:safe512-v1
+
+# multi-arch (linux/amd64 + linux/arm64) for Android — same data payload:
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/mroie/lego-loco-cluster/win98-loco-golden:safe512-v1 --push <ctx>
+```
+Or run the `publish-golden-image` GitHub workflow (uses the runner's
+`GITHUB_TOKEN`, which has `packages: write`).

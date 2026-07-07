@@ -32,9 +32,10 @@ PRIVATE="$HERE/../assets/private"
 
 log() { echo "[bootstrap] $*"; }
 
-# 1. Termux check
-if [ -z "${PREFIX:-}" ] || [ "${PREFIX#*com.termux}" = "$PREFIX" ]; then
-  echo "WARNING: this does not look like Termux (\$PREFIX=$PREFIX)." >&2
+# 1. Termux check (safe under set -u: PREFIX may be unset off-Termux)
+PREFIX_VAL="${PREFIX:-}"
+if [ -z "$PREFIX_VAL" ] || [ "${PREFIX_VAL#*com.termux}" = "$PREFIX_VAL" ]; then
+  echo "WARNING: this does not look like Termux (\$PREFIX='$PREFIX_VAL')." >&2
   echo "         Continuing anyway — package install is skipped off-Termux." >&2
   ON_TERMUX=0
 else

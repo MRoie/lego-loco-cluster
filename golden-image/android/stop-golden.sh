@@ -13,8 +13,10 @@ while [ $# -gt 0 ]; do
     *) echo "Unknown option: $1" >&2; exit 2;;
   esac
 done
-PID_FILE="$RUN/qmp.sock"
-[ -S "$RUN/qmp.sock" ] || { echo "No QMP socket at $RUN/qmp.sock"; }
+if [ ! -S "$RUN/qmp.sock" ]; then
+  echo "ERROR: no QMP socket at $RUN/qmp.sock — is a golden VM running for this run-dir?" >&2
+  exit 1
+fi
 
 python3 - "$RUN/qmp.sock" <<'PY' || true
 import json, socket, sys

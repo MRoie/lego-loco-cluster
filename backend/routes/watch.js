@@ -19,8 +19,18 @@ const watchPairing = require('../services/watchPairing');
 const { parseWatchMessage } = require('../protocol/watchProtocol');
 const logger = require('../utils/logger');
 
+const crypto = require('crypto');
+
+// Crypto-strength 6-char pairing code (unambiguous alphabet, no 0/O/1/I).
+function defaultCodeGen() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (const b of crypto.randomBytes(6)) out += alphabet[b % alphabet.length];
+  return out;
+}
+
 function registerWatchRoutes(app, { generateCode } = {}) {
-  const codeGen = generateCode || (() => Math.random().toString(36).slice(2, 8).toUpperCase());
+  const codeGen = generateCode || defaultCodeGen;
 
   app.post('/api/watch/pair', (req, res) => {
     const instanceId = req.body && req.body.instanceId;

@@ -23,6 +23,7 @@ def main():
     banner = s.recv(12)
     if not banner.startswith(b"RFB "):
         print(f"not an RFB server (banner={banner!r})")
+        s.close()
         return 1
     print(f"RFB banner: {banner.decode(errors='replace').strip()}")
 
@@ -31,6 +32,7 @@ def main():
     sec = s.recv(1)
     if not sec:
         print("no security types returned")
+        s.close()
         return 1
     n = sec[0]
     types = s.recv(n) if n else b""

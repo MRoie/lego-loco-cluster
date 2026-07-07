@@ -80,8 +80,9 @@ if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; t
   exit 1
 fi
 
-# QEMU binary — prefer the headless build available on Termux.
-QEMU_BIN="$(command -v qemu-system-i386 || command -v qemu-system-i386-headless || true)"
+# QEMU binary — prefer the headless build on Termux (avoids GUI deps); fall
+# back to the full binary elsewhere.
+QEMU_BIN="$(command -v qemu-system-i386-headless || command -v qemu-system-i386 || true)"
 if [ -z "$QEMU_BIN" ]; then
   if [ "$DRY_RUN" = "1" ]; then
     QEMU_BIN="qemu-system-i386"   # placeholder so --dry-run can print the command

@@ -83,4 +83,9 @@ describe('LensBridge frame pacing', () => {
     await bridge._tick();
     expect(bridge.stats.droppedBusy).toBe(1);
   });
+
+  test('defaults to PNG so the circular transparent corners survive', () => {
+    const bridge = new LensBridge({ framebuffer: fakeFb(), send: () => {} });
+    expect(bridge.format).toBe('png');
+  });
 });

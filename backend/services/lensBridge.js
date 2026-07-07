@@ -24,9 +24,11 @@ class LensBridge {
    * @param {number} [opts.fps=10]
    * @param {number} [opts.size=400]   output crop edge
    * @param {number} [opts.staleMs=250] drop frames older than this
-   * @param {'png'|'jpeg'|'raw'} [opts.format='jpeg']
+   * @param {'png'|'jpeg'|'raw'} [opts.format='png'] PNG preserves the circular
+   *        transparent corners; JPEG has no alpha and would matte them to a
+   *        square background, so PNG is the default for the round watch.
    */
-  constructor({ framebuffer, send, fps = 10, size = 400, staleMs = 250, format = 'jpeg' }) {
+  constructor({ framebuffer, send, fps = 10, size = 400, staleMs = 250, format = 'png' }) {
     this.fb = framebuffer;
     this.send = send;
     this.intervalMs = Math.round(1000 / fps);
