@@ -68,3 +68,8 @@ __pycache__/
 /kind
 /kind.exe
 /.vscode/
+
+# Golden-image build outputs and proprietary guest assets — never commit
+golden-image/build/
+golden-image/assets/private/
+*.qcow2.builtin

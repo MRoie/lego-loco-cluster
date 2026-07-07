@@ -1455,6 +1455,21 @@ signalWss.on("error", (err) => {
   logger.error("Signal WebSocket server error", { error: err.message });
 });
 
+// --- Loco Lens (M5Stack watch) WebSocket + REST ---
+const { registerWatchRoutes, handleLensConnection } = require("./routes/watch");
+const lensWss = new WebSocketServer({ noServer: true });
+lensWss.on("error", (err) => logger.error("Lens WebSocket server error", { error: err.message }));
+
+// Resolve an instance id to a VNC endpoint for the lens bridge, reusing the
+// same instance-target logic as the VNC proxy. Async: awaited in the handler.
+async function lensInstanceResolver(instanceId) {
+  const target = await getInstanceTarget(instanceId); // "host:port" or a URL
+  if (!target) return null;
+  const [host, portStr] = String(target).replace(/^.*\/\//, "").split(":");
+  return { host, port: parseInt(portStr, 10) || 5901 };
+}
+registerWatchRoutes(app, {});
+
 // Active peer connections keyed by ID for WebRTC signaling
 const peers = new Map();
 
@@ -1660,6 +1675,15 @@ server.on("upgrade", (req, socket, head) => {
       socket.destroy();
     });
 
+    return;
+  }
+
+  // Loco Lens WebSocket (M5Stack watch): /ws/lens/:instanceId
+  const lensMatch = req.url.match(/^\/ws\/lens\/([^\/\?]+)/);
+  if (lensMatch) {
+    lensWss.handleUpgrade(req, socket, head, (ws) => {
+      handleLensConnection(ws, decodeURIComponent(lensMatch[1]), lensInstanceResolver);
+    });
     return;
   }
 
