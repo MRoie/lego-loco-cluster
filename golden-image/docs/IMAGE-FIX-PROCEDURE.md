@@ -54,14 +54,28 @@ Result (measured 2026-07-07): `win98-loco-golden:safe512-v1`
 Helper used for headless driving: `image/qmp-drive.py` (screendump / sendkey /
 keyseq / mouse / powerdown / wait-shutdown).
 
-## Publishing (requires a token with `write:packages`)
-```
-docker build -t ghcr.io/mroie/lego-loco-cluster/win98-loco-golden:safe512-v1 <ctx>   # FROM scratch + COPY win98.qcow2.builtin
-docker push  ghcr.io/mroie/lego-loco-cluster/win98-loco-golden:safe512-v1
+## Publishing
 
-# multi-arch (linux/amd64 + linux/arm64) for Android — same data payload:
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/mroie/lego-loco-cluster/win98-loco-golden:safe512-v1 --push <ctx>
+The sealed qcow2 lives at `containers/win98-loco-golden-safe512.qcow2`
+(gitignored — pull it from GHCR once published). Use the push script:
+
+```bash
+# GHCR needs a CLASSIC PAT with write:packages (see the token note below).
+export GHCR_TOKEN=ghp_xxx
+scripts/push-golden-image.sh --multi-arch     # amd64+arm64 for Android
+#   pwsh scripts/push-golden-image.ps1 -MultiArch   # (Windows)
 ```
+It builds two carriers from the one payload and pushes them:
+- `win98-loco-golden:safe512-v1` (Android, builtin path)
+- `emulator-snapshot:{hostgame,joingame,clean-safe512}` (cluster, qcow2 at root)
+
 Or run the `publish-golden-image` GitHub workflow (uses the runner's
 `GITHUB_TOKEN`, which has `packages: write`).
+
+### Token note — `write:packages`
+The `gho_` OAuth token in Git Credential Manager (scopes `gist, repo, workflow`)
+**cannot push to GHCR and cannot be scope-extended** — OAuth-app tokens have a
+fixed scope set. Create a **classic Personal Access Token** instead:
+GitHub → Settings → Developer settings → Personal access tokens (classic) →
+Generate new token → check **`write:packages`** (and `read:packages`, `repo`).
+Use it as `GHCR_TOKEN` (or `docker login ghcr.io -u MRoie` and paste it).
