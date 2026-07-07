@@ -170,8 +170,13 @@ echo "[pkg] pruning build junk"
 find "$BUNDLE" -type d -name '__pycache__' -prune -exec rm -rf {} + 2>/dev/null || true
 find "$BUNDLE" -name '*.pyc' -delete 2>/dev/null || true
 
-echo "[pkg] zipping"
-( cd "$STAGE" && zip -qr "loco-lens-android.zip" "loco-lens-android" )
+echo "[pkg] archiving (zip + tar.gz)"
 mkdir -p "$OUT"
+( cd "$STAGE" && zip -qr "loco-lens-android.zip" "loco-lens-android" )
+( cd "$STAGE" && tar -czf "loco-lens-android.tar.gz" "loco-lens-android" )
 mv "$STAGE/loco-lens-android.zip" "$OUT/loco-lens-android.zip"
-echo "[pkg] wrote $OUT/loco-lens-android.zip ($(du -h "$OUT/loco-lens-android.zip" | cut -f1))"
+mv "$STAGE/loco-lens-android.tar.gz" "$OUT/loco-lens-android.tar.gz"
+( cd "$OUT" && sha256sum loco-lens-android.zip loco-lens-android.tar.gz > loco-lens-android.sha256 2>/dev/null || \
+  shasum -a 256 loco-lens-android.zip loco-lens-android.tar.gz > loco-lens-android.sha256 )
+echo "[pkg] wrote:"
+ls -la "$OUT"/loco-lens-android.* | awk '{print "  ", $5, $NF}'

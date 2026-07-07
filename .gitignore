@@ -82,6 +82,9 @@ m5stack-lens/flasher/firmware/
 containers/win98-loco-golden-*.qcow2
 containers/win98-loco-golden-*.qcow2.sha256
 
-# Packaged bundles
+# Transient build dir (packager scratch). Released bundles live in dist/ and
+# are committed intentionally.
 /build/
-*.zip
+# Allow committed release bundles under dist/ despite the broad *.tar.gz above.
+!dist/
+!dist/**
