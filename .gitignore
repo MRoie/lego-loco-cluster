@@ -73,3 +73,7 @@ __pycache__/
 golden-image/build/
 golden-image/assets/private/
 *.qcow2.builtin
+
+# M5Stack firmware build artifacts
+m5stack-lens/firmware/.pio/
+m5stack-lens/flasher/firmware/
