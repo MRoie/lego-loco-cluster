@@ -54,48 +54,69 @@ const openBridges = new Set();
  * Handle one lens WebSocket connection. `instanceResolver` may be sync or
  * async and returns { host, port, password } | null for the instance's VNC.
  */
-async function handleLensConnection(ws, instanceId, instanceResolver) {
-  let endpoint = null;
-  try {
-    endpoint = instanceResolver ? await instanceResolver(instanceId) : null;
-  } catch (e) {
-    logger.warn('Lens endpoint resolve failed', { instanceId, error: e.message });
-  }
-  if (!endpoint || !endpoint.host) {
-    if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({ type: 'error', error: `no VNC endpoint for ${instanceId}` }));
+async function handleLensConnection(ws, instanceId, instanceResolver, deps = {}) {
+  // Injectable for tests; defaults to the real classes.
+  const Fb = deps.RfbFramebuffer || RfbFramebuffer;
+  const Bridge = deps.LensBridge || LensBridge;
+
+  let current = { id: instanceId, fb: null, bridge: null };
+
+  // (Re)point the lens at an instance. Tears down any existing RFB+bridge and
+  // connects a fresh one — used both at connect time and on instance.select.
+  async function connectTo(id) {
+    let endpoint = null;
+    try {
+      endpoint = instanceResolver ? await instanceResolver(id) : null;
+    } catch (e) {
+      logger.warn('Lens endpoint resolve failed', { instanceId: id, error: e.message });
     }
-    ws.close();
-    return;
+    if (!endpoint || !endpoint.host) {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify({ type: 'error', error: `no VNC endpoint for ${id}` }));
+      }
+      return false;
+    }
+
+    // Tear down the previous target.
+    if (current.bridge) { current.bridge.stop(); openBridges.delete(current.bridge); }
+    if (current.fb) current.fb.close();
+
+    const fb = new Fb(endpoint);
+    try { fb.connect(); } catch (e) {
+      logger.warn('Lens RFB connect failed', { instanceId: id, error: e.message });
+    }
+    const bridge = new Bridge({
+      framebuffer: fb,
+      send: (data) => { if (ws.readyState === ws.OPEN) ws.send(data); },
+    });
+    bridge.start();
+    openBridges.add(bridge);
+    current = { id, fb, bridge };
+    if (ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({ type: 'instance.active', id }));
+    }
+    logger.info('Lens pointed at instance', { instanceId: id });
+    return true;
   }
 
-  const fb = new RfbFramebuffer(endpoint);
-  try { fb.connect(); } catch (e) {
-    logger.warn('Lens RFB connect failed', { instanceId, error: e.message });
-  }
+  const ok = await connectTo(instanceId);
+  if (!ok) { ws.close(); return; }
 
-  const bridge = new LensBridge({
-    framebuffer: fb,
-    send: (data) => { if (ws.readyState === ws.OPEN) ws.send(data); },
-  });
-  bridge.start();
-  openBridges.add(bridge);
-  logger.info('Lens connection opened', { instanceId });
-
-  ws.on('message', (data) => {
+  ws.on('message', async (data) => {
     const res = parseWatchMessage(data.toString());
     if (res.ok && res.msg.type === 'instance.select') {
-      // Re-target would reconnect the RFB; for the foundation we just log it.
-      logger.info('Lens instance.select', { from: instanceId, to: res.msg.id });
+      // Actually re-point the lens at the newly selected instance.
+      const switched = await connectTo(res.msg.id);
+      if (!switched) logger.warn('instance.select failed', { from: current.id, to: res.msg.id });
+      return; // handled here; don't forward to the (possibly replaced) bridge
     }
-    bridge.handleMessage(data.toString());
+    if (current.bridge) current.bridge.handleMessage(data.toString());
   });
 
   ws.on('close', () => {
-    bridge.stop();
-    fb.close();
-    openBridges.delete(bridge);
-    logger.info('Lens connection closed', { instanceId });
+    if (current.bridge) { current.bridge.stop(); openBridges.delete(current.bridge); }
+    if (current.fb) current.fb.close();
+    logger.info('Lens connection closed', { instanceId: current.id });
   });
 }
 

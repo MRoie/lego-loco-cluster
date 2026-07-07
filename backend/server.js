@@ -1460,13 +1460,20 @@ const { registerWatchRoutes, handleLensConnection } = require("./routes/watch");
 const lensWss = new WebSocketServer({ noServer: true });
 lensWss.on("error", (err) => logger.error("Lens WebSocket server error", { error: err.message }));
 
-// Resolve an instance id to a VNC endpoint for the lens bridge, reusing the
-// same instance-target logic as the VNC proxy. Async: awaited in the handler.
-async function lensInstanceResolver(instanceId) {
+// Resolve an instance id to a VNC endpoint for the lens bridge. Uses a static
+// registry (LENS_INSTANCES) when set — for the no-cluster case (Android/Termux,
+// compose, single host) — otherwise the k8s instance-target path.
+const { InstanceResolver } = require("./services/instanceResolver");
+const k8sVncResolver = async (instanceId) => {
   const target = await getInstanceTarget(instanceId); // "host:port" or a URL
   if (!target) return null;
   const [host, portStr] = String(target).replace(/^.*\/\//, "").split(":");
   return { host, port: parseInt(portStr, 10) || 5901 };
+};
+const lensResolver = new InstanceResolver({ k8sResolver: k8sVncResolver });
+logger.info("Lens instance resolver", { mode: lensResolver.mode, staticInstances: lensResolver.listStaticInstances() });
+async function lensInstanceResolver(instanceId) {
+  return lensResolver.resolve(instanceId);
 }
 registerWatchRoutes(app, {});
 

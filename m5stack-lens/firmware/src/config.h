@@ -19,8 +19,11 @@
 #ifndef LOCO_BRIDGE_PORT
 #define LOCO_BRIDGE_PORT   3001
 #endif
+// Cluster: an instance id from discovery (e.g. "instance-0").
+// Android / single host: the static registry id — "local" by default
+// (see golden-image/android/lens-server.js).
 #ifndef LOCO_INSTANCE_ID
-#define LOCO_INSTANCE_ID   "instance-0"
+#define LOCO_INSTANCE_ID   "local"
 #endif
 
 // ---- Round display ----
