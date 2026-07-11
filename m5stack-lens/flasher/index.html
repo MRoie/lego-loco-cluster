@@ -60,13 +60,17 @@
 
     <div class="card">
       <div class="studs"><span class="stud g"></span><span class="stud r"></span><span class="stud y"></span></div>
-      <h2>2 · Point it at your cluster</h2>
+      <h2>2 · Set up on first boot (no rebuild)</h2>
       <ol>
-        <li>Set Wi-Fi + bridge host in <code>firmware/src/config.h</code> before flashing
-            (or provision over serial after boot).</li>
-        <li>The watch connects to <code>ws://&lt;bridge&gt;:3001/ws/lens/&lt;instanceId&gt;</code>.</li>
-        <li>In the dashboard, <code>POST /api/watch/pair</code> to get a pairing code, then
-            redeem it from the watch to bind it to an instance.</li>
+        <li>On first boot the watch shows <b>SETUP</b> and starts a Wi-Fi
+            hotspot <code>LocoLens-Setup</code>.</li>
+        <li>Join it from your phone; the captive portal opens. Enter your
+            <b>Wi-Fi</b> and the <b>bridge host/IP, port, and instance id</b>
+            (e.g. <code>192.168.1.236</code> / <code>3001</code> /
+            <code>instance-0</code>), then Save.</li>
+        <li>The watch connects to
+            <code>ws://&lt;bridge&gt;:&lt;port&gt;/ws/lens/&lt;instanceId&gt;</code> and shows the
+            live crop. Hold <b>KEYA</b> at boot to re-run setup.</li>
       </ol>
     </div>
 
@@ -77,7 +81,7 @@
         <li><b>Drag</b> — move the lens over the city.</li>
         <li><b>Tap</b> — inspect the object under the lens centre.</li>
         <li><b>Long-press</b> — close the inspection.</li>
-        <li><b>Side buttons</b> — zoom out / in.</li>
+        <li><b>KEYA / KEYB</b> — zoom out / in.</li>
       </ol>
       <p class="note">The round display shows a live circular crop of the actual game —
       the crop matches Lego Loco's in-game inspection magnifier.</p>

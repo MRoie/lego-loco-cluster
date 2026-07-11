@@ -7,10 +7,7 @@
     {
       "chipFamily": "ESP32-S3",
       "parts": [
-        { "path": "firmware/bootloader.bin", "offset": 0 },
-        { "path": "firmware/partitions.bin", "offset": 32768 },
-        { "path": "firmware/boot_app0.bin", "offset": 57344 },
-        { "path": "firmware/loco-lens.bin", "offset": 65536 }
+        { "path": "firmware/loco-lens.bin", "offset": 0 }
       ]
     }
   ]

@@ -1,16 +1,13 @@
 #pragma once
-// Loco Lens — M5Stack StopWatch config. Edit before flashing (or provision
-// later). Do NOT commit real Wi-Fi credentials.
+// Loco Lens — M5Stack StopWatch config.
+//
+// Wi-Fi and the bridge are provisioned at RUNTIME via a captive portal
+// (WiFiManager): on first boot the watch starts an AP "LocoLens-Setup" — join
+// it from a phone and enter Wi-Fi + bridge host/port/instance. Hold KEYA at
+// boot to re-provision. So one flashed binary works for anyone; the values
+// below are only first-boot DEFAULTS (safe to leave as-is — no secrets baked).
 
-// ---- Wi-Fi (StopWatch is 2.4 GHz only) ----
-#ifndef LOCO_WIFI_SSID
-#define LOCO_WIFI_SSID     "YOUR_WIFI"
-#endif
-#ifndef LOCO_WIFI_PASS
-#define LOCO_WIFI_PASS     "YOUR_PASS"
-#endif
-
-// ---- Lens bridge (the machine running lens-server / the cluster backend) ----
+// ---- Lens bridge defaults (overridden by the captive portal) ----
 // The watch connects to ws://<host>:<port>/ws/lens/<instanceId>.
 #ifndef LOCO_BRIDGE_HOST
 #define LOCO_BRIDGE_HOST   "192.168.1.50"

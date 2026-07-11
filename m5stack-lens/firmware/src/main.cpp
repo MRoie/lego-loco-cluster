@@ -21,6 +21,8 @@
 // ============================================================================
 #include <M5Unified.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
+#include <Preferences.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include "config.h"
@@ -28,6 +30,13 @@
 static WebSocketsClient ws;
 static bool connected = false;
 static uint32_t lastPing = 0;
+
+// Runtime config (Wi-Fi via WiFiManager; bridge via captive-portal fields,
+// persisted in NVS) so one flashed binary works for anyone.
+static Preferences prefs;
+static char   g_host[64]   = LOCO_BRIDGE_HOST;
+static int    g_port       = LOCO_BRIDGE_PORT;
+static char   g_instance[32] = LOCO_INSTANCE_ID;
 
 // Touch gesture state → lens.move / lens.inspect / lens.close.
 static bool touching = false;
@@ -117,21 +126,59 @@ static void pollInput() {
 }
 
 // ---------------------------------------------------------------------------
+static void banner(const char* line1, const char* line2 = nullptr) {
+  M5.Display.fillScreen(TFT_BLACK);
+  M5.Display.setTextDatum(middle_center);
+  int cx = M5.Display.width() / 2, cy = M5.Display.height() / 2;
+  M5.Display.drawString(line1, cx, line2 ? cy - 16 : cy);
+  if (line2) M5.Display.drawString(line2, cx, cy + 16);
+}
+
 void setup() {
   auto cfg = M5.config();
   M5.begin(cfg);                               // display + touch + buttons + power
   M5.Display.setBrightness(160);
-  M5.Display.fillScreen(TFT_BLACK);
-  M5.Display.setTextDatum(middle_center);
-  M5.Display.setTextSize(M5.Display.height() / 160);
-  M5.Display.drawString("LOCO LENS", M5.Display.width()/2, M5.Display.height()/2);
+  M5.Display.setTextSize(M5.Display.height() / 200);
+  banner("LOCO LENS");
+  delay(400);
+  M5.update();
 
-  WiFi.begin(LOCO_WIFI_SSID, LOCO_WIFI_PASS);
-  uint32_t t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) { delay(200); M5.update(); }
+  // Load persisted bridge config (falls back to config.h defaults).
+  prefs.begin("locolens", true);
+  prefs.getString("host", g_host, sizeof(g_host));
+  g_port = prefs.getInt("port", g_port);
+  prefs.getString("inst", g_instance, sizeof(g_instance));
+  prefs.end();
 
-  String path = String("/ws/lens/") + LOCO_INSTANCE_ID;
-  ws.begin(LOCO_BRIDGE_HOST, LOCO_BRIDGE_PORT, path);
+  // Hold KEYA at boot to wipe saved Wi-Fi + config and re-provision.
+  bool forceSetup = M5.BtnA.isPressed();
+
+  // Captive-portal provisioning: Wi-Fi + bridge host/port/instance. On first
+  // boot (or forceSetup) join AP "LocoLens-Setup" to enter them from a phone.
+  WiFiManager wm;
+  char portStr[8]; snprintf(portStr, sizeof(portStr), "%d", g_port);
+  WiFiManagerParameter pHost("host", "Bridge host/IP", g_host, sizeof(g_host) - 1);
+  WiFiManagerParameter pPort("port", "Bridge port", portStr, 6);
+  WiFiManagerParameter pInst("inst", "Instance id", g_instance, sizeof(g_instance) - 1);
+  wm.addParameter(&pHost); wm.addParameter(&pPort); wm.addParameter(&pInst);
+  wm.setConfigPortalTimeout(300);
+  wm.setAPCallback([](WiFiManager*) { banner("SETUP", "join 'LocoLens-Setup'"); });
+  wm.setSaveParamsCallback([&]() {
+    strncpy(g_host, pHost.getValue(), sizeof(g_host) - 1);
+    strncpy(g_instance, pInst.getValue(), sizeof(g_instance) - 1);
+    g_port = atoi(pPort.getValue());
+    prefs.begin("locolens", false);
+    prefs.putString("host", g_host); prefs.putInt("port", g_port); prefs.putString("inst", g_instance);
+    prefs.end();
+  });
+
+  banner("connecting", "Wi-Fi...");
+  bool ok = forceSetup ? wm.startConfigPortal("LocoLens-Setup") : wm.autoConnect("LocoLens-Setup");
+  if (!ok) { banner("Wi-Fi failed", "rebooting"); delay(1500); ESP.restart(); }
+
+  banner("connected", g_host);
+  String path = String("/ws/lens/") + g_instance;
+  ws.begin(g_host, g_port, path);
   ws.onEvent(onWs);
   ws.setReconnectInterval(3000);
 }

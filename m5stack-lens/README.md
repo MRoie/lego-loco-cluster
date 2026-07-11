@@ -32,14 +32,27 @@ m5stack-lens/
 └── docs/          E2E-VERIFICATION.md
 ```
 
-## Build + flash
+## Flash & set up (no rebuild needed)
 
-First set your target in `src/config.h`: Wi-Fi SSID/pass, `LOCO_BRIDGE_HOST`
-(the machine running lens-server / the cluster backend), and `LOCO_INSTANCE_ID`
-(`instance-0` for the cluster, `local` for the Android bundle).
+A **pre-built, universal binary** is committed at
+`flasher/firmware/loco-lens.bin` (ESP32-S3, ~1.5 MB, **no secrets baked in** —
+Wi-Fi and the bridge are entered at runtime). Just flash it:
 
-**Enter download mode before flashing:** hold the reset/power button ~2 s until
-the internal **green LED** lights, then release.
+- **Web flasher**: serve `flasher/` and open it in desktop Chrome/Edge, or
+- **CLI**: `esptool.py --chip esp32s3 write_flash 0x0 flasher/firmware/loco-lens.bin`
+
+**Enter download mode first:** hold the reset/power button ~2 s until the
+internal **green LED** lights, then release.
+
+**First boot provisioning:** the watch shows `SETUP` and starts a Wi-Fi hotspot
+`LocoLens-Setup`. Join it from a phone, and in the captive portal enter your
+Wi-Fi + the bridge **host/IP, port, instance id** (e.g. `192.168.1.236` /
+`3001` / `instance-0`). Saved to flash. Hold **KEYA** at boot to re-provision.
+
+## Build it yourself
+
+Verified build: PlatformIO on this repo → Flash 43.7 %, RAM 15.7 %, SUCCESS.
+`src/config.h` only holds first-boot *defaults* (safe to leave as-is).
 
 ### Arduino IDE (matches M5's docs)
 - ESP32 board manager **≥ 3.3.7**, board **"M5StopWatch"**.
@@ -56,13 +69,12 @@ pio run                 # build
 pio run -t upload       # flash over USB (download mode first)
 ```
 
-### Web flasher
-Merge the build output and drop it in `flasher/firmware/`, then serve
-`flasher/` and open it in desktop Chrome/Edge (WebSerial):
+### Re-merge the web-flasher binary after a build
 ```bash
-esptool.py --chip esp32s3 merge_bin -o m5stack-lens/flasher/firmware/loco-lens.bin \
-  0x0 .pio/build/*/bootloader.bin 0x8000 .pio/build/*/partitions.bin \
-  0x10000 .pio/build/*/firmware.bin
+B=.pio/build/m5stack-stopwatch
+BOOTAPP=$(find ~/.platformio -name boot_app0.bin | head -1)   # or your PLATFORMIO_CORE_DIR
+esptool.py --chip esp32s3 merge_bin -o flasher/firmware/loco-lens.bin \
+  0x0 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 $BOOTAPP 0x10000 $B/firmware.bin
 ```
 
 ## Verify before you flash
