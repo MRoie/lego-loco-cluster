@@ -47,8 +47,18 @@ class RfbFramebuffer {
       this.width = this.client.width;
       this.height = this.client.height;
       this.pixels = Buffer.alloc(this.width * this.height * this.channels);
+      // Per-channel byte offsets from the negotiated pixel format. QEMU's VNC
+      // is 32bpp little-endian BGRX (redShift 16, greenShift 8, blueShift 0),
+      // so R is at byte 2 and B at byte 0 — copying straight through would swap
+      // red and blue (red shows as blue). Derive the offsets so any server's
+      // channel order is honoured.
+      const c = this.client;
+      this.srcBytes = Math.max(3, (c.bpp || 32) >> 3);
+      this.rOff = (c.redShift   != null) ? (c.redShift   >> 3) : 0;
+      this.gOff = (c.greenShift != null) ? (c.greenShift >> 3) : 1;
+      this.bOff = (c.blueShift  != null) ? (c.blueShift  >> 3) : 2;
       this.connected = true;
-      logger.info('RFB framebuffer connected', { host: this.host, port: this.port, w: this.width, h: this.height });
+      logger.info('RFB framebuffer connected', { host: this.host, port: this.port, w: this.width, h: this.height, bpp: c.bpp });
       this.client.requestUpdate(false, 0, 0, this.width, this.height);
       // Periodically request a full update so the lens bridge always has a
       // recent frame even when the Win98 guest is idle (no screen changes).
@@ -77,20 +87,23 @@ class RfbFramebuffer {
     return this;
   }
 
-  /** Blit an RFB raw rectangle (RGB or 32-bit) into the framebuffer. */
+  /** Blit an RFB raw rectangle into the framebuffer, honouring channel order. */
   _blit(rect) {
     if (!this.pixels || !rect || !rect.data) return;
     const { x, y, width, height } = rect;
-    const srcChannels = rect.data.length >= width * height * 4 ? 4 : 3;
+    const srcChannels = this.srcBytes || (rect.data.length >= width * height * 4 ? 4 : 3);
+    const rOff = this.rOff != null ? this.rOff : 0;
+    const gOff = this.gOff != null ? this.gOff : 1;
+    const bOff = this.bOff != null ? this.bOff : 2;
     for (let ry = 0; ry < height; ry++) {
       const dyRow = (y + ry) * this.width;
       for (let rx = 0; rx < width; rx++) {
         const si = (ry * width + rx) * srcChannels;
         const di = (dyRow + (x + rx)) * this.channels;
         if (di + 2 >= this.pixels.length) continue;
-        this.pixels[di] = rect.data[si];
-        this.pixels[di + 1] = rect.data[si + 1];
-        this.pixels[di + 2] = rect.data[si + 2];
+        this.pixels[di]     = rect.data[si + rOff];
+        this.pixels[di + 1] = rect.data[si + gOff];
+        this.pixels[di + 2] = rect.data[si + bOff];
       }
     }
   }
