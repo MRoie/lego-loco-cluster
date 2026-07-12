@@ -63,10 +63,35 @@ Capture/inject over VNC (published to host :5903 in testing).
 docker exec -d qemu3dfx bash /work/run.sh
 ```
 
-## Making it fluid (GPU)
-On this host `/dev/dxg` (WSL2 GPU) was **not** exposed to the container, so Mesa
-fell back to `llvmpipe`. To accelerate:
-1. Enable Docker Desktop GPU support; get `/dev/dxg` + `/usr/lib/wsl/lib` into
-   the container; then `GALLIUM_DRIVER=d3d12` uses the real GPU (the
-   `d3d12_dri.so` driver ships in Debian mesa).
-2. Or run qemu-3dfx on a **Linux host with a GPU + KVM** — its intended target.
+## Making it fluid (GPU) — investigated, blocked in Docker Desktop
+
+GPU passthrough was tried thoroughly. The result: the GPU is reachable for
+**compute** but not **graphics**, so Mesa stays on `llvmpipe`.
+
+What works:
+- `docker run --gpus all` exposes **`/dev/dxg`** (the WSL2 D3D12/CUDA device);
+  the host is an NVIDIA GPU.
+- The WSL GPU libs (`libdxcore.so`, `libd3d12.so`, `libd3d12core.so`) live on the
+  Windows host at `C:\Windows\System32\lxss\lib` and can be bind-mounted to
+  `/usr/lib/wsl/lib`.
+
+What's blocked — no DRM render node:
+- Mesa's hardware GL needs **`/dev/dri/renderD128`** (a DRM render node). It is
+  **absent** in Docker containers *and* in the `docker-desktop` WSL VM, even with
+  `--privileged --gpus all`. Only `/dev/dxg` (compute) is exposed.
+- Consequently: GLX on Xvfb falls back to `swrast`; EGL-surfaceless d3d12 fails
+  with `DRI2: failed to create gbm device` (gbm needs `/dev/dri`). So the
+  `d3d12` Gallium driver never binds the GPU.
+- No user WSL2/WSLg distro is installed here (only Docker Desktop's internal
+  distros), so the WSLg-provided `/dev/dri` + hardware d3d12 path isn't available
+  either.
+
+To actually get GPU-backed GL for qemu-3dfx, run these scripts where a DRM node
+exists:
+1. **Native WSL2 with WSLg** (`wsl --install -d Ubuntu`): WSLg provides
+   `/dev/dri` backed by the GPU; Mesa's `d3d12` driver then hits hardware.
+2. **A native Linux host with a GPU** (`/dev/dri`) + KVM — qemu-3dfx's intended
+   target, where it is fast.
+
+In Docker Desktop on Windows the software `llvmpipe` path (correct but slow) is
+the practical ceiling.
