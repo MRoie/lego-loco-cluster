@@ -50,6 +50,13 @@ class RfbFramebuffer {
       this.connected = true;
       logger.info('RFB framebuffer connected', { host: this.host, port: this.port, w: this.width, h: this.height });
       this.client.requestUpdate(false, 0, 0, this.width, this.height);
+      // Periodically request a full update so the lens bridge always has a
+      // recent frame even when the Win98 guest is idle (no screen changes).
+      this._refreshTimer = setInterval(() => {
+        if (this.connected && this.client && this.client.requestUpdate) {
+          this.client.requestUpdate(false, 0, 0, this.width, this.height);
+        }
+      }, 500);
     });
 
     this.client.on('rect', (rect) => {
@@ -117,6 +124,7 @@ class RfbFramebuffer {
   }
 
   close() {
+    if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
     if (this.client && this.client.end) { try { this.client.end(); } catch (e) { /* ignore */ } }
     this.connected = false;
   }

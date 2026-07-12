@@ -88,6 +88,7 @@ async function handleLensConnection(ws, instanceId, instanceResolver, deps = {})
     const bridge = new Bridge({
       framebuffer: fb,
       send: (data) => { if (ws.readyState === ws.OPEN) ws.send(data); },
+      size: parseInt(process.env.LENS_CROP_SIZE, 10) || 466,
     });
     bridge.start();
     openBridges.add(bridge);

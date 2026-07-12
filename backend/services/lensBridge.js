@@ -28,7 +28,7 @@ class LensBridge {
    *        transparent corners; JPEG has no alpha and would matte them to a
    *        square background, so PNG is the default for the round watch.
    */
-  constructor({ framebuffer, send, fps = 10, size = 400, staleMs = 250, format = 'png' }) {
+  constructor({ framebuffer, send, fps = 10, size = 400, staleMs = 5000, format = 'png' }) {
     this.fb = framebuffer;
     this.send = send;
     this.intervalMs = Math.round(1000 / fps);
