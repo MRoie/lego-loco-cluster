@@ -29,6 +29,31 @@ lens; the watch/firmware side is in [../../../m5stack-lens/docs/](../../../m5sta
 | **conclusion** | software SoftGPU **cannot** complete LOCO's 3D at any flag setting |
 | **`qemu-3dfx` (Mesa passthrough)** | LOCO 3D **renders + progresses** (llvmpipe host GL); correct but slow without a GPU |
 
+## Tried: skip the intro instead of fixing 3D (inconclusive — not the real fix)
+
+Before going further down the qemu-3dfx/PCem road, tried the cheap option:
+make `Loco.exe` skip whatever's crashing instead of fixing 3D rendering.
+
+- The Desktop `LOCO.lnk` shortcut targets **`Exe\Loco.exe` directly** (not the
+  `Exe\LEGO LOCO.scr` launcher) — confirmed via `strings` on the `.lnk`. So the
+  `LEGO.INI`/`LEGO LOCO.scr` launcher (which plays `Video\LOCOINTR.avi`, a
+  genuine 99 MB Cinepak-encoded 640×480 movie) is **never invoked** by normal
+  play — a red herring.
+- Renamed `LOCOINTR.avi` away entirely (guestfish, on a disposable copy of the
+  golden image) to test "does removing the AVI avoid the crash?" — **the
+  brick-swarm intro rendered identically anyway**, byte-for-byte on early
+  frames. Renaming the AVI made no difference to the crash.
+- Confirmed via `strings Loco.exe`: the binary links `D3DRM*` (Direct3D
+  **Retained Mode**) error strings (`D3DRMERR_BADDEVICE`,
+  `D3DRMERR_TEXTURE_CREATE_FAILED`, etc.) — the brick swarm is **genuine
+  real-time D3DRM rendering inside Loco.exe itself**, not a pre-rendered video.
+  No command-line skip flag exists in the binary's strings table.
+- **Conclusion: Option A (skip-the-intro) doesn't apply here** — there's no
+  separate "intro asset" to bypass; the crash is in the game's own mandatory
+  D3DRM startup sequence. The only paths that actually fix it are real/passthrough
+  3D (qemu-3dfx, above) or genuine period hardware emulation (PCem, see
+  [`../../pcem/standalone/README.md`](../../pcem/standalone/README.md)).
+
 Other findings along the way:
 - **Guest mouse is relative (PS/2)** under the software path → VNC absolute
   clicks miss. Add `-device usb-tablet` for absolute mouse (needed for the lens
