@@ -142,8 +142,13 @@ for the QEMU-side investigation this follows on from.
   BIOS Setup — confirmed via the "Windows Setup Safe Recovery" screen on the
   next boot, then a clean run straight into the GUI Setup Wizard with no
   floppy/DOS detour. See gotcha #24.
-- Windows 98 has since booted all the way into the GUI Setup Wizard's
-  "Setting up hardware and finalizing settings" phase under PCem.
+- **Windows 98 SE has booted all the way to a working desktop under PCem.**
+  Two further Setup-triggered reboots each hit a reproducible chipset-level
+  hang (guest CPU spinning in a tiny real-mode code range instead of
+  completing its reboot request) — recovered both times via `kill -9` +
+  relaunch, which resumed cleanly on `C:` thanks to gotcha #24's boot-order
+  fix rather than losing progress. See gotcha #25. A checkpoint of this
+  clean-desktop state was saved to `disk-vhd-503-win98-desktop-checkpoint.vhd`.
 
 ### First-session TL;DR (kept for history)
 - Built **PCem v17** (official `sarah-walker-pcem/pcem` Linux source release —
@@ -679,6 +684,41 @@ for the QEMU-side investigation this follows on from.
     genuine-Microsoft-boot-floppy fix from gotcha #22 has done its job and
     isn't needed for the rest of Setup or for normal operation.
 
+25. **Windows 98 SE has booted to a working desktop under PCem for the first
+    time.** Two more Setup-triggered reboots (the post-hardware-detection
+    restart, and the final restart into first-boot) each hung identically to
+    gotcha #24's original symptom, but with a different signature: instead of
+    re-entering the DOS/floppy environment, the guest CPU got stuck spinning
+    in a tiny (~10-byte) real-mode code range — confirmed via repeated `gdb -p
+    <pid> -batch -ex 'print/x cpu_state.pc'` samples oscillating between the
+    same 2-3 nearby addresses (occasionally diverging to a fixed timer-ISR
+    address and back) rather than advancing, unlike legitimate work
+    elsewhere in this session which always showed `cpu_state.pc` landing on
+    substantially different addresses each sample. This looks like the
+    guest's post-hardware-detection reboot request (likely a keyboard-
+    controller-reset sequence) not completing under this chipset
+    (`fic_va503p`/VIA MVP3) — plausibly related to the same El Torito/
+    boot-virus-scan-class BIOS gaps noted in gotcha #20 for this model, though
+    not confirmed further given a working recovery was already in hand.
+    **Recovery, identical both times**: `kill -9` the `pcem-debug` process
+    (plain `pkill`/`SIGTERM` still doesn't work — see gotcha #12) and relaunch
+    with the same `--config pcem.cfg` invocation. With `Boot Sequence = C
+    only` (gotcha #24) already set, the relaunch boots straight back into
+    `C:` with no floppy detour every time — Setup simply re-ran the
+    in-progress phase (hardware detection redid its scan from the top; the
+    final restart resumed straight into "Getting ready to run Windows for the
+    first time") rather than losing overall progress. Re-capture SDL mouse
+    input after each relaunch (gotcha #8: `xdotool windowfocus`/`click` on
+    the 640×480 render window, found via `xdotool search --name pcem` +
+    `getwindowgeometry` — it's the larger of the two windows that command
+    returns, the other being the ~10×10 wx frame from gotcha #12).
+    **A live checkpoint of this exact state** (Windows 98 SE fully installed,
+    first boot to desktop reached, no drivers beyond the auto-detected PnP
+    monitor yet) was copied to `disk-vhd-503-win98-desktop-checkpoint.vhd`
+    alongside the working disk, in case a driver install or the LOCO copy
+    step goes wrong later and this state needs restoring rather than redoing
+    the ~hour of Setup navigation from scratch.
+
 ## Scripts
 
 ### `build-pcem.sh`
@@ -704,21 +744,13 @@ Voodoo3 detected, hard disk not yet functional; see gotcha #7). Update
 `hdc_fn` to your actual writable disk path before use.
 
 ## Next steps if resuming this
-**The disk/IDE, CD-ROM, "16MB of memory", and restart-loop bugs are all
-resolved now** (see TL;DR + gotchas #14–17, #22, #24) — PCem + the debug
-build + a correctly-configured disk, CD-ROM, genuine-Microsoft boot floppy
-(gotcha #22), and `Boot Sequence = C only` (gotcha #24) get Setup all the way
-through the DOS-mode file copy, past the restart into GUI-mode setup, through
-User Information/License Agreement/Product Key, and into "Setting up
-hardware and finalizing settings" with no further blockers hit so far.
-Remaining work, roughly in order:
-- **Finish stepping through Setup** using the `Tab`+`Enter` pattern from
-  gotcha #23 (mouse clicks are unreliable in the GUI wizard). Hardware
-  detection may trigger further automatic reboots as it finalizes settings;
-  with `Boot Sequence = C only` these should now resume cleanly on `C:` with
-  no floppy detour — re-establish mouse capture (gotcha #8) after each
-  reboot before continuing to drive it.
-- Once the desktop boots for the first time: install chipset drivers,
+**Windows 98 SE is fully installed and boots to a working desktop under
+PCem** (see TL;DR + gotchas #14–17, #22, #24, #25) — every blocker hit so far
+(disk/IDE, CD-ROM, "16MB of memory", the floppy-first restart loop, and the
+two chipset-level reboot hangs during hardware detection/first-boot) has a
+known fix or recovery. A checkpoint of this exact state is saved at
+`disk-vhd-503-win98-desktop-checkpoint.vhd`. Remaining work, roughly in order:
+- Install chipset drivers,
   Voodoo3 drivers (from `containers/amigamerlin-win9x-29.zip`), and
   DirectX 7 (`containers/directx7.zip`); copy the LEGO LOCO game files over
   (no standalone installer in the repo — copy `Program Files\LEGO
