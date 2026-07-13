@@ -16,9 +16,26 @@ for the QEMU-side investigation this follows on from.
 - **Real Award BIOS POSTs successfully.** Voodoo3 shows up correctly on the PCI
   bus (`Vendor 121A Device 0005`, "Display Controller"). This proves PCem +
   Voodoo3 is a viable hardware target in principle.
-- **Blocked**: the emulated hard disk consistently fails ("Primary master hard
-  disk fail" at boot; BIOS's own "IDE HDD AUTO DETECTION" utility hangs/loops
-  indefinitely across all 4 IDE slots). Root cause not resolved — see below.
+- **Found and fixed a major false lead**: BIOS-Setup keyboard input looked
+  extremely flaky (dropped keys, "IDE HDD AUTO DETECTION" appearing to hang
+  forever). Root cause: **PCem's SDL window doesn't receive real keyboard input
+  until its *mouse* is captured** (window title literally says "Click to
+  capture mouse"), and x11vnc's synthetic pointer clicks don't trigger SDL's
+  capture-on-click detection — only a real X11 `XTestFakeButtonEvent` does
+  (`xdotool click`, not a VNC-injected click). Fixed with `xdotool windowfocus`
+  + `xdotool click` once at session start; after that, keyboard input via VNC
+  became 100% reliable, and "IDE HDD AUTO DETECTION" completes cleanly in one
+  pass through all four drives — it was never actually looping, just silently
+  dropping the keys sent to dismiss each step. See gotcha #8.
+- **Exhaustively ruled out every config-level cause of the disk failure**:
+  exact-matching file size to configured CHS, classic vs. LBA-style geometry,
+  manually forcing `TYPE=User` in Standard CMOS Setup, CD-ROM presence
+  (the ATAPI CD-ROM slot is always enumerated regardless of `cdrom_path`), and
+  the video card (`v3_3000` vs. plain ISA `vga` — identical failure either
+  way). **"Primary master hard disk fail" is unrelated to anything in
+  `pcem.cfg`** — it reproduces identically no matter what's changed on our side.
+  This points to a genuine bug in PCem v17's IDE/PIIX emulation or its
+  raw-disk/minivhd read path for this specific chipset, not a config mistake.
   Windows 98 never actually booted under PCem in this session.
 
 ## Gotchas found (useful if picking this back up)
@@ -73,16 +90,33 @@ for the QEMU-side investigation this follows on from.
 
 7. **Unresolved**: even with a writable raw disk image (valid MBR, confirmed
    `55 AA` boot signature) on a writable mount, at the correct config key
-   (`hdc_fn`) — the BIOS still reports **"Primary master hard disk fail"**
-   at boot, consistently, across multiple CHS geometries tried (16/63/1024
-   classic-CHS, 255/63/261 LBA-style). The BIOS's own "IDE HDD AUTO DETECTION"
-   SETUP utility does eventually detect *something* (device responds to
-   IDENTIFY, since POST shows `PCemHD` as the drive's self-reported name) but
-   the auto-detect **loops indefinitely** re-probing all 4 IDE slots rather
-   than terminating with a result — never seen to complete. Whether this is a
-   raw-vs-VHD disk-image handling bug in this build's `minivhd` integration, an
-   IDE/BIOS timing issue, or something specific to the `430vx` + `v3_3000`
-   combination wasn't isolated further in this session.
+   (`hdc_fn`), at the *exact* file size implied by the configured CHS
+   (1024×16×63×512 = 528,482,304 bytes, byte-for-byte) — the BIOS still
+   reports **"Primary master hard disk fail"** at boot. Confirmed via direct
+   source reading that the config→geometry threading is correct end-to-end
+   (`pc.c` → `hdc[0].spt/hpc/tracks` → `hdd_load_ext()` → `hdd->spt/hpc/tracks`
+   all match; `ide_identify()`'s reported geometry matches what
+   `ide_get_sector()` uses for CHS→LBA translation). Whether this is a
+   raw-vs-VHD handling bug in this build's `minivhd` integration, or a
+   PIIX-IDE-channel-enable timing issue (`piix.c`'s `card_piix_ide[0x41]`/`[0x43]`
+   bit-0x80 gating of `ide_pri_enable()`) specific to this BIOS ROM's
+   expectations, wasn't isolated further — see "Next steps" below.
+
+8. **BIOS Setup keyboard input requires the SDL window's mouse to be
+   *captured* first** (see TL;DR above). Without it, keys are silently
+   dropped/delayed at unpredictable rates — this looks exactly like "the
+   emulator is buggy/hanging" but is actually an input-delivery problem.
+   Fix, once per fresh container/process:
+   ```sh
+   docker exec <container> bash -c "export DISPLAY=:99; xdotool windowfocus <winid>; xdotool mousemove --window <winid> <cx> <cy>; xdotool click 1"
+   ```
+   Find `<winid>` via `xdotool search --name pcem` or by geometry
+   (`xdotool getwindowgeometry`); the PCem SDL window's title changes to
+   "Press CTRL-END or middle button to release mouse" once captured. After
+   that, drive the emulator's `sendKey()`/`sendPointer()` over VNC as usual —
+   just make sure to wait for the *actual* `connect` event (poll
+   `fb.connected`) rather than a blind `setTimeout`, since `sendKey()` silently
+   no-ops (`return false`) if called before the RFB handshake completes.
 
 ## Scripts
 
@@ -111,12 +145,17 @@ Voodoo3 detected, hard disk not yet functional; see gotcha #7). Update
 ## Next steps if resuming this
 - Try a genuinely VHD-formatted disk image (this build's `minivhd` integration
   may only be reliable for VHD, not raw `.img`, despite `hdd_load_ext()`
-  nominally supporting both).
-- Try a different/simpler machine model (e.g. an ISA-only 486 board) to
-  isolate whether the bug is IDE/PCI-specific or general.
+  nominally supporting both) — the one config-shaped variable *not* yet ruled
+  out.
+- Try a different IDE-capable machine model with its own bundled/sourceable ROM
+  (e.g. a Slot-1 board like `ga686bx`) to isolate whether the bug is specific
+  to the 430VX+PIIX combination or general to PCem's IDE emulation.
 - Consider **86Box** instead (the actively-maintained PCem-lineage project;
-  prebuilt Linux AppImage available, ROM set already downloaded during this
-  session at the same source used for the BIOS-dump cross-reference above) —
-  the original evaluation doc
+  prebuilt Linux AppImage + ROM set already downloaded during this session at
+  the same source used for the BIOS-dump cross-reference above) — the original
+  evaluation doc
   ([`docs/knowledge/emulation/pcem-86box-runtime-evaluation.md`](../../../docs/knowledge/emulation/pcem-86box-runtime-evaluation.md))
-  already recommended 86Box over PCem for exactly this kind of maintenance gap.
+  already recommended 86Box over PCem for exactly this kind of maintenance gap,
+  and it may simply have this IDE bug fixed already given its active
+  development. Needs the user to confirm running the downloaded AppImage
+  (external binary execution).
