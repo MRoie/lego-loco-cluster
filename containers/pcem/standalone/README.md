@@ -5,9 +5,22 @@ software Voodoo3 dynarec) can run LEGO LOCO more smoothly than QEMU+SoftGPU or
 qemu-3dfx. See [../../qemu-softgpu/standalone/README.md](../../qemu-softgpu/standalone/README.md)
 for the QEMU-side investigation this follows on from.
 
-## TL;DR (updated — third session: RESOLVED)
-- **Both the disk and the CD-ROM are now fully working.** Three real bugs
-  were found and fixed this session, none of them in PCem itself:
+## TL;DR (updated — third session)
+- **Disk and CD-ROM are both fully working now** (see below) — Windows 98 SE
+  Setup successfully boots from CD, launches, and gets as far as copying its
+  initial files. **Blocked on a new, unresolved issue**: Setup's 32-bit
+  wizard shows "Windows 98 requires a computer with at least 16MB of memory"
+  during the file-copy step, every time, unconditionally — see gotcha #18.
+  Tried and ruled out as the cause: `mem_size` (65536 and 32768 both fail
+  identically), the `JEMM386`/EMS-UMB memory manager (fails identically with
+  it removed, `HIMEMX`-only), a stale/bad CMOS (fails identically after
+  deleting the NVR file to force fresh auto-detection), `cpu_use_dynarec`
+  (fails identically with the dynamic recompiler off), and the machine model
+  (fails identically on both `430vx`/Award BIOS and `fic_va503p`/VIA MVP3 —
+  two different BIOS vendors). Not yet isolated further; see gotcha #18 and
+  "Next steps" for the state of this.
+- Three real bugs were found and fixed this session before hitting the above,
+  none of them in PCem itself:
   1. **"Primary master hard disk fail" is a `RELEASE_BUILD` compiler-
      optimization bug**, not a config or geometry issue. A **debug-mode**
      rebuild (`./configure --enable-debug`, **`make clean` first** — gotcha #9)
@@ -404,6 +417,62 @@ for the QEMU-side investigation this follows on from.
     for the CD-ROM bug) rather than continuing to vary the guest-side retry
     and hoping timing was the culprit.
 
+18. **Unresolved: Windows 98 SE's 32-bit Setup wizard shows "Windows 98
+    requires a computer with at least 16MB of memory" unconditionally, every
+    single time, once Setup reaches its "Copying files needed for Windows
+    Setup" step** — with the correct disk and CD-ROM both working (per
+    gotchas #14–17) and the full 65536 KB (64 MB) of RAM configured. Note this
+    is *not* the same as the identical real-world error from actual low RAM;
+    real machines/emulators hitting this error nearly always trace to one of
+    a few well-known causes, all of which were tried here and **none fixed
+    it**:
+    - **`mem_size` value itself** — tried 65536 (64 MB) and 32768 (32 MB);
+      identical error both times. Eliminates a naive INT15h/AH=88h 16-bit
+      register overflow at exactly 64 MB as the cause (that theory doesn't
+      hold anyway: extended memory reported by that call is `mem_size -
+      1024`, i.e. 64512 KB at our setting, comfortably under the 65535 KB
+      register ceiling).
+    - **A third-party memory manager stepping on Setup's own memory
+      detection** — the classic real-world cause of this exact error, and
+      the boot floppy's own `FDCONFIG.SYS` even carries the comment "Dont
+      load freedos to highmemory it will break windows installer!". Added a
+      custom boot option loading only `HIMEMX.EXE` (bare XMS) with
+      `JEMM386.EXE` (the EMS/UMB manager) removed entirely — confirmed via
+      the boot banner changing from `Jemm386 loaded / UMBs unavailable!` to
+      `KBC A20 method used` — and the error still appeared, identically.
+    - **Stale/bad CMOS from the earlier model-switch checksum reset** —
+      deleted `~/.pcem/nvr/pcem.430vx.nvr` to force the BIOS to re-detect and
+      re-save memory size fresh (confirmed via a fresh "CMOS checksum error –
+      Defaults loaded" + correct "Memory Test: 65536K OK" on the next boot);
+      the error still appeared afterward, identically.
+    - **A fast-CPU timing-loop miscalibration** (the class of bug this exact
+      boot floppy is *named for* — "Patch for Windows 95/98/Me to fix CPU
+      issues", `PATCH9X.EXE` on board) — tried with `cpu_use_dynarec = 0`
+      (forcing the slower pure interpreter instead of the JIT-like dynamic
+      recompiler, which changes the guest's effective execution speed
+      substantially); identical error.
+    - **Chipset/BIOS-specific bug** — tried both `430vx` (Intel i430VX,
+      Award BIOS) and `fic_va503p` (VIA MVP3, different BIOS) with otherwise
+      identical config; identical error on both.
+    - **Tried but inconclusive**: freshly rebuilt the `RELEASE_BUILD` binary
+      (the original had been overwritten by an in-place `make` during the
+      debug rebuild — rebuilding it means `make clean` then `./configure
+      --enable-release-build` again) to check whether this is another
+      debug-build-only compiler-optimization bug in the same family as
+      gotcha #9's disk-detection bug. Inconclusive: the release build hit its
+      *own*, already-documented "Primary master hard disk fail" bug first
+      (confirming that bug is still present and unrelated to any of this
+      session's fixes), and separately reported a bizarre CPU/memory
+      mismatch in its POST banner (`PENTIUM-S CPU at 75MHz` / `8192K`
+      instead of the configured Pentium MMX 200 MHz / 64 MB) that wasn't
+      investigated further given the higher-priority disk-fail blocker on
+      that build. **A clean release-vs-debug comparison for this specific
+      bug has not actually been done yet** — that's the most promising
+      untried lead if picking this back up (would need the release build's
+      own disk issue worked around first, e.g. by testing purely with a
+      RAM-disk or by getting further in gotcha #7/#9's investigation for
+      that build specifically).
+
 ## Scripts
 
 ### `build-pcem.sh`
@@ -429,29 +498,47 @@ Voodoo3 detected, hard disk not yet functional; see gotcha #7). Update
 `hdc_fn` to your actual writable disk path before use.
 
 ## Next steps if resuming this
-**The disk/IDE bug is resolved (see TL;DR + gotchas #14–16) — PCem + `430vx` +
-the debug build + a correctly-`-H`-formatted disk works.** What's left is the
-originally-planned install/benchmark path:
-- Boot the win98se.iso CD-ROM (already attached at `cdrom_path`) and run
-  `SETUP.EXE` onto the now-working, formatted `C:` drive. Given gotcha #16,
-  drive this from `AUTOEXEC.BAT`/scripted input where possible rather than
-  live keystrokes, or expect to fight the same input-lag issues Setup's UI
-  will present — worth budgeting time for.
-- Install chipset drivers, Voodoo3 drivers (from
+**The disk/IDE and CD-ROM bugs are resolved (see TL;DR + gotchas #14–17) —
+PCem + either machine model + the debug build + a correctly-configured disk
+and CD-ROM all work.** Currently blocked on gotcha #18 (Setup's false "16MB
+of memory" error) before Windows 98 can actually finish installing:
+- **Most promising untried lead**: a clean release-vs-debug-build comparison
+  for gotcha #18 specifically. The release build's own pre-existing disk-fail
+  bug (gotcha #7, still present, confirmed again this session) blocked a
+  clean test. If the release build's disk-fail bug can be worked around for
+  just long enough to reach the Setup memory check — e.g. temporarily via a
+  disk config known to dodge it, or by getting further in isolating gotcha
+  #7 itself for a fresh look — and the memory error does *not* reproduce
+  there, that would point conclusively at another debug-build-only
+  compiler-optimization bug (same family as gotcha #9), likely somewhere in
+  extended-memory/E820-style reporting rather than IDE this time.
+- Try `patch9x`'s `-force-cpupatch`/`-force-cpupatch-ndis` options against
+  the Windows 98 install media itself (the tool's help text implies it can
+  target "a directory with windows instalation", not just an already-installed
+  system) — untried this session, and it's the exact tool this floppy bundles
+  for "fix CPU issues," even though gotcha #18's dynarec-off test argues
+  against a pure CPU-speed cause.
+- Consider whether the *win98se.iso* itself (not the emulator or disk) is
+  implicated — e.g. a slipstreamed/OEM build with an unusual `MSBATCH.INF` or
+  a modified `w98setup.bin`, since this error is normally hardware-triggered
+  and we've now ruled out every hardware-shaped explanation tried so far.
+  Not yet checked: whether a *different* Windows 98 (SE or first edition) ISO
+  hits the same wall.
+- Once Setup completes: install chipset drivers, Voodoo3 drivers (from
   `containers/amigamerlin-win9x-29.zip`), and DirectX 7
-  (`containers/directx7.zip`) once Windows 98 is up.
-- Copy the LEGO LOCO game files onto the new install (no standalone installer
-  in the repo — copy `Program Files\LEGO Media\Constructive\LEGO LOCO\` from
-  the existing golden qcow2 image).
-- Benchmark LOCO's actual performance under this stack — the original point
-  of this whole investigation — and compare against the qemu-3dfx numbers in
-  the sibling README.
-- Snapshot the finished disk into the existing bake pipeline
-  (`scripts/bake-game-snapshots.ps1` pattern) and publish under a new tag.
+  (`containers/directx7.zip`); copy the LEGO LOCO game files over (no
+  standalone installer in the repo — copy `Program Files\LEGO
+  Media\Constructive\LEGO LOCO\` from the existing golden qcow2 image);
+  benchmark performance (the original point of this investigation) against
+  the qemu-3dfx numbers in the sibling README; snapshot the finished disk
+  into the existing bake pipeline (`scripts/bake-game-snapshots.ps1` pattern)
+  and publish under a new tag.
 
-**86Box** remains a reasonable fallback if the Windows 98 Setup phase turns up
-a *genuine* new PCem bug (as opposed to another disk-prep or input-delivery
-artifact — check gotchas #14–16 first) — prebuilt Linux AppImage + ROM set
+**86Box** remains a reasonable fallback if gotcha #18 turns out to be a
+genuine, unfixable-from-config PCem bug — prebuilt Linux AppImage + ROM set
 already downloaded during this session, see
 [`docs/knowledge/emulation/pcem-86box-runtime-evaluation.md`](../../../docs/knowledge/emulation/pcem-86box-runtime-evaluation.md).
-Not currently needed given PCem now works.
+Given how much of this session's *other* apparent "PCem bugs" turned out to
+be config/tooling issues instead (gotchas #14, #17), it's worth exhausting
+the release-vs-debug comparison and the ISO-variant check above before
+concluding this one is really PCem's fault.
