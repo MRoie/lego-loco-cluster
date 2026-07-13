@@ -149,6 +149,14 @@ for the QEMU-side investigation this follows on from.
   relaunch, which resumed cleanly on `C:` thanks to gotcha #24's boot-order
   fix rather than losing progress. See gotcha #25. A checkpoint of this
   clean-desktop state was saved to `disk-vhd-503-win98-desktop-checkpoint.vhd`.
+- **Voodoo3 (3dfx `am29win9x`) and DirectX 7.0a drivers are both installed.**
+  Delivered via a custom Joliet ISO (too big for a floppy), driven entirely
+  by keyboard (mouse clicks still unreliable — gotcha #23) with a new gotcha
+  found along the way: typing a literal `:` is unreliable in this
+  environment and should be avoided entirely in favor of Explorer's
+  icon/arrow-key navigation. See gotcha #26. This state is checkpointed both
+  locally (`disk-vhd-503-post-drivers-checkpoint.vhd`) and pushed to
+  `ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-post-drivers`.
 
 ### First-session TL;DR (kept for history)
 - Built **PCem v17** (official `sarah-walker-pcem/pcem` Linux source release —
@@ -719,6 +727,56 @@ for the QEMU-side investigation this follows on from.
     step goes wrong later and this state needs restoring rather than redoing
     the ~hour of Setup navigation from scratch.
 
+26. **Voodoo3 (3dfx `am29win9x`) and DirectX 7.0a drivers installed successfully
+    from a custom CD image, and the resulting install was checkpointed to
+    GHCR.** Since both driver packages (`containers/amigamerlin-win9x-29.zip`,
+    `containers/directx7.zip`) are several MB — too big for a floppy — they
+    were extracted on the host and repacked into a fresh ISO with
+    `genisoimage -J -joliet-long -r -V DRIVERS -o drivers.iso
+    drivers-iso-root/` (Joliet extensions so Win98 sees long filenames), then
+    `cdrom_path` in `pcem.cfg` was swapped from `win98se.iso` to this new
+    `drivers.iso` and PCem relaunched (`kill -9` + relaunch — a plain config
+    edit doesn't take effect on a running process, and gotcha #4's auto-save
+    on graceful exit is avoided entirely by never asking for one). Both
+    installers (`voodoo3\am29win9x\driver9x\Setup.exe`, then
+    `directx7\7.0_directx7.exe`) were driven via `Tab`/arrow-key/`Enter`
+    navigation exactly per gotcha #23 — mouse clicks remain unreliable, and
+    Explorer icon navigation (arrow keys + `Enter` to open, `Backspace` to go
+    up one folder) works fine as a keyboard-only substitute for double-click.
+    **New input gotcha found here**: typing a literal `:` (colon) via this
+    environment's synthetic-keysym path is unreliable — it silently becomes
+    `;` or is dropped outright, corrupting any typed path like `D:\foo`.
+    Sending it as an explicit `Shift`+`semicolon` combo didn't reliably fix it
+    either. **Workaround: never type a drive letter + colon at all** — use
+    Explorer's own icon-selection navigation (arrow keys between icons,
+    `Enter` to descend, `Backspace` to go up) to reach a target file instead
+    of typing its path into the Address bar or a Run dialog.
+    DirectX 7 required one more restart to finish (`Building driver
+    information database` runs on the next boot) — same `kill -9` + relaunch
+    recovery applied when that reboot's BIOS POST screen stayed black for
+    ~50s with an ambiguous (partially-repeating) `cpu_state.pc` sample, and it
+    came back up cleanly with no data loss. **A second checkpoint was saved
+    after both driver installs**, this time pushed to the registry rather
+    than just sitting alongside the working disk: wrapped in a `FROM scratch`
+    Dockerfile and pushed as
+    `ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-post-drivers`
+    — the same tagging scheme the qemu-softgpu bake pipeline
+    (`scripts/bake-game-snapshots.ps1`) uses for its own snapshots, just
+    without that script's QEMU/kubectl-specific extraction steps since the
+    raw `.vhd` was already sitting on the host from PCem's own disk config.
+    (Attempted to also confirm the Voodoo3 driver via Device Manager, but
+    both the `Ctrl+Esc` Start-menu shortcut and `Alt+Enter`-on-selected-icon
+    Properties shortcut failed to register repeatedly in this environment;
+    deferred to functional verification once LEGO LOCO itself runs, which is
+    a more meaningful test of 3D acceleration than a Device Manager label
+    anyway. Host-side inspection of `SYSTEM.INI` via `mtools` while PCem has
+    the disk open was also tried as a shortcut and abandoned — `mtype`
+    reported "Error reading FAT" even moments after a confirmed host-file
+    flush, most likely a cache-coherency gap between PCem's internal
+    write-back cache and the host file rather than actual corruption; treat
+    any host-side read of a disk PCem currently has open as unreliable, not
+    just host-side writes as gotcha #16 already warned.)
+
 ## Scripts
 
 ### `build-pcem.sh`
@@ -748,11 +806,13 @@ Voodoo3 detected, hard disk not yet functional; see gotcha #7). Update
 PCem** (see TL;DR + gotchas #14–17, #22, #24, #25) — every blocker hit so far
 (disk/IDE, CD-ROM, "16MB of memory", the floppy-first restart loop, and the
 two chipset-level reboot hangs during hardware detection/first-boot) has a
-known fix or recovery. A checkpoint of this exact state is saved at
-`disk-vhd-503-win98-desktop-checkpoint.vhd`. Remaining work, roughly in order:
-- Install chipset drivers,
-  Voodoo3 drivers (from `containers/amigamerlin-win9x-29.zip`), and
-  DirectX 7 (`containers/directx7.zip`); copy the LEGO LOCO game files over
+known fix or recovery. Voodoo3 and DirectX 7 drivers are also installed now
+(gotcha #26). Checkpoints are saved at both
+`disk-vhd-503-win98-desktop-checkpoint.vhd` (pre-drivers) and
+`disk-vhd-503-post-drivers-checkpoint.vhd` (post-drivers, also pushed to
+`ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-post-drivers`).
+Remaining work, roughly in order:
+- Copy the LEGO LOCO game files over
   (no standalone installer in the repo — copy `Program Files\LEGO
   Media\Constructive\LEGO LOCO\` from the existing golden qcow2 image).
 - Benchmark performance (the original point of this investigation) against
