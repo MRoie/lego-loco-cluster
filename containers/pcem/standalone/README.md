@@ -5,54 +5,66 @@ software Voodoo3 dynarec) can run LEGO LOCO more smoothly than QEMU+SoftGPU or
 qemu-3dfx. See [../../qemu-softgpu/standalone/README.md](../../qemu-softgpu/standalone/README.md)
 for the QEMU-side investigation this follows on from.
 
-## TL;DR (updated — second session)
-- **"Primary master hard disk fail" (gotcha #7 below) is a `RELEASE_BUILD`
-  compiler-optimization bug, not a config or geometry issue.** Rebuilding PCem
-  in **debug mode** (`./configure --enable-debug`, **`make clean` first** — see
-  gotcha #9) makes the exact same config/disk detect correctly every time. This
-  is the single most important finding: it unblocks disk use entirely at the
-  BIOS-detection level, on **any** machine model.
-- With detection fixed, moved to the `fic_va503p` (VIA MVP3 / Socket 7) model
-  per a deliberate model-swap test, sourced its BIOS the same way (86Box ROM
-  set), got a fresh disk partitioned via FDISK and formatted — and hit a
-  **second, distinct bug**: any *guest-side, multi-sector* disk read (`dir c:`,
-  `format c:`, even just switching the current drive to `c:`) hangs the
-  emulator completely (100%+ CPU busy-spin, unresponsive to all keys including
-  Escape). Single-sector I/O (BIOS's own MBR read, FDISK's MBR write) always
-  works fine — it's specifically multi-sector transfers that hang.
-- Ruled out the classic "528 MB / 1024-cylinder CHS barrier" as the cause: built
-  a second disk at 1023 cylinders (503 MB, just under the barrier) — identical
-  hang. Ruled out `fic_va503p`/VIA-MVP3-specific IDE emulation as the cause too:
-  switched to `430vx` (Intel i430VX/PIIX) with the **same debug build** and the
-  **same disk** — BIOS detection works (`Detecting IDE Primary Master ...
-  PCemHD`), but the identical hang reproduces the moment DOS touches partition
-  *contents*. Two unrelated chipsets, same symptom → **this points to a bug in
-  PCem's shared/generic IDE PIO-transfer code, not any one chipset's emulation**
-  (see gotcha #10).
-- **Not a v17 regression either**: built PCem **v16** (2020 release, commit
-  `d0c7ea56`) from source with the identical debug-build recipe and tested it
-  against the exact same `430vx` config and disk — same hang, same symptom
-  (100%+ CPU busy-spin, unresponsive to Escape, the instant DOS reads partition
-  contents). This bug has been present in PCem for **at least five years**
-  across two chipset emulations and two major releases; it is not something
-  introduced recently. Building older versions requires `autoreconf -fi` (the
-  checked-in `aclocal.m4`/`configure` expect an exact old `automake` point
-  version not available on current Debian) and `-fcommon` (old PCem relies on
-  C89 tentative-definition merging for its many `extern`-less globals in
-  `ibm.h`, which GCC 10+ no longer does by default) — see gotcha #13. Given the
-  bug predates v16, bisecting further backward has sharply diminishing odds of
-  landing near the actual fix/regression point; reading `ide.c` directly, or
-  moving to 86Box, are both more promising next steps than continuing to
-  bisect.
-- **Workaround found for partitioning/formatting without ever touching the
-  buggy guest-side path**: write the MBR partition table entry directly (16
-  bytes at offset 446, byte layout is completely standard/self-describing —
-  see gotcha #11) and format the partition with **`mtools`** (`mformat`, via a
-  `.mtoolsrc` `offset=`/`cylinders=`/`heads=`/`sectors=` drive definition)
-  directly against the disk image file from the host/build container — no PCem
-  process involved at all for this step. This produces a byte-valid,
-  guest-readable FAT16 filesystem; the only thing that still doesn't work is
-  the guest *itself* reading it back once booted.
+## TL;DR (updated — third session: RESOLVED)
+- **The disk is now fully working. Both bugs found this session were real, and
+  both are fixed:**
+  1. **"Primary master hard disk fail" is a `RELEASE_BUILD` compiler-
+     optimization bug**, not a config or geometry issue. A **debug-mode**
+     rebuild (`./configure --enable-debug`, **`make clean` first** — gotcha #9)
+     detects the exact same disk correctly every time, on any machine model.
+  2. **The "any multi-sector disk read hangs the emulator" bug that looked
+     like a PCem IDE-emulation bug was actually a bug in our own host-side
+     disk-prep workaround**, not in PCem at all (see below). Once fixed,
+     `dir c:` completes instantly and correctly — file listing, free-space
+     calculation (which requires walking the whole FAT table), all of it —
+     with the debug build, on a plain `430vx` machine, no further changes to
+     PCem needed.
+- **Root cause of bug 2, found via live `gdb -p <pid>` attach on the hung
+  process** (`thread apply all bt` to find the actual x86 emulation thread —
+  it's the one named exactly `Main Thread`, buried among ~20 wx/GTK/llvmpipe
+  threads all confusingly also named `pcem-debug`) and `print
+  ide_drives[0].<field>` to inspect live IDE controller state: **the FAT16
+  boot sector our host-side `mtools mformat` workaround (see gotcha #11)
+  created had `hidden sectors = 0` in its BPB, when it must equal the
+  partition's starting LBA (63 for this layout) for a filesystem living
+  inside a partition.** Real `FORMAT.COM` always sets this correctly from the
+  partition table; `mformat` only does if told to. FreeDOS's kernel uses this
+  field for its own internal sector arithmetic once mounting a partitioned
+  (not whole-disk) FAT volume, and with it wrong, some downstream calculation
+  (most likely the free-space FAT scan, which is the first thing after the
+  simple root-directory read that needs more than trivial sector math)
+  never terminates. **Fix: `mformat -H 63 ...` instead of plain `mformat
+  ...`** — one flag, already listed in mtools' own `--help` output the whole
+  time.
+- This also explains the "confirmed on both `fic_va503p` and `430vx`" and
+  "confirmed on both PCem v16 and v17" findings from earlier in this session
+  (previously read as "this is a deep, version-spanning PCem IDE bug") —
+  **all of those tests were run against the same buggy disk image**. They
+  correctly proved the bug wasn't chipset- or version-specific, but the actual
+  conclusion is "the disk was broken the same way regardless of which PCem
+  build reads it," not "PCem's IDE emulation is broken." Once the disk was
+  fixed, the *identical* `430vx` config that hung before now completes
+  `dir c:` cleanly. PCem itself was never the problem.
+- **A major, unrelated time-sink throughout this session**: keyboard input
+  delivered via `xdotool`/VNC to the guest is severely and unpredictably
+  delayed under this container/Xvfb setup — keystrokes (especially a trailing
+  `:`) can arrive seconds to tens-of-seconds late, out of order, or interleaved
+  with earlier "lost" keystrokes resurfacing much later, making live
+  interactive typing an unreliable way to test anything disk-related (a
+  dropped `:` silently redirects a command from `C:` to `A:`, which of course
+  "doesn't hang" — it just never touched the code path being tested, and looks
+  identical to a real fix from the screen alone). **The methodology that
+  actually settled this**: write the test command into `AUTOEXEC.BAT` on the
+  boot floppy via `mtools` and just watch the screen — zero live keystrokes
+  needed, so the flaky input path can't corrupt the result. Do this for any
+  future disk-behavior test in this environment rather than trusting live
+  typing.
+- **Workaround/technique retained for future disk prep**: writing the MBR
+  partition table entry directly (16 bytes at offset 446 — see gotcha #11)
+  and formatting with `mtools mformat -H <hidden_sectors> ...` against the
+  disk image file from the host is a fully valid, fast way to prep a PCem
+  disk without ever going through FDISK/FORMAT.COM interactively — as long as
+  `-H` is set correctly.
 - Confirmed PCem's disk **write-back cache is only flushed to the host file on
   a clean process exit** — `pkill` (even plain `SIGTERM`, even a `SIGINT`) is
   silently ignored by this build and leaves all FDISK/format writes trapped in
@@ -153,19 +165,17 @@ for the QEMU-side investigation this follows on from.
    with **no error logged** (release builds compile out `pclog` entirely via
    `#ifndef RELEASE_BUILD`). Copy the disk image to a writable path first.
 
-7. **Unresolved**: even with a writable raw disk image (valid MBR, confirmed
-   `55 AA` boot signature) on a writable mount, at the correct config key
-   (`hdc_fn`), at the *exact* file size implied by the configured CHS
-   (1024×16×63×512 = 528,482,304 bytes, byte-for-byte) — the BIOS still
-   reports **"Primary master hard disk fail"** at boot. Confirmed via direct
+7. **Resolved (see gotcha #9)**: even with a writable raw disk image (valid
+   MBR, confirmed `55 AA` boot signature) on a writable mount, at the correct
+   config key (`hdc_fn`), at the *exact* file size implied by the configured
+   CHS (1024×16×63×512 = 528,482,304 bytes, byte-for-byte) — the BIOS still
+   reported **"Primary master hard disk fail"** at boot. Confirmed via direct
    source reading that the config→geometry threading is correct end-to-end
    (`pc.c` → `hdc[0].spt/hpc/tracks` → `hdd_load_ext()` → `hdd->spt/hpc/tracks`
    all match; `ide_identify()`'s reported geometry matches what
-   `ide_get_sector()` uses for CHS→LBA translation). Whether this is a
-   raw-vs-VHD handling bug in this build's `minivhd` integration, or a
-   PIIX-IDE-channel-enable timing issue (`piix.c`'s `card_piix_ide[0x41]`/`[0x43]`
-   bit-0x80 gating of `ide_pri_enable()`) specific to this BIOS ROM's
-   expectations, wasn't isolated further — see "Next steps" below.
+   `ide_get_sector()` uses for CHS→LBA translation) — the bug was a
+   `RELEASE_BUILD`-only compiler-optimization issue, not a raw-vs-VHD or
+   PIIX-timing bug as originally suspected here.
 
 8. **BIOS Setup keyboard input requires the SDL window's mouse to be
    *captured* first** (see TL;DR above). Without it, keys are silently
@@ -200,31 +210,36 @@ for the QEMU-side investigation this follows on from.
    *specific* line, but forcing a full debug rebuild to test it is what
    incidentally fixed the bug.
 
-10. **A second, distinct bug survives the debug-build fix**: once the BIOS
-    correctly detects the disk, any *guest-side* multi-sector read of
-    partition contents — `dir c:`, `format c:`, even just typing `c:` to
-    switch the current drive — hangs the emulator solid (sustained 100%+ CPU,
-    unresponsive to every key including Escape; confirmed via cursor-blink
-    diffing between screenshots taken seconds apart — zero byte difference).
-    Single-sector operations (BIOS's own MBR probe at boot, FDISK's MBR
-    write) always succeed. Ruled out as the cause:
+10. **Resolved — was never a PCem bug**: once the BIOS correctly detects the
+    disk, any *guest-side* multi-sector read of partition contents —
+    `dir c:`, `format c:`, even just typing `c:` to switch the current drive —
+    appeared to hang the emulator solid (sustained 100%+ CPU, unresponsive to
+    every key including Escape; the cursor-blink diff test between
+    screenshots taken seconds apart showed zero byte difference, which read
+    as a genuine freeze). Single-sector operations (BIOS's own MBR probe at
+    boot, FDISK's MBR write) always succeeded, which is what made it look
+    IDE/multi-sector-transfer-specific. Extensive isolation work seemed to
+    rule out every PCem-side explanation:
     - **The classic 528 MB/1024-cylinder CHS barrier** — built a second disk
       at 1023 cylinders (503 MB, just under the barrier) with a from-scratch
       MBR; identical hang.
     - **The `fic_va503p` (VIA MVP3) chipset specifically** — switched to
       `430vx` (Intel i430VX/PIIX) with the *same* debug binary and the *same*
-      disk image; BIOS detection succeeds (`Detecting IDE Primary Master ...
-      PCemHD`) but the hang reproduces identically the moment DOS reads
-      partition contents.
+      disk image; BIOS detection succeeded but the hang reproduced identically.
+    - **A v17 regression** — built PCem v16 (2020, commit `d0c7ea56`, see
+      gotcha #13) and tested the same disk; identical hang.
 
-    Two chipsets from different PCem machine-model source files, same
-    symptom → the bug most likely lives in **shared IDE PIO-transfer code**
-    (multi-sector `READ SECTORS`/interrupt-completion handling), not
-    chipset-specific southbridge emulation. Not yet isolated to a specific
-    function/line. **Untested next step**: try an older tagged PCem release
-    (pre-v17) with the same debug-build recipe, to check whether this is a
-    regression or has always been present — would help decide whether
-    bisecting PCem's own history is worthwhile versus moving to 86Box.
+    **All three of those tests were unknowingly run against the same broken
+    disk image** (see gotcha #14) — they correctly proved the symptom wasn't
+    chipset- or version-specific, but the actual reason is that the *disk
+    itself* was subtly invalid in a way that broke identically regardless of
+    which PCem build read it. Once the disk was fixed, this exact `430vx`
+    config and debug binary completed `dir c:` — including the free-space
+    scan — instantly and correctly. Lesson for next time this class of "looks
+    like a hang, survives every isolation test" symptom shows up: **suspect
+    the test fixture (the disk image) before suspecting the emulator**,
+    especially when the fixture was built by a workaround rather than the
+    guest's own standard tools.
 
 11. **Partitioning/formatting can be done entirely from the host, bypassing
     the guest (and gotcha #10's hang) completely.** The MBR partition-table
@@ -293,6 +308,67 @@ for the QEMU-side investigation this follows on from.
     because it's baked into the compiler invocation itself, not appended
     separately.
 
+14. **The actual root cause of gotcha #10: `mtools mformat` doesn't set the
+    boot sector's `hidden sectors` BPB field unless told to, and a FAT
+    filesystem living inside a partition needs it set correctly.** When
+    partitioning/formatting a disk image directly from the host (bypassing
+    the guest's own FDISK/FORMAT — see gotcha #11), `mformat -v LABEL c:`
+    against a `.mtoolsrc` drive with `offset=<partition start>` produces a
+    filesystem that `minfo` and `mdir` read back perfectly fine — but
+    `hidden sectors: 0` in that boot sector's BPB is wrong; it must equal the
+    partition's starting LBA (63 for a `heads=16 sectors=63` disk with the
+    first partition at the conventional head-1/sector-1/cylinder-0 start).
+    FreeDOS's kernel reads this field for its own internal sector arithmetic
+    once mounting a partitioned volume, and with it wrong, something
+    downstream — empirically, whatever runs right after the trivial
+    root-directory listing, most likely the free-space FAT scan — never
+    terminates. **This is what actually caused gotcha #10's "hang."** Fix is
+    a single flag: `mformat -H <hidden_sectors> -v LABEL c:`. Always pass
+    `-H` when formatting a partitioned (not whole-disk) image this way;
+    `minfo`'s `hidden sectors:` line will silently read `0` otherwise with no
+    warning that anything is wrong until a real DOS kernel trips over it.
+
+15. **Live `gdb -p <pid>` attach is the fastest way to tell "genuine emulator
+    hang" from "input never arrived" or "guest is legitimately still working"
+    in this setup — screenshots alone can't distinguish them.** `gdb -p <pid>
+    -batch -ex 'thread apply all bt'` dumps every thread; this build has
+    ~20+ (wx GUI thread, GTK/llvmpipe software-GL rendering workers, an SDL
+    timer thread, several `pcem-debug`-named helper threads) and the *actual
+    x86 CPU emulation loop* is easy to miss — it's the one named exactly
+    `Main Thread` (from `SDL_CreateThread(mainthread, "Main Thread", ...)` in
+    `wx-sdl2.c`), not any of the several threads whose name happens to be the
+    process name. If that thread's PC keeps changing between repeated
+    attach/detach cycles (expect to land in dynarec-JIT-generated code with
+    no symbols — a "corrupt stack"/`??` backtrace is normal, not a sign of
+    corruption), the guest CPU is actually executing, not stuck. Combine with
+    `set max-value-size unlimited` (the `IDE` struct's `sector_buffer[256*512]`
+    otherwise blows gdb's default print-size limit) and `print
+    ide_drives[0].<field>` (`.command`, `.atastat`, `.secount`, `.sector`,
+    `.head`, `.cylinder`) to read the live IDE controller state directly —
+    an unchanging `atastat` showing `READY_STAT|DSC_STAT` (0x50) with
+    `secount == 0` means the last disk transfer completed cleanly; the guest
+    is off doing something else (or legitimately hung in its *own* code, as
+    turned out to be the case here) rather than stuck waiting on disk I/O.
+
+16. **Don't trust live interactive keystroke testing for anything
+    disk-behavior-related in this container/Xvfb/VNC setup — script it into
+    `AUTOEXEC.BAT` instead.** Keyboard input delivered via `xdotool type`/
+    `xdotool key` (and the VNC-`keyEvent` fallback) is severely and
+    unpredictably delayed here: a trailing `:` on a typed command routinely
+    arrives seconds late or gets dropped outright (silently redirecting
+    `dir c:` to `dir c` against the floppy — which of course returns
+    instantly with no hang, since it never touched the hard disk at all,
+    looking exactly like a successful fix when it proves nothing), and
+    "lost" keystrokes from several attempts back can resurface much later,
+    interleaved with new ones, corrupting whatever's currently being typed.
+    This cost enormous time in this session chasing what looked like a
+    still-reproducing hang after the real fix (gotcha #14) had already
+    landed. **The methodology that actually settled it**: `mcopy` a test
+    command straight into `AUTOEXEC.BAT` on the boot floppy (`mcopy -o
+    test.bat -i patcher.ima ::AUTOEXEC.BAT`) and just watch the VNC
+    screenshot — zero live keystrokes in the loop, so the flaky input path
+    can't corrupt the result either way.
+
 ## Scripts
 
 ### `build-pcem.sh`
@@ -318,28 +394,29 @@ Voodoo3 detected, hard disk not yet functional; see gotcha #7). Update
 `hdc_fn` to your actual writable disk path before use.
 
 ## Next steps if resuming this
-- **v16 (2020) confirmed to share the identical hang** — built from source
-  (commit `d0c7ea56`, see gotcha #13 for the build fixes needed) with the same
-  debug recipe, same `430vx` config, same mtools-formatted disk: same 100%+
-  CPU busy-spin the instant DOS reads partition contents, same
-  unresponsive-to-Escape signature. The bug is at least five years old and
-  survived a major version bump, across two chipsets — bisecting further back
-  than v16 has increasingly poor odds of landing near the actual fix point and
-  probably isn't worth the (nontrivial, per gotcha #13) build-environment
-  archaeology for each additional older version.
-- **Read PCem's shared IDE controller source directly** (`ide.c`, focus on
-  multi-sector `READ SECTORS`/`WRITE SECTORS` command handling and
-  IRQ-completion signalling) — both tested chipsets (`fic_va503p`, `430vx`)
-  and both tested versions (v16, v17) route through the same generic IDE code,
-  so the bug should be visible there rather than in per-chipset southbridge
-  files or anything version-specific. This is now the most promising
-  code-level lead.
-- Consider **86Box** instead (the actively-maintained PCem-lineage project;
-  prebuilt Linux AppImage + ROM set already downloaded during this session at
-  the same source used for the BIOS-dump cross-reference above) — the original
-  evaluation doc
-  ([`docs/knowledge/emulation/pcem-86box-runtime-evaluation.md`](../../../docs/knowledge/emulation/pcem-86box-runtime-evaluation.md))
-  already recommended 86Box over PCem for exactly this kind of maintenance gap,
-  and it may simply have this IDE bug fixed already given its active
-  development. Needs the user to confirm running the downloaded AppImage
-  (external binary execution).
+**The disk/IDE bug is resolved (see TL;DR + gotchas #14–16) — PCem + `430vx` +
+the debug build + a correctly-`-H`-formatted disk works.** What's left is the
+originally-planned install/benchmark path:
+- Boot the win98se.iso CD-ROM (already attached at `cdrom_path`) and run
+  `SETUP.EXE` onto the now-working, formatted `C:` drive. Given gotcha #16,
+  drive this from `AUTOEXEC.BAT`/scripted input where possible rather than
+  live keystrokes, or expect to fight the same input-lag issues Setup's UI
+  will present — worth budgeting time for.
+- Install chipset drivers, Voodoo3 drivers (from
+  `containers/amigamerlin-win9x-29.zip`), and DirectX 7
+  (`containers/directx7.zip`) once Windows 98 is up.
+- Copy the LEGO LOCO game files onto the new install (no standalone installer
+  in the repo — copy `Program Files\LEGO Media\Constructive\LEGO LOCO\` from
+  the existing golden qcow2 image).
+- Benchmark LOCO's actual performance under this stack — the original point
+  of this whole investigation — and compare against the qemu-3dfx numbers in
+  the sibling README.
+- Snapshot the finished disk into the existing bake pipeline
+  (`scripts/bake-game-snapshots.ps1` pattern) and publish under a new tag.
+
+**86Box** remains a reasonable fallback if the Windows 98 Setup phase turns up
+a *genuine* new PCem bug (as opposed to another disk-prep or input-delivery
+artifact — check gotchas #14–16 first) — prebuilt Linux AppImage + ROM set
+already downloaded during this session, see
+[`docs/knowledge/emulation/pcem-86box-runtime-evaluation.md`](../../../docs/knowledge/emulation/pcem-86box-runtime-evaluation.md).
+Not currently needed given PCem now works.
