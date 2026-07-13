@@ -5,20 +5,45 @@ software Voodoo3 dynarec) can run LEGO LOCO more smoothly than QEMU+SoftGPU or
 qemu-3dfx. See [../../qemu-softgpu/standalone/README.md](../../qemu-softgpu/standalone/README.md)
 for the QEMU-side investigation this follows on from.
 
-## TL;DR (updated — third session)
-- **Disk and CD-ROM are both fully working now** (see below) — Windows 98 SE
-  Setup successfully boots from CD, launches, and gets as far as copying its
-  initial files. **Blocked on a new, unresolved issue**: Setup's 32-bit
-  wizard shows "Windows 98 requires a computer with at least 16MB of memory"
-  during the file-copy step, every time, unconditionally — see gotcha #18.
-  Tried and ruled out as the cause: `mem_size` (65536 and 32768 both fail
-  identically), the `JEMM386`/EMS-UMB memory manager (fails identically with
-  it removed, `HIMEMX`-only), a stale/bad CMOS (fails identically after
-  deleting the NVR file to force fresh auto-detection), `cpu_use_dynarec`
-  (fails identically with the dynamic recompiler off), and the machine model
-  (fails identically on both `430vx`/Award BIOS and `fic_va503p`/VIA MVP3 —
-  two different BIOS vendors). Not yet isolated further; see gotcha #18 and
-  "Next steps" for the state of this.
+## TL;DR (updated — fourth session — gotcha #18 RESOLVED)
+- **The false "16MB of memory" error (gotcha #18) is fixed.** Root cause:
+  it was never about actual memory at all — it was **FreeDOS's `HIMEMX.EXE`
+  (or the FreeDOS real-mode environment generally) causing Windows 98
+  Setup's own real-mode memory/XMS check to fail**, on a boot floppy that
+  was otherwise fully functional (CD-ROM worked, `dir d:` worked, HimemX
+  reported itself loaded correctly in the boot banner). Swapping the entire
+  DOS boot environment for **genuine Microsoft-authored boot files —
+  real `IO.SYS`, real `HIMEM.SYS`, real `COMMAND.COM`, `OAKCDROM.SYS` +
+  `MSCDEX.EXE` — extracted directly from the Windows 98 SE install CD's own
+  cabinet files** (no internet download, no third-party boot disk) made the
+  error disappear immediately and let Setup proceed normally into the real
+  wizard (computer name, region, "Start Copying Files", the actual
+  file-copy phase). See gotcha #22 for the full extraction/build recipe —
+  this is the one to reuse if the floppy image is ever lost or needs
+  rebuilding.
+- Two dead-end/false leads chased before finding the real fix, kept here so
+  they aren't re-tried: **the Voodoo3 card was not the cause** (gotcha #18's
+  original memory error reproduced identically with `gfxcard=vga`, ruling
+  out PCI MMIO interference) — see gotcha #19. **PCem cannot boot from the
+  Windows 98 CD's own El Torito boot record** — the BIOS's boot-virus-scan
+  step hangs indefinitely trying to scan a CD-ROM boot sector even with
+  scanning disabled, and just proceeding to read the El Torito image hangs
+  too; this looks like a genuine PCem/ATAPI-BIOS-extension gap, not
+  something fixable from config. See gotcha #20 for the investigation and
+  gotcha #21 for the two host-BIOS-Setup findings worth keeping (how to
+  reach BIOS Setup reliably in this input-flaky environment, and the actual
+  `Boot Sequence` value that maps to the CD-ROM: `SCSI`, not an explicit
+  `CDROM` entry).
+- **A second, unrelated input-reliability gotcha found while stepping
+  through the Setup GUI wizard itself (not just DOS-level text screens)**:
+  mouse clicks routinely fail to register on `Continue`/`Next`/dialog
+  buttons inside Setup's graphical (Mini-Windows) screens in this
+  container/Xvfb/VNC setup, even when the cursor visibly hovers correctly
+  on the right control — **keyboard-only navigation (`Tab` to move focus,
+  screenshot to confirm which control now has the dotted focus rectangle,
+  then `Enter`) is the reliable pattern** and is what actually got Setup
+  from the Welcome screen through Identification, Establishing Your
+  Location, and Startup Disk. See gotcha #23.
 - Three real bugs were found and fixed this session before hitting the above,
   none of them in PCem itself:
   1. **"Primary master hard disk fail" is a `RELEASE_BUILD` compiler-
@@ -473,6 +498,151 @@ for the QEMU-side investigation this follows on from.
       RAM-disk or by getting further in gotcha #7/#9's investigation for
       that build specifically).
 
+19. **Resolved false lead: the Voodoo3 graphics card was not the cause of
+    gotcha #18.** Hypothesis was that the Voodoo3's PCI memory-mapped I/O
+    region could be confusing Windows' memory-map probing. Tested by
+    switching `gfxcard = v3_3000` → `gfxcard = vga` (triggers a harmless
+    "Configured video BIOS not available. Defaulting to available romset."
+    dialog on `fic_va503p`, since no bundled generic-VGA romset matches that
+    model exactly — dismiss with OK, PCem falls back automatically). The
+    "16MB of memory" error reproduced byte-for-byte identically at the same
+    point in Setup. Rules out the graphics card entirely as a factor in
+    gotcha #18.
+
+20. **PCem cannot successfully boot from the Windows 98 CD's own El Torito
+    boot record — this looks like a genuine gap in PCem's BIOS/ATAPI CD-ROM
+    emulation, not a config problem.** The Windows 98 SE ISO used in this
+    project *is* a valid El Torito CD (`isoinfo -d` reports `El Torito VD
+    version 1 found`, `Boot media 2 (1.44MB Floppy)`, bootable flag set) —
+    booting straight from it would replace the entire custom FreeDOS floppy
+    with Microsoft's own genuine real-mode boot environment, sidestepping
+    gotcha #18 (and every other custom-floppy gotcha in this file) in one
+    move. In practice: setting the Award BIOS's `Boot Sequence` to put
+    `SCSI` (this BIOS's label for the ATAPI CD-ROM boot device — see gotcha
+    #21) first causes POST to hang indefinitely at "Now Detecting Boot
+    Sector Type Virus..." (the `ChipAwayVirus` boot-sector-scan BIOS
+    extension) — confirmed genuinely hung, not slow, via repeated
+    screenshots over 45+ seconds showing zero change while CPU stayed
+    pegged. Disabling `Detect Boot Virus By Trend` (BIOS Features Setup)
+    removes that specific hang, but POST then hangs identically at the very
+    next step instead (immediately after "Verifying DMI Pool Data ...
+    Update Success", where the BIOS would actually start reading the El
+    Torito boot image from the CD) — same symptom, same "identical every
+    time regardless of wait" signature as gotcha #17 describes, pointing at
+    a structural gap in the emulated ATAPI/BIOS El-Torito-read path rather
+    than a slow operation. **Verdict: not fixable from `pcem.cfg` or BIOS
+    Setup; abandoned in favor of gotcha #22's fix**, which gets the exact
+    same "genuine Microsoft boot environment" benefit without needing
+    PCem to boot the CD directly — the boot floppy itself now carries real
+    Microsoft files, so this El Torito path is no longer needed for
+    anything.
+
+21. **Two reusable findings from navigating Award BIOS Setup itself in this
+    environment**, found while investigating gotcha #20:
+    - **Reaching BIOS Setup reliably requires spamming `Delete` continuously
+      through the whole POST window, not timing a single keypress.** A
+      single well-timed `Delete` after watching for "Press DEL to enter
+      SETUP" on screen consistently arrives too late (POST has already
+      moved on to boot-device search by the time a screenshot round-trip +
+      one keypress completes). What works: immediately after relaunching
+      PCem and capturing the mouse (gotcha #8), fire ~15-30 `Delete`
+      keypresses in a tight loop over several seconds using one persistent
+      VNC connection (reconnecting per-keypress via a fresh process, as
+      `send-keys.js` does, adds enough round-trip latency per call that a
+      loop of individual process invocations mostly still misses the
+      window — a single connected script sending repeated taps is what
+      reliably lands inside it).
+    - **This BIOS's `Boot Sequence (LS120/ZIP100)` field has no explicit
+      `CDROM` entry — `SCSI` is the entry that boots the ATAPI CD-ROM.**
+      Cycling the field (`Page Up`/`Page Down` — note **`KP_Page_Up`/`0xff9a`
+      cycles the same direction as the "next option" `Page Down` semantics
+      here**, not what the keysym name implies; use plain `Page_Up`/`0xff55`
+      to reliably cycle the other way) walks through `A,C,SCSI` → `C,A,SCSI`
+      → `C only` → `D,A,SCSI` → `E,A,SCSI` → ... → `SCSI,C,A` → `SCSI,A,C` —
+      i.e. `SCSI` stands in for "the ATAPI/El-Torito-capable device" in this
+      Award BIOS revision's boot-order UI, the same way it's historically
+      used as a catch-all boot-device class on BIOSes of this era.
+
+22. **The actual fix for gotcha #18: replace the entire FreeDOS boot
+    environment with genuine Microsoft Windows 98 boot files, extracted
+    directly from the install CD's own cabinet files.** No internet
+    download, no third-party boot disk — every file comes from
+    `win98se.iso` itself:
+    - `cabextract` isn't in the base container image: `apt-get install -y
+      cabextract` (Debian bookworm, instant).
+    - The ISO's individual cabinets can be pulled straight out with
+      `isoinfo -i win98se.iso -R -x '/WIN98/<NAME>.CAB' > NAME.CAB` — no
+      need to mount the ISO (this container has no loopback-mount
+      permission anyway).
+    - Real `COMMAND.COM` (93,890 bytes) and the real consolidated real-mode
+      DOS kernel — shipped in the cab under the name **`winboot.sys`**, which
+      Setup itself renames to `IO.SYS` when actually installing — both live
+      inside the multi-part `PRECOPY1.CAB`/`PRECOPY2.CAB` set (`cabextract`
+      auto-follows the `extends to`/`extends backwards to` chain as long as
+      all the referenced cab files are present alongside each other, so
+      fetch `CATALOG3.CAB`, `BASE4.CAB`, `BASE5.CAB`, `BASE6.CAB` too even
+      though nothing is extracted from them directly).
+    - Real `HIMEM.SYS` (33,191 bytes), `OAKCDROM.SYS` (a generic real-mode
+      ATAPI CD-ROM driver, 41,302 bytes), and `MSCDEX.EXE` (25,473 bytes)
+      all live in `BASE5.CAB`.
+    - `/TOOLS/MTSUTIL/FAT32EBD/IMAGE.DSK` (36,864 bytes) is Microsoft's own
+      Emergency-Boot-Disk **template** — it has a genuine, correctly-authored
+      Windows 98 boot sector (real bootstrap code at offset 0x3E, standard
+      1.44 MB BPB: 2 sectors/cluster, 224 root entries, 9 sectors/FAT, 18
+      sectors/track, 2 heads) plus a skeleton root directory
+      (`AUTOEXEC.BAT`/`CONFIG.SYS`/an 8-byte placeholder `MSDOS.SYS`) — but
+      **the file itself is truncated to only the sectors those three tiny
+      files actually occupy** (`mdir` still reports the full ~1.4 MB of
+      "free space" by trusting the BPB's declared total-sectors field, but
+      writing anything past the physical 36,864 bytes reads/writes past
+      the real end of the file). Don't `mcopy` onto `IMAGE.DSK` directly.
+      Instead: `dd if=/dev/zero of=win98boot.ima bs=1024 count=1440`,
+      `mformat -i win98boot.ima -T 2880 -h 2 -s 18 ::` (matches `IMAGE.DSK`'s
+      BPB exactly), then `dd if=IMAGE.DSK of=win98boot.ima bs=512 count=1
+      conv=notrunc` to transplant just the genuine first sector (boot code +
+      BPB) onto the now-properly-sized image. `mcopy`/`mattrib +h +s +r` the
+      five real files on afterward (`IO.SYS` and `COMMAND.COM` need
+      hidden+system+read-only to match genuine Win98 media — `mattrib -i
+      img '::*.*'` lists current attributes to confirm).
+    - `CONFIG.SYS` only needs `DEVICE=HIMEM.SYS /testmem:off` +
+      `DEVICE=OAKCDROM.SYS /D:mscd001` (plus the usual `FILES=`/`BUFFERS=`/
+      `DOS=HIGH,UMB`/`LASTDRIVE=Z`) — this is, byte-for-byte in spirit, the
+      same `[CD]` section Microsoft's own real Startup Disk ships in
+      `IMAGE.DSK`'s template `CONFIG.SYS`, discovered by `mtype`-ing it
+      before overwriting. `AUTOEXEC.BAT` just needs `MSCDEX.EXE /D:mscd001
+      /L:D` then whatever you want to auto-launch (`D:\SETUP.EXE` once
+      you're past experimentation).
+    - Net result: booting this floppy shows the real Microsoft driver
+      banners (`This driver is provided by Oak Technology, Inc..`, real
+      `MSCDEX Version 2.25` banner) instead of FreeDOS's, `D:` mounts
+      identically to before, and **Setup's "Copying files needed for
+      Windows Setup..." step proceeds straight into the real 32-bit wizard
+      with no memory error at all** — first-try, no further tuning needed.
+
+23. **Mouse clicks are unreliable inside Setup's graphical (Mini-Windows)
+    screens in this container/Xvfb/VNC setup — use `Tab`+`Enter` instead,
+    confirming focus via screenshot before pressing Enter.** Once Setup
+    leaves the plain-text DOS screens and enters its GUI wizard (starting
+    at "Welcome to Windows 98 Setup"), `xdotool click` on `Continue`/`Next`/
+    dialog buttons routinely does nothing even when: the mouse is
+    genuinely captured (gotcha #8), the cursor visibly hovers exactly on
+    the button with the correct hand-pointer icon, `mousedown`/`sleep`/
+    `mouseup` are sent explicitly instead of a bare `click`, and repeated
+    attempts are made. (Absolute `xdotool mousemove X Y` is also unreliable
+    once the SDL mouse is captured — same as gotcha #8's original note —
+    use `mousemove_relative -- dx dy` computed from the cursor's last known
+    rendered position in a screenshot instead, or avoid mouse positioning
+    for clicking entirely per this gotcha.) What *does* work every time:
+    send a bare `Tab` (`0xff09`), screenshot to see which control now has
+    the dotted focus rectangle, and only send `Enter` (`0xff0d`) once
+    that's confirmed to be the desired button — the number of `Tab`s needed
+    to reach `Next`/`OK` varies per screen (radio-button groups count as one
+    stop; text-field-heavy screens like Identification need several). This
+    is what actually drove Setup through Welcome → Setup Options → Windows
+    Components → Identification → Establishing Your Location → Startup Disk
+    → Start Copying Files after mouse-based interaction repeatedly stalled
+    on the very first `Continue` button.
+
 ## Scripts
 
 ### `build-pcem.sh`
@@ -498,47 +668,41 @@ Voodoo3 detected, hard disk not yet functional; see gotcha #7). Update
 `hdc_fn` to your actual writable disk path before use.
 
 ## Next steps if resuming this
-**The disk/IDE and CD-ROM bugs are resolved (see TL;DR + gotchas #14–17) —
-PCem + either machine model + the debug build + a correctly-configured disk
-and CD-ROM all work.** Currently blocked on gotcha #18 (Setup's false "16MB
-of memory" error) before Windows 98 can actually finish installing:
-- **Most promising untried lead**: a clean release-vs-debug-build comparison
-  for gotcha #18 specifically. The release build's own pre-existing disk-fail
-  bug (gotcha #7, still present, confirmed again this session) blocked a
-  clean test. If the release build's disk-fail bug can be worked around for
-  just long enough to reach the Setup memory check — e.g. temporarily via a
-  disk config known to dodge it, or by getting further in isolating gotcha
-  #7 itself for a fresh look — and the memory error does *not* reproduce
-  there, that would point conclusively at another debug-build-only
-  compiler-optimization bug (same family as gotcha #9), likely somewhere in
-  extended-memory/E820-style reporting rather than IDE this time.
-- Try `patch9x`'s `-force-cpupatch`/`-force-cpupatch-ndis` options against
-  the Windows 98 install media itself (the tool's help text implies it can
-  target "a directory with windows instalation", not just an already-installed
-  system) — untried this session, and it's the exact tool this floppy bundles
-  for "fix CPU issues," even though gotcha #18's dynarec-off test argues
-  against a pure CPU-speed cause.
-- Consider whether the *win98se.iso* itself (not the emulator or disk) is
-  implicated — e.g. a slipstreamed/OEM build with an unusual `MSBATCH.INF` or
-  a modified `w98setup.bin`, since this error is normally hardware-triggered
-  and we've now ruled out every hardware-shaped explanation tried so far.
-  Not yet checked: whether a *different* Windows 98 (SE or first edition) ISO
-  hits the same wall.
-- Once Setup completes: install chipset drivers, Voodoo3 drivers (from
-  `containers/amigamerlin-win9x-29.zip`), and DirectX 7
-  (`containers/directx7.zip`); copy the LEGO LOCO game files over (no
-  standalone installer in the repo — copy `Program Files\LEGO
-  Media\Constructive\LEGO LOCO\` from the existing golden qcow2 image);
-  benchmark performance (the original point of this investigation) against
-  the qemu-3dfx numbers in the sibling README; snapshot the finished disk
-  into the existing bake pipeline (`scripts/bake-game-snapshots.ps1` pattern)
-  and publish under a new tag.
+**The disk/IDE, CD-ROM, and "16MB of memory" bugs are all resolved now** (see
+TL;DR + gotchas #14–17, #22) — PCem + the debug build + a correctly-configured
+disk, CD-ROM, and genuine-Microsoft boot floppy (gotcha #22) get Setup all the
+way into its real 32-bit wizard and into the actual file-copy phase with no
+further blockers hit so far. Remaining work, roughly in order:
+- **Finish stepping through Setup** using the `Tab`+`Enter` pattern from
+  gotcha #23 (mouse clicks are unreliable in the GUI wizard) — as of the end
+  of this session, Setup was mid-file-copy ("Please sit back and relax while
+  Windows 98 installs on your computer", ~29 minutes estimated). Expect at
+  least one BIOS-detection reboot partway through the file-copy phase and
+  another at the very end into the finished desktop; both are normal Win98
+  Setup behavior, not a bug — just re-establish mouse capture (gotcha #8)
+  after each reboot before continuing to drive it.
+- Once the desktop boots for the first time: install chipset drivers,
+  Voodoo3 drivers (from `containers/amigamerlin-win9x-29.zip`), and
+  DirectX 7 (`containers/directx7.zip`); copy the LEGO LOCO game files over
+  (no standalone installer in the repo — copy `Program Files\LEGO
+  Media\Constructive\LEGO LOCO\` from the existing golden qcow2 image).
+- Benchmark performance (the original point of this investigation) against
+  the qemu-3dfx numbers in the sibling README.
+- Snapshot the finished disk into the existing bake pipeline
+  (`scripts/bake-game-snapshots.ps1` pattern) and publish under a new tag to
+  `ghcr.io/mroie/lego-loco-cluster/emulator-snapshot`.
+- Minor cleanup before final imaging: remove the stray `TEST.TXT` file left
+  on `C:` from an earlier diagnostic `mcopy` (harmless if left, but tidy).
 
-**86Box** remains a reasonable fallback if gotcha #18 turns out to be a
-genuine, unfixable-from-config PCem bug — prebuilt Linux AppImage + ROM set
-already downloaded during this session, see
-[`docs/knowledge/emulation/pcem-86box-runtime-evaluation.md`](../../../docs/knowledge/emulation/pcem-86box-runtime-evaluation.md).
-Given how much of this session's *other* apparent "PCem bugs" turned out to
-be config/tooling issues instead (gotchas #14, #17), it's worth exhausting
-the release-vs-debug comparison and the ISO-variant check above before
-concluding this one is really PCem's fault.
+**86Box** was kept as a fallback while gotcha #18 was still unresolved —
+prebuilt Linux AppImage + ROM set already downloaded during an earlier
+session, see
+[`docs/knowledge/emulation/pcem-86box-runtime-evaluation.md`](../../../docs/knowledge/emulation/pcem-86box-runtime-evaluation.md)
+— but with gotcha #22's fix landing, PCem is no longer blocked and 86Box is
+back to being a "nice to have another data point" option rather than a
+required fallback. Every apparent "PCem bug" chased across this project so
+far (gotchas #7/#9's release-build compiler bug, #14's disk-image bug,
+#17/#18's memory-error investigation) turned out to be a config, tooling, or
+boot-environment issue rather than something wrong with PCem's own hardware
+emulation — worth remembering next time something here "looks like an
+emulator bug."
