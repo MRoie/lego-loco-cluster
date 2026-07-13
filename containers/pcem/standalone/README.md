@@ -135,8 +135,15 @@ for the QEMU-side investigation this follows on from.
   pattern for any test that needs the write to land on disk is: **do the
   disk-mutating step directly via `mtools`/a byte-level script on the host
   file, never through the live guest.**
-- Windows 98 has still never actually booted under PCem — blocked on the
-  generic IDE multi-sector-read hang above.
+- **A Setup-triggered restart mid-file-copy caused a genuine restart loop**
+  (redoing the entire DOS-mode wizard from scratch, three times) because the
+  BIOS's default `Boot Sequence` booted the floppy before the hard disk on
+  every post-Setup reboot. Fixed by changing `Boot Sequence` to `C only` in
+  BIOS Setup — confirmed via the "Windows Setup Safe Recovery" screen on the
+  next boot, then a clean run straight into the GUI Setup Wizard with no
+  floppy/DOS detour. See gotcha #24.
+- Windows 98 has since booted all the way into the GUI Setup Wizard's
+  "Setting up hardware and finalizing settings" phase under PCem.
 
 ### First-session TL;DR (kept for history)
 - Built **PCem v17** (official `sarah-walker-pcem/pcem` Linux source release —
@@ -643,6 +650,35 @@ for the QEMU-side investigation this follows on from.
     → Start Copying Files after mouse-based interaction repeatedly stalled
     on the very first `Continue` button.
 
+24. **A Setup-triggered restart mid-file-copy re-entered the DOS/floppy
+    environment instead of continuing into GUI-mode setup, redoing the
+    entire DOS-mode wizard from scratch — three full times.** Windows 98
+    Setup's file copy runs in DOS real mode (driven by `D:\SETUP.EXE` off
+    the CD, launched from the boot floppy's `AUTOEXEC.BAT`), then does a
+    **mandatory hardware reboot** before continuing into the GUI-mode wizard
+    (hardware detection, "Setting up hardware and finalizing settings").
+    With the Award BIOS's `Boot Sequence (LS120/ZIP100)` left at its default
+    `A,C,SCSI` (floppy first — see gotcha #21), every one of these reboots
+    re-booted the floppy and re-ran `AUTOEXEC.BAT`'s `D:\SETUP.EXE`, which
+    restarted the whole DOS-mode wizard from "Welcome" rather than letting
+    the reboot land on the now-partially-installed `C:` and resume GUI setup
+    — a genuine restart loop, not a hang or a Setup bug, and easy to mistake
+    for one since each cycle looks identical to the first run. **Fix: enter
+    BIOS Setup (gotcha #21's Delete-spam technique) and change `Boot
+    Sequence` from `A,C,SCSI` to `C only`** (cycle with `Page Down`/`0xff9a`:
+    `A,C,SCSI` → `LS/ZIP,C` → `C only`), then F10-save. Confirmed fixed: the
+    very next reboot showed Windows 98's own **"Windows Setup Safe Recovery"**
+    screen (*"Windows Setup could not completely install Windows... If you
+    started Setup from Windows, type WIN to restart Windows, and then run
+    Setup again... Do not delete any files or reconfigure your system."*) —
+    proof `C:` now has genuine bootable Windows files — followed by a direct
+    boot straight into the GUI Setup Wizard (resuming at "Start Wizard" /
+    Finish, then "Setting up hardware and finalizing settings") with no
+    DOS/floppy detour at all. With the boot floppy now retired from active
+    use (`Boot Sequence = C only` means it's never read again), the
+    genuine-Microsoft-boot-floppy fix from gotcha #22 has done its job and
+    isn't needed for the rest of Setup or for normal operation.
+
 ## Scripts
 
 ### `build-pcem.sh`
@@ -668,19 +704,20 @@ Voodoo3 detected, hard disk not yet functional; see gotcha #7). Update
 `hdc_fn` to your actual writable disk path before use.
 
 ## Next steps if resuming this
-**The disk/IDE, CD-ROM, and "16MB of memory" bugs are all resolved now** (see
-TL;DR + gotchas #14–17, #22) — PCem + the debug build + a correctly-configured
-disk, CD-ROM, and genuine-Microsoft boot floppy (gotcha #22) get Setup all the
-way into its real 32-bit wizard and into the actual file-copy phase with no
-further blockers hit so far. Remaining work, roughly in order:
+**The disk/IDE, CD-ROM, "16MB of memory", and restart-loop bugs are all
+resolved now** (see TL;DR + gotchas #14–17, #22, #24) — PCem + the debug
+build + a correctly-configured disk, CD-ROM, genuine-Microsoft boot floppy
+(gotcha #22), and `Boot Sequence = C only` (gotcha #24) get Setup all the way
+through the DOS-mode file copy, past the restart into GUI-mode setup, through
+User Information/License Agreement/Product Key, and into "Setting up
+hardware and finalizing settings" with no further blockers hit so far.
+Remaining work, roughly in order:
 - **Finish stepping through Setup** using the `Tab`+`Enter` pattern from
-  gotcha #23 (mouse clicks are unreliable in the GUI wizard) — as of the end
-  of this session, Setup was mid-file-copy ("Please sit back and relax while
-  Windows 98 installs on your computer", ~29 minutes estimated). Expect at
-  least one BIOS-detection reboot partway through the file-copy phase and
-  another at the very end into the finished desktop; both are normal Win98
-  Setup behavior, not a bug — just re-establish mouse capture (gotcha #8)
-  after each reboot before continuing to drive it.
+  gotcha #23 (mouse clicks are unreliable in the GUI wizard). Hardware
+  detection may trigger further automatic reboots as it finalizes settings;
+  with `Boot Sequence = C only` these should now resume cleanly on `C:` with
+  no floppy detour — re-establish mouse capture (gotcha #8) after each
+  reboot before continuing to drive it.
 - Once the desktop boots for the first time: install chipset drivers,
   Voodoo3 drivers (from `containers/amigamerlin-win9x-29.zip`), and
   DirectX 7 (`containers/directx7.zip`); copy the LEGO LOCO game files over
