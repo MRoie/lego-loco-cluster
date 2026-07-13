@@ -6,8 +6,8 @@ qemu-3dfx. See [../../qemu-softgpu/standalone/README.md](../../qemu-softgpu/stan
 for the QEMU-side investigation this follows on from.
 
 ## TL;DR (updated — third session: RESOLVED)
-- **The disk is now fully working. Both bugs found this session were real, and
-  both are fixed:**
+- **Both the disk and the CD-ROM are now fully working.** Three real bugs
+  were found and fixed this session, none of them in PCem itself:
   1. **"Primary master hard disk fail" is a `RELEASE_BUILD` compiler-
      optimization bug**, not a config or geometry issue. A **debug-mode**
      rebuild (`./configure --enable-debug`, **`make clean` first** — gotcha #9)
@@ -65,6 +65,26 @@ for the QEMU-side investigation this follows on from.
   disk image file from the host is a fully valid, fast way to prep a PCem
   disk without ever going through FDISK/FORMAT.COM interactively — as long as
   `-H` is set correctly.
+- **A third, unrelated config bug blocked the CD-ROM identically**: `cdrom_path`
+  pointing at a perfectly valid ISO (verified byte-for-byte: correct ISO9660
+  PVD signature at the expected offset, right file size, `isoinfo` reads it
+  fine) was silently ignored because **`cdrom_drive` was `0`, and `0` doesn't
+  mean "no drive" or "use `cdrom_path`" — it means "use physical host CD-ROM
+  device #0" via a Linux ioctl path** (`pc.c`'s `cdrom_drive == CDROM_IMAGE`
+  branch, where `CDROM_IMAGE` is `200`, is the *only* path that calls
+  `image_open()`/reads `cdrom_path` at all). In this headless container
+  there's no `/dev/sr0`, so every read failed with "drive not ready" — every
+  single time, identically, no matter how long you wait or how many times you
+  retry, because the in-memory `cdrom` object was simply never created
+  (confirmed by `gdb -p <pid> -ex 'print cdrom'` showing a null pointer while
+  `image_path` correctly held the right filename the whole time — the
+  smoking gun that the image-loading code path was never even reached).
+  **Fix: `cdrom_drive = 200` in `pcem.cfg`**, not `0`. The boot-time driver
+  handshake (`SHSUCDX installed, Drive D: assigned`) still succeeds either
+  way, since that's generic ATAPI identify-level detection independent of the
+  backend — only actual data reads expose the misconfiguration, which is what
+  made this look identical in symptom to gotcha #14's disk bug (see gotcha
+  #17 for the general lesson this and #14 both teach).
 - Confirmed PCem's disk **write-back cache is only flushed to the host file on
   a clean process exit** — `pkill` (even plain `SIGTERM`, even a `SIGINT`) is
   silently ignored by this build and leaves all FDISK/format writes trapped in
@@ -368,6 +388,21 @@ for the QEMU-side investigation this follows on from.
     test.bat -i patcher.ima ::AUTOEXEC.BAT`) and just watch the VNC
     screenshot — zero live keystrokes in the loop, so the flaky input path
     can't corrupt the result either way.
+
+17. **The general lesson from both gotcha #14 (disk) and the CD-ROM
+    `cdrom_drive` bug above: when something "hangs" or "isn't ready"
+    identically on every retry regardless of how long you wait, that's the
+    signature of a static misconfiguration or bad fixture, not a timing race
+    or a real emulator bug** — a genuine race or slow-hardware-emulation
+    issue would be expected to resolve at least sometimes with enough
+    retries/elapsed time; a config value that's simply wrong, or a data
+    structure that was never populated, fails the *same* way *every* time,
+    forever. Both bugs this session fit that pattern exactly (same "not
+    ready"/hang signature on attempt 1 and attempt 20 alike), and both times
+    the fastest confirmation was reading live process state with `gdb -p
+    <pid>` (IDE register values for the disk bug; the `cdrom` global pointer
+    for the CD-ROM bug) rather than continuing to vary the guest-side retry
+    and hoping timing was the culprit.
 
 ## Scripts
 
