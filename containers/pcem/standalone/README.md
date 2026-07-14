@@ -1000,6 +1000,45 @@ Remaining work, roughly in order:
   leftover `LEGO LOCO` directory entry under the old `lego media\constructive`
   path if it's still lingering (harmless either way, but tidy).
 
+## Benchmark (PCem + Voodoo3, genuine install)
+Measured against the `Benchmark Gate` methodology from
+[`pcem-86box-runtime-evaluation.md`](../../../docs/knowledge/emulation/pcem-86box-runtime-evaluation.md)
+(host CPU, emulated-speed stability, frame progression over several minutes),
+sampled every 20 s for 3 minutes while sitting at the LEGO LOCO main menu
+(post real-time-rendered 3D intro cinematics):
+
+| Time | PCem emulated speed | Container CPU (docker stats) |
+|------|---------------------|-------------------------------|
+| 11:32:41 | 100% | 75.16% |
+| 11:33:05 | 100% | 78.26% |
+| 11:33:29 | 101% | 77.75% |
+| 11:33:51 | 100% | 74.42% |
+| 11:34:14 | 100% | 75.29% |
+| 11:34:37 | 100% | 97.62% |
+| 11:35:00 | 100% | 74.95% |
+| 11:35:23 | 100% | 73.60% |
+
+- **PCem's own speed indicator held rock-steady at 100–101%** of real
+  Pentium MMX 200 hardware throughout — i.e. real-time speed, not
+  throttled/lagging, for both the 3D intro cinematics and the idle main
+  menu. Host CPU cost for that is ~74–98% of one core (single-threaded
+  dynarec + Voodoo3 software rasterization).
+- This directly answers the question this whole `pcem/standalone`
+  investigation was chasing: unlike QEMU TCG (which the sibling
+  `qemu-softgpu` investigation and the 86Box evaluation doc both note as
+  struggling to even reach the LOCO main menu reliably), **PCem reaches the
+  main menu, renders the real 3D intro cinematics, and holds steady
+  real-hardware speed** — a clear, positive result for PCem as the emulator
+  backend for this game.
+- **One behavior worth knowing, not a bug**: leaving the main menu idle for
+  a couple of minutes blanks the screen to solid black (with what looks
+  like a lingering text-mode cursor) — this is the **game's own idle/
+  screensaver-style blanking**, not an emulator hang or crash. Confirmed via
+  `/proc/<pid>/stat` CPU-tick deltas (still actively consuming CPU, not
+  stuck) and by sending any keypress (`Escape`/`Space`), which instantly
+  restored the exact same menu frame. No actual reboot or state loss
+  occurred.
+
 **86Box** was kept as a fallback while gotcha #18 was still unresolved —
 prebuilt Linux AppImage + ROM set already downloaded during an earlier
 session, see
