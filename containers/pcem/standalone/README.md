@@ -807,16 +807,37 @@ PCem** (see TL;DR + gotchas #14–17, #22, #24, #25) — every blocker hit so fa
 (disk/IDE, CD-ROM, "16MB of memory", the floppy-first restart loop, and the
 two chipset-level reboot hangs during hardware detection/first-boot) has a
 known fix or recovery. Voodoo3 and DirectX 7 drivers are also installed now
-(gotcha #26). Checkpoints are saved at both
-`disk-vhd-503-win98-desktop-checkpoint.vhd` (pre-drivers) and
+(gotcha #26), and **the LEGO LOCO game files are copied onto the fresh
+install** — extracted from the existing qemu-softgpu golden image
+(`containers/qemu-softgpu/tmp-bake/netready.qcow2`) via `libguestfs-tools`
+(`guestfish --ro -a netready.qcow2` + `run` + `mount-ro /dev/sda1 /` +
+`copy-out "/Program Files/LEGO Media/Constructive/LEGO LOCO" ...` — note
+`virt-copy-out` alone fails with "no operating system was found on this
+disk" against this particular image and needs the manual `guestfish`
+sequence instead), repacked into a Joliet ISO the same way as the drivers,
+and copied into `C:\Program Files\lego media\constructive\LEGO LOCO\` inside
+the guest (folder names typed without a drive-letter colon, and via File >
+New > Folder + keyboard nav rather than typing paths — see gotcha #26's
+colon gotcha). A large (~800 file, ~200 MB real / 1.4 GB apparent-size due to
+a `du` block-size quirk on this bind mount) folder copy triggered two
+sequential "this folder already exists" prompts — most likely because an
+earlier `Ctrl+V` had already silently started the same paste during a run of
+dropped keystrokes, and the explicit retry queued a second one — answered
+`Yes to All` (mnemonic `a`) both times, which is harmless since the content
+is identical either way. Checkpoints are saved at
+`disk-vhd-503-win98-desktop-checkpoint.vhd` (pre-drivers),
 `disk-vhd-503-post-drivers-checkpoint.vhd` (post-drivers, also pushed to
-`ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-post-drivers`).
+`ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-post-drivers`),
+and `disk-vhd-503-with-loco-checkpoint.vhd` (post-LOCO-copy, also pushed to
+`ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-with-loco`).
 Remaining work, roughly in order:
-- Copy the LEGO LOCO game files over
-  (no standalone installer in the repo — copy `Program Files\LEGO
-  Media\Constructive\LEGO LOCO\` from the existing golden qcow2 image).
-- Benchmark performance (the original point of this investigation) against
-  the qemu-3dfx numbers in the sibling README.
+- Launch `Loco.exe` and confirm it actually runs under PCem + Voodoo3 — the
+  original point of this whole investigation, and the qemu-softgpu sibling
+  README's own results table shows this exact game on this exact golden
+  image hitting GPFs at the menu/on launch under QEMU+SoftGPU, so this is not
+  a given.
+- Benchmark performance (if it runs) against the qemu-3dfx numbers in the
+  sibling README.
 - Snapshot the finished disk into the existing bake pipeline
   (`scripts/bake-game-snapshots.ps1` pattern) and publish under a new tag to
   `ghcr.io/mroie/lego-loco-cluster/emulator-snapshot`.
