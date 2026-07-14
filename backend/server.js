@@ -1455,6 +1455,28 @@ signalWss.on("error", (err) => {
   logger.error("Signal WebSocket server error", { error: err.message });
 });
 
+// --- Loco Lens (M5Stack watch) WebSocket + REST ---
+const { registerWatchRoutes, handleLensConnection } = require("./routes/watch");
+const lensWss = new WebSocketServer({ noServer: true });
+lensWss.on("error", (err) => logger.error("Lens WebSocket server error", { error: err.message }));
+
+// Resolve an instance id to a VNC endpoint for the lens bridge. Uses a static
+// registry (LENS_INSTANCES) when set — for the no-cluster case (Android/Termux,
+// compose, single host) — otherwise the k8s instance-target path.
+const { InstanceResolver } = require("./services/instanceResolver");
+const k8sVncResolver = async (instanceId) => {
+  const target = await getInstanceTarget(instanceId); // "host:port" or a URL
+  if (!target) return null;
+  const [host, portStr] = String(target).replace(/^.*\/\//, "").split(":");
+  return { host, port: parseInt(portStr, 10) || 5901 };
+};
+const lensResolver = new InstanceResolver({ k8sResolver: k8sVncResolver });
+logger.info("Lens instance resolver", { mode: lensResolver.mode, staticInstances: lensResolver.listStaticInstances() });
+async function lensInstanceResolver(instanceId) {
+  return lensResolver.resolve(instanceId);
+}
+registerWatchRoutes(app, {});
+
 // Active peer connections keyed by ID for WebRTC signaling
 const peers = new Map();
 
@@ -1660,6 +1682,15 @@ server.on("upgrade", (req, socket, head) => {
       socket.destroy();
     });
 
+    return;
+  }
+
+  // Loco Lens WebSocket (M5Stack watch): /ws/lens/:instanceId
+  const lensMatch = req.url.match(/^\/ws\/lens\/([^\/\?]+)/);
+  if (lensMatch) {
+    lensWss.handleUpgrade(req, socket, head, (ws) => {
+      handleLensConnection(ws, decodeURIComponent(lensMatch[1]), lensInstanceResolver);
+    });
     return;
   }
 

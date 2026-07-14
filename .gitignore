@@ -68,3 +68,26 @@ __pycache__/
 /kind
 /kind.exe
 /.vscode/
+
+# Golden-image build outputs and proprietary guest assets — never commit
+golden-image/build/
+golden-image/assets/private/
+*.qcow2.builtin
+
+# M5Stack firmware build artifacts
+m5stack-lens/firmware/.pio/
+m5stack-lens/flasher/firmware/*
+# ...but DO commit the released, flash-and-go merged binary (no secrets baked —
+# Wi-Fi/bridge are provisioned at runtime via the captive portal).
+!m5stack-lens/flasher/firmware/loco-lens.bin
+
+# Golden image qcow2 staged for pushing (large, pull from GHCR instead)
+containers/win98-loco-golden-*.qcow2
+containers/win98-loco-golden-*.qcow2.sha256
+
+# Transient build dir (packager scratch). Released bundles live in dist/ and
+# are committed intentionally.
+/build/
+# Allow committed release bundles under dist/ despite the broad *.tar.gz above.
+!dist/
+!dist/**

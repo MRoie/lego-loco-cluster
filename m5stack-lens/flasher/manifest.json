@@ -1,0 +1,14 @@
+{
+  "name": "Loco Lens — M5Stack StopWatch",
+  "version": "0.1.0",
+  "funding_url": "https://github.com/MRoie/lego-loco-cluster",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "firmware/loco-lens.bin", "offset": 0 }
+      ]
+    }
+  ]
+}

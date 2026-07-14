@@ -16,6 +16,9 @@
     "werift": "^0.19.3",
     "ws": "^8.18.2"
   },
+  "optionalDependencies": {
+    "sharp": "^0.33.5"
+  },
   "devDependencies": {
     "jest": "^30.0.5",
     "nodemon": "^3.1.10",
