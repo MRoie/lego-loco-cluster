@@ -812,12 +812,13 @@ for the QEMU-side investigation this follows on from.
       from gotcha #26's forced-lowercase typing), so this specific file is
       probably not the culprit — but it confirms the *category* of "install
       leaves behind state beyond just the files" is real for this game.
-    - **Corrupted/truncated resource file**: the ~57 MB `art-res\resource.RFD`
-      was copied during the two-overlapping-paste-operations episode from
-      gotcha #26; not yet confirmed byte-for-byte intact on the guest side
-      (host-side reads of this disk are unreliable per gotcha #16/#26's last
-      point, and in-guest Properties/size inspection wasn't completed before
-      pausing on this investigation).
+    - **Corrupted/truncated resource file — ruled out.** In-guest Explorer
+      (maximized, via the same `Alt+Space` `x` system-menu maximize trick,
+      keyboard-only) shows `art-res\resource.RFD` at exactly 55,963 KB
+      (status bar: 54.6 MB) — matching the original 57,305,835-byte file to
+      the nearest displayed KB (Explorer rounds up: 57,305,835 / 1024 =
+      55,962.73 → 55,963). The double-paste episode did not corrupt this
+      file; focus should shift to the CD-check or registry theories.
     Also note: this is a **different, earlier failure than the qemu-softgpu
     sibling README's own results** for this exact game on this exact golden
     image (`netready.qcow2`), which get as far as the intro/menu before
@@ -881,14 +882,20 @@ and `disk-vhd-503-with-loco-checkpoint.vhd` (post-LOCO-copy, also pushed to
 `ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-with-loco`).
 Remaining work, roughly in order:
 - **`Loco.exe` launches (splash screen renders) but hits "An error occurred
-  while loading. Please reinstall this software."** — see gotcha #27 for the
-  three candidate root causes (CD-check against `D:`, missing registry state
-  from bypassing the original InstallShield installer, or a corrupted
-  `resource.RFD`) and the reusable colon-free launch-by-path technique.
-  Next diagnostic step: confirm `resource.RFD`'s size in-guest (Explorer's
-  info panel, already proven reliable elsewhere this session) against the
-  57,305,835-byte original; if it matches, shift focus to the CD-check and
-  registry theories instead.
+  while loading. Please reinstall this software."** — see gotcha #27. The
+  corrupted-resource-file theory is now ruled out (`resource.RFD` confirmed
+  intact in-guest). Two candidates remain, needing different next steps:
+  - **CD-check**: try building a CD image that better mimics the real LEGO
+    LOCO retail disc (correct volume label at minimum; a full ISO of the
+    actual retail CD if one can be located, rather than a plain file-transfer
+    ISO) and see if the error changes or disappears.
+  - **Missing registry state**: would need extracting the relevant
+    `HKEY_LOCAL_MACHINE`/`HKEY_CURRENT_USER` keys from the golden
+    `netready.qcow2` image's Windows 9x registry (`SYSTEM.DAT`/`USER.DAT` —
+    note these are the *old* Win9x registry format, not NT-hive format, so
+    `hivex`/`virt-win-reg` from libguestfs won't read them directly; a Win9x-
+    specific registry tool or booting that image to export a `.reg` file
+    would be needed) and merging them into this fresh install.
 - Benchmark performance (once it runs) against the qemu-3dfx numbers in the
   sibling README.
 - Snapshot the finished disk into the existing bake pipeline
