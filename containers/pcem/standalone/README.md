@@ -827,6 +827,64 @@ for the QEMU-side investigation this follows on from.
     approach (missing state a real installer would set up) rather than a
     LOCO-vs-3dfx-driver rendering incompatibility.
 
+28. **First attempt at gotcha #27's missing-registry-state theory: found real
+    strings, built a plausible `.reg`, imported it cleanly — did not fix the
+    error.** `SYSTEM.DAT`/`USER.DAT` are Windows 9x's old `CREG` format
+    (magic bytes `CREG`, then `RGKN`/`RGDB` blocks) — a completely different,
+    older binary layout than the NT registry hive format, so `hivex`/
+    `virt-win-reg` (libguestfs's usual registry tools) can't read them, and
+    no packaged parser exists (`pip install pycreg`/`win9xreg`/`creg` all
+    404'd against PyPI). Two approaches were tried:
+    - **Live QEMU + `regedit /e` export** — booted `netready.qcow2` under
+      plain `qemu-system-i386` (Debian's `qemu-system-x86` package, not a
+      custom build) with `-snapshot` (throwaway) and a writable `-fda`
+      floppy meant for exporting a `.reg` file, using the flags the
+      qemu-softgpu standalone README documents as required for this image
+      (`-cpu qemu32,+sse3,+ssse3,+sse4.1`, single-threaded `-accel tcg` —
+      MTTCG is documented there as hanging this guest early — `-vga std` in
+      place of `vmware` since only text/registry access was needed here,
+      not 3D). **Abandoned as a dead end**: QEMU's built-in `-vnc` (as
+      opposed to the Xvfb+x11vnc bridge used for PCem all session) has its
+      own input quirks — Escape/Ctrl+Esc/arrow-key Start-menu navigation all
+      worked fine, but plain letter keys silently did nothing once at the
+      desktop (tried both with and without `-k en-us`), and absolute mouse
+      clicks via `-device usb-tablet` didn't register either, even on
+      simple targets like desktop icons. An early green/black
+      vertical-stripe screenshot during BIOS POST turned out to be a red
+      herring, not the real problem — confirmed via `info registers` over
+      the QEMU monitor (`-monitor telnet:...`) showing genuine EIP progress
+      across samples, not a stuck loop; the real blocker was specifically
+      character input once the desktop was reached, never root-caused
+      further given time already spent.
+    - **Raw ASCII string scan of the extracted `.DAT` files — this is what
+      actually found something usable.** Rather than parsing CREG's binary
+      structure, a plain Python regex scan (`re.finditer(rb'[\x20-\x7e]{3,}',
+      data)`) for printable-ASCII runs containing `LEGO`/`LOCO` was enough:
+      it surfaced a clear cluster in `SYSTEM.DAT` around offset `0x24c735` —
+      `LEGO Media`, `LEGO LOCO`, a version string `1.12.008`, `loco.exe`, two
+      separate `Path` values (one at `C:\Program Files\LEGO
+      Media\Constructive\LEGO LOCO`, another at `...\LEGO LOCO\Exe`), an
+      `UninstallString` referencing `IsUninst.exe`/`Uninst.isu` (confirming
+      InstallShield), a `DisplayName`, and a `Publisher`-shaped string
+      `Intelligent Games`. Built a `.reg` file recreating a plausible
+      `HKEY_LOCAL_MACHINE\SOFTWARE\LEGO Media\LEGO LOCO` key (+ `\Exe`
+      subkey) from these strings, delivered via a small Joliet ISO (same
+      pattern as gotcha #26's drivers/game-files ISOs), and imported by
+      selecting it in Explorer and pressing `Enter` — `REGEDIT.EXE`'s own
+      "are you sure you want to add this information to the registry?" /
+      "successfully entered into the registry" dialogs handled the actual
+      merge, so gotcha #26's colon-typing bug never came up (no manual path
+      typing needed for this step at all).
+    - **Result: registry import succeeded cleanly, but relaunching
+      `Loco.exe` showed the exact same "reinstall this software" error
+      afterward.** Either the guessed key hierarchy/value names don't
+      exactly match what the exe actually reads at startup (the raw-scan
+      approach confirms these strings exist somewhere in the file but not
+      their real parent/child key relationships — only a proper RGKN/RGDB
+      structural parse would confirm that), or the registry isn't the
+      actual blocker here and gotcha #27's CD-check theory deserves priority
+      next.
+
 ## Scripts
 
 ### `build-pcem.sh`
@@ -882,20 +940,21 @@ and `disk-vhd-503-with-loco-checkpoint.vhd` (post-LOCO-copy, also pushed to
 `ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-with-loco`).
 Remaining work, roughly in order:
 - **`Loco.exe` launches (splash screen renders) but hits "An error occurred
-  while loading. Please reinstall this software."** — see gotcha #27. The
-  corrupted-resource-file theory is now ruled out (`resource.RFD` confirmed
-  intact in-guest). Two candidates remain, needing different next steps:
+  while loading. Please reinstall this software."** — see gotchas #27–28.
+  The corrupted-resource-file theory is ruled out (`resource.RFD` confirmed
+  intact in-guest), and a first attempt at the missing-registry-state theory
+  (gotcha #28) didn't fix it either. Remaining directions:
   - **CD-check**: try building a CD image that better mimics the real LEGO
     LOCO retail disc (correct volume label at minimum; a full ISO of the
     actual retail CD if one can be located, rather than a plain file-transfer
     ISO) and see if the error changes or disappears.
-  - **Missing registry state**: would need extracting the relevant
-    `HKEY_LOCAL_MACHINE`/`HKEY_CURRENT_USER` keys from the golden
-    `netready.qcow2` image's Windows 9x registry (`SYSTEM.DAT`/`USER.DAT` —
-    note these are the *old* Win9x registry format, not NT-hive format, so
-    `hivex`/`virt-win-reg` from libguestfs won't read them directly; a Win9x-
-    specific registry tool or booting that image to export a `.reg` file
-    would be needed) and merging them into this fresh install.
+  - **Registry, round 2**: a real RGKN/RGDB parse of `SYSTEM.DAT` (rather
+    than gotcha #28's flat string scan) to confirm the actual key hierarchy,
+    or booting `netready.qcow2` far enough to get a real `regedit /e` export
+    despite the input-reliability issues found there (may need a different
+    QEMU display backend than `-vnc`, e.g. `-display sdl` via Xvfb+x11vnc
+    the way `run-3dfx-headless.sh` does it for its own display, to inherit
+    the same input path already proven reliable with PCem all session).
 - Benchmark performance (once it runs) against the qemu-3dfx numbers in the
   sibling README.
 - Snapshot the finished disk into the existing bake pipeline
