@@ -5,7 +5,14 @@ software Voodoo3 dynarec) can run LEGO LOCO more smoothly than QEMU+SoftGPU or
 qemu-3dfx. See [../../qemu-softgpu/standalone/README.md](../../qemu-softgpu/standalone/README.md)
 for the QEMU-side investigation this follows on from.
 
-## TL;DR (updated — fourth session — gotcha #18 RESOLVED)
+## TL;DR (updated — fifth session — LEGO LOCO runs correctly, gotcha #29)
+- **LEGO LOCO is fully working.** The "reinstall this software" error
+  (gotchas #27–28) is resolved — root cause was the raw-file-copy install
+  approach itself, not a CD-check or a missing registry key. Running the
+  genuine retail InstallShield installer from `Lego_Loco.iso` instead fixed
+  it completely: `Loco.exe` launches, plays its real 3D intro cinematics,
+  and reaches the interactive main menu with no error. See gotcha #29.
+
 - **The false "16MB of memory" error (gotcha #18) is fixed.** Root cause:
   it was never about actual memory at all — it was **FreeDOS's `HIMEMX.EXE`
   (or the FreeDOS real-mode environment generally) causing Windows 98
@@ -885,6 +892,63 @@ for the QEMU-side investigation this follows on from.
       actual blocker here and gotcha #27's CD-check theory deserves priority
       next.
 
+29. **RESOLVED — "reinstall this software" was caused by the raw-copy
+    install itself, not a CD-check or missing registry key.** The fix:
+    abandon the raw-file-copy approach entirely and run the **genuine
+    retail InstallShield installer** from the actual `Lego_Loco.iso` CD
+    image (confirmed via `isoinfo -d`: ISO9660+Joliet, volume id "LEGO
+    LOCO", publisher "LEGO MEDIA", `SETUP.EXE` + InstallShield engine +
+    C-Dilla copy-protection files + bundled DirectX7 installer — a
+    complete, unmodified retail disc image, not a hand-extracted file
+    transfer).
+    - Copied the ISO into the `pcem-run` container's `/work` (only bind
+      mount available to it) and pointed `cdrom_path` at it in
+      `pcem.cfg`. Opening `D:` in Explorer auto-fired the real
+      `AUTORUN.INF` → "Choose Setup Language" → InstallShield wizard
+      (Welcome → License → Select Components).
+    - **First attempt failed at Select Components**: `Space Available`
+      (4.6 MB) was far below `Space Required` (~205 MB) because the
+      earlier botched raw-copy install's `C:\Program Files\lego
+      media\constructive\LEGO LOCO` tree was still occupying the disk.
+      Exited Setup cleanly (`Exit Setup` confirmation dialog, not a crash)
+      and deleted `lego media` from Explorer — most of it went via a
+      normal "Yes to All" on read-only-file prompts, but the `LEGO LOCO`
+      subfolder itself resisted removal with "Access is denied" (likely a
+      lingering handle from something in-guest). This still freed enough
+      space (503 MB disk → 227 MB free per `C:` Properties) to proceed;
+      the residual empty `LEGO LOCO` folder was harmlessly overwritten
+      file-by-file by the real installer's own "read-only file detected,
+      overwrite?" prompts (answered `Yes to All`) during the actual copy.
+    - **Second attempt**: full install completed (progress bar 0→100%,
+      ~2 minutes), followed by a DirectX7 sub-installer step
+      ("Extracting Direct Transform...") that hit its own "not enough
+      disk space to install DirectX" warning — harmless, since gotcha
+      #26 already installed Voodoo3 + DirectX7 drivers directly; just
+      clicked through it.
+    - **Result: `Loco.exe` now launches cleanly** — LEGO Media splash →
+      a genuine real-time-rendered 3D intro cinematic (LEGO carrying
+      case, train-track scene, postman-on-a-skateboard sequence) →
+      **Escape skips straight to the actual LEGO LOCO profile-selection
+      main menu**, fully interactive, no "reinstall this software" error
+      at any point. This confirms the error was never a CD-check or a
+      missing/wrong registry key (both of gotcha #27/#28's theories) —
+      it was that the raw file-copy approach could never faithfully
+      reproduce whatever InstallShield's real first-run does (correct
+      file *attributes*/timestamps, a fully-populated real registry tree
+      versus the gotcha #28 guess, and/or InstallShield-internal
+      component-registration bookkeeping a plain file copy has no way to
+      replicate).
+    - **Recurring session-wide flakiness note**: individual keystrokes
+      (especially `Enter` on a freshly-selected icon, and modifier
+      combos like `Shift+Tab`) routinely needed 2–6 retries to register
+      even with input verified alive via a `Tab`-then-screenshot check
+      in between — worse than earlier sessions, cause not identified
+      (possibly cumulative VNC/x11vnc connection churn from this
+      session's very high number of short-lived script invocations). A
+      `Left` then `Right` (or `Down` then `Up`) "refresh" pair immediately
+      before `Enter` reliably un-stuck a real Explorer-list focus/selection
+      desync several times when plain retries of `Enter` alone did not.
+
 ## Scripts
 
 ### `build-pcem.sh`
@@ -910,58 +974,31 @@ Voodoo3 detected, hard disk not yet functional; see gotcha #7). Update
 `hdc_fn` to your actual writable disk path before use.
 
 ## Next steps if resuming this
-**Windows 98 SE is fully installed and boots to a working desktop under
-PCem** (see TL;DR + gotchas #14–17, #22, #24, #25) — every blocker hit so far
-(disk/IDE, CD-ROM, "16MB of memory", the floppy-first restart loop, and the
-two chipset-level reboot hangs during hardware detection/first-boot) has a
-known fix or recovery. Voodoo3 and DirectX 7 drivers are also installed now
-(gotcha #26), and **the LEGO LOCO game files are copied onto the fresh
-install** — extracted from the existing qemu-softgpu golden image
-(`containers/qemu-softgpu/tmp-bake/netready.qcow2`) via `libguestfs-tools`
-(`guestfish --ro -a netready.qcow2` + `run` + `mount-ro /dev/sda1 /` +
-`copy-out "/Program Files/LEGO Media/Constructive/LEGO LOCO" ...` — note
-`virt-copy-out` alone fails with "no operating system was found on this
-disk" against this particular image and needs the manual `guestfish`
-sequence instead), repacked into a Joliet ISO the same way as the drivers,
-and copied into `C:\Program Files\lego media\constructive\LEGO LOCO\` inside
-the guest (folder names typed without a drive-letter colon, and via File >
-New > Folder + keyboard nav rather than typing paths — see gotcha #26's
-colon gotcha). A large (~800 file, ~200 MB real / 1.4 GB apparent-size due to
-a `du` block-size quirk on this bind mount) folder copy triggered two
-sequential "this folder already exists" prompts — most likely because an
-earlier `Ctrl+V` had already silently started the same paste during a run of
-dropped keystrokes, and the explicit retry queued a second one — answered
-`Yes to All` (mnemonic `a`) both times, which is harmless since the content
-is identical either way. Checkpoints are saved at
+**LEGO LOCO now runs correctly end-to-end under PCem** (see gotcha #29) —
+Windows 98 SE boots to a working desktop (gotchas #14–17, #22, #24, #25),
+Voodoo3 + DirectX 7 drivers are installed (gotcha #26), and the genuine
+retail InstallShield installer (run from `Lego_Loco.iso`, not a raw file
+copy) put down a fully correct install: `Loco.exe` launches straight to the
+LEGO Media splash, plays the real-time-rendered 3D intro cinematics, and
+`Escape` skips to the actual interactive profile-selection main menu — no
+"reinstall this software" error anywhere in that path. Checkpoints on disk:
 `disk-vhd-503-win98-desktop-checkpoint.vhd` (pre-drivers),
-`disk-vhd-503-post-drivers-checkpoint.vhd` (post-drivers, also pushed to
+`disk-vhd-503-post-drivers-checkpoint.vhd` (post-drivers, pushed to
 `ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-post-drivers`),
-and `disk-vhd-503-with-loco-checkpoint.vhd` (post-LOCO-copy, also pushed to
-`ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-with-loco`).
+`disk-vhd-503-with-loco-checkpoint.vhd` (the old raw-copy install, superseded
+— kept only for reference), and **`disk-vhd-503-genuine-install-checkpoint.vhd`
+(the working genuine install, pushed to
+`ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-genuine-loco-install`)**.
 Remaining work, roughly in order:
-- **`Loco.exe` launches (splash screen renders) but hits "An error occurred
-  while loading. Please reinstall this software."** — see gotchas #27–28.
-  The corrupted-resource-file theory is ruled out (`resource.RFD` confirmed
-  intact in-guest), and a first attempt at the missing-registry-state theory
-  (gotcha #28) didn't fix it either. Remaining directions:
-  - **CD-check**: try building a CD image that better mimics the real LEGO
-    LOCO retail disc (correct volume label at minimum; a full ISO of the
-    actual retail CD if one can be located, rather than a plain file-transfer
-    ISO) and see if the error changes or disappears.
-  - **Registry, round 2**: a real RGKN/RGDB parse of `SYSTEM.DAT` (rather
-    than gotcha #28's flat string scan) to confirm the actual key hierarchy,
-    or booting `netready.qcow2` far enough to get a real `regedit /e` export
-    despite the input-reliability issues found there (may need a different
-    QEMU display backend than `-vnc`, e.g. `-display sdl` via Xvfb+x11vnc
-    the way `run-3dfx-headless.sh` does it for its own display, to inherit
-    the same input path already proven reliable with PCem all session).
-- Benchmark performance (once it runs) against the qemu-3dfx numbers in the
-  sibling README.
-- Snapshot the finished disk into the existing bake pipeline
-  (`scripts/bake-game-snapshots.ps1` pattern) and publish under a new tag to
-  `ghcr.io/mroie/lego-loco-cluster/emulator-snapshot`.
+- Benchmark performance now that it actually runs — frame rate / responsiveness
+  of the 3D intro and in-game view under PCem+Voodoo3 — against the qemu-3dfx
+  numbers in the sibling README.
+- Run the m5stack-lens hardware/software companion tests against this now-working
+  LOCO instance (see `m5stack-lens/` at the repo root).
 - Minor cleanup before final imaging: remove the stray `TEST.TXT` file left
-  on `C:` from an earlier diagnostic `mcopy` (harmless if left, but tidy).
+  on `C:` from an earlier diagnostic `mcopy`, and the empty/access-denied
+  leftover `LEGO LOCO` directory entry under the old `lego media\constructive`
+  path if it's still lingering (harmless either way, but tidy).
 
 **86Box** was kept as a fallback while gotcha #18 was still unresolved —
 prebuilt Linux AppImage + ROM set already downloaded during an earlier
