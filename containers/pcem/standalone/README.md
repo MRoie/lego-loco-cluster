@@ -777,6 +777,55 @@ for the QEMU-side investigation this follows on from.
     any host-side read of a disk PCem currently has open as unreliable, not
     just host-side writes as gotcha #16 already warned.)
 
+27. **`Loco.exe` runs under PCem — genuine progress past every environment
+    blocker in this file — but hits a game-level error, not an emulator one:
+    "An error occurred while loading. Please reinstall this software."**
+    This is LEGO LOCO's own generic error dialog, shown right after its
+    splash screen (LEGO logo + "media." branding both render correctly,
+    confirming the Voodoo3/software rendering path works enough to draw the
+    splash). Launched via `C:\Program Files\lego media\constructive\LEGO
+    LOCO\Exe\Loco.exe` — reached without ever typing a colon, by opening
+    a fresh Explorer window to a known-good address-bar state (e.g.
+    `C:\Program Files\lego media`, reached entirely via icon/arrow-key
+    navigation) then `Alt+D` → `End` → typing the remaining
+    `\constructive\LEGO LOCO\Exe\Loco.exe` suffix and `Enter` — a reusable
+    pattern for launching anything by path in this environment without
+    hitting gotcha #26's colon bug at all. **Root cause not yet found; three
+    candidate explanations, most likely first**:
+    - **CD-check**: many 1998-era CD games refuse to run without their
+      original CD in the drive as a copy-protection check. `D:` currently
+      holds the custom `loco-game.iso` built for file transfer (gotcha #26),
+      not a bootable/autorun-capable image of the real LEGO LOCO retail CD —
+      if `Loco.exe` checks for a specific volume label, file, or CD-audio
+      track on `D:` and doesn't find it, this exact generic error is a very
+      plausible result.
+    - **Missing registry state**: copying the installed game's files
+      directly (this session's approach) skips whatever `HKEY_LOCAL_MACHINE`/
+      `HKEY_CURRENT_USER` keys the original InstallShield-based installer
+      (`Uninst.isu` is present in the copied folder, confirming InstallShield
+      was used originally) would have written — install path, CD key/serial,
+      DirectPlay/component registration, etc. `Exe\LEGO.INI` (a plain-text
+      config file, not the registry) does hardcode
+      `C:\Program Files\LEGO Media\Constructive\LEGO LOCO\...` paths, but
+      these match our actual copy destination case-insensitively (FAT
+      doesn't care about the `LEGO Media`/`lego media` casing difference
+      from gotcha #26's forced-lowercase typing), so this specific file is
+      probably not the culprit — but it confirms the *category* of "install
+      leaves behind state beyond just the files" is real for this game.
+    - **Corrupted/truncated resource file**: the ~57 MB `art-res\resource.RFD`
+      was copied during the two-overlapping-paste-operations episode from
+      gotcha #26; not yet confirmed byte-for-byte intact on the guest side
+      (host-side reads of this disk are unreliable per gotcha #16/#26's last
+      point, and in-guest Properties/size inspection wasn't completed before
+      pausing on this investigation).
+    Also note: this is a **different, earlier failure than the qemu-softgpu
+    sibling README's own results** for this exact game on this exact golden
+    image (`netready.qcow2`), which get as far as the intro/menu before
+    GPF'ing — this PCem attempt fails before that point, at the loading
+    screen itself, so whatever's wrong here is specific to the fresh-install
+    approach (missing state a real installer would set up) rather than a
+    LOCO-vs-3dfx-driver rendering incompatibility.
+
 ## Scripts
 
 ### `build-pcem.sh`
@@ -831,12 +880,16 @@ is identical either way. Checkpoints are saved at
 and `disk-vhd-503-with-loco-checkpoint.vhd` (post-LOCO-copy, also pushed to
 `ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-with-loco`).
 Remaining work, roughly in order:
-- Launch `Loco.exe` and confirm it actually runs under PCem + Voodoo3 — the
-  original point of this whole investigation, and the qemu-softgpu sibling
-  README's own results table shows this exact game on this exact golden
-  image hitting GPFs at the menu/on launch under QEMU+SoftGPU, so this is not
-  a given.
-- Benchmark performance (if it runs) against the qemu-3dfx numbers in the
+- **`Loco.exe` launches (splash screen renders) but hits "An error occurred
+  while loading. Please reinstall this software."** — see gotcha #27 for the
+  three candidate root causes (CD-check against `D:`, missing registry state
+  from bypassing the original InstallShield installer, or a corrupted
+  `resource.RFD`) and the reusable colon-free launch-by-path technique.
+  Next diagnostic step: confirm `resource.RFD`'s size in-guest (Explorer's
+  info panel, already proven reliable elsewhere this session) against the
+  57,305,835-byte original; if it matches, shift focus to the CD-check and
+  registry theories instead.
+- Benchmark performance (once it runs) against the qemu-3dfx numbers in the
   sibling README.
 - Snapshot the finished disk into the existing bake pipeline
   (`scripts/bake-game-snapshots.ps1` pattern) and publish under a new tag to
