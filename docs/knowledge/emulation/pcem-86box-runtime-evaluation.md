@@ -2,6 +2,24 @@
 
 Date: 2026-05-15
 
+> **Superseded on the PCem question (2026-08-07).** This document recommends
+> against PCem — keep it as a reference backend, try 86Box first — and treats
+> `containers/pcem` as a non-building placeholder. Both statements are now out
+> of date. PCem was taken through to a working runtime: Windows 98 SE + LEGO
+> LOCO boot unattended on an emulated FIC VA-503+ with a Voodoo3 3000, holding
+> **100–101% of real Pentium-MMX-200 speed** (benchmark table in
+> `containers/pcem/standalone/README.md`), and `containers/pcem` now builds
+> PCem v17 from source and ships as a first-class emulator flavor —
+> `emulator.flavor: pcem`, see `helm/loco-chart/values-pcem.yaml`.
+>
+> The comparative reasoning below still stands and is worth reading: 86Box is
+> the maintained project, and the two things this doc identifies as PCem's
+> weaknesses remain genuinely unaddressed in the container — **guest LAN**
+> (PCem's NE2000/SLiRP is compiled in but not wired to the pod bridge, so LOCO
+> multiplayer does not work on this flavor) and **upstream staleness** (v17,
+> 2022; the container carries local patches for headless/VNC use). 86Box
+> remains the right thing to evaluate for the LAN path.
+
 ## Context
 
 The live cluster currently runs Windows 98 through QEMU with SoftGPU on the

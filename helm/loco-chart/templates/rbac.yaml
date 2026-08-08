@@ -21,6 +21,11 @@ rules:
 - apiGroups: [""]
   resources: ["pods", "services", "endpoints"]
   verbs: ["get", "list", "watch"]
+# "delete" is how the restart button works: removing the pod lets the
+# StatefulSet recreate it with the same identity, disk and DNS name.
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["delete"]
 - apiGroups: ["apps"]
   resources: ["statefulsets"]
   verbs: ["get", "list", "watch"]

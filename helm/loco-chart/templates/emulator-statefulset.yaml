@@ -69,8 +69,11 @@ spec:
             mountPath: {{ .Values.storage.strategy.hostPath.path }}
       {{- end }}
       
-      # Init container for disk image population
-      {{- if .Values.emulator.diskPVC }}
+      # Init container for disk image population.
+      # PCem skips it: its entrypoint resolves its own disk (node cache first,
+      # then a curl-based registry pull), and it needs a .vhd rather than the
+      # qcow2 this container hardcodes.
+      {{- if and .Values.emulator.diskPVC (ne .Values.emulator.flavor "pcem") }}
       - name: init-disk-image
         image: {{ include "loco.image" (dict "root" . "image" .Values.emulator.image "tag" .Values.emulator.tag) }}
         imagePullPolicy: {{ .Values.emulator.imagePullPolicy }}
@@ -207,6 +210,15 @@ spec:
               command:
                 - /bin/sh
                 - -c
+                {{- if eq .Values.emulator.flavor "pcem" }}
+                # PCem only flushes its disk write-back cache on a clean exit,
+                # and the entrypoint's SIGTERM handler is what performs it, so
+                # preStop just needs to stop drawing new viewers in.
+                - |
+                  echo "Pre-stop: draining VNC connections..."
+                  pkill -TERM x11vnc 2>/dev/null || true
+                  echo "Pre-stop: complete"
+                {{- else }}
                 - |
                   echo "Pre-stop: draining VNC/WebRTC connections..."
                   # Signal GStreamer to stop cleanly
@@ -214,6 +226,7 @@ spec:
                   sleep 5
                   # Give QEMU time to save state if needed
                   echo "Pre-stop: complete"
+                {{- end }}
         ports:
         - containerPort: {{ .Values.emulator.servicePort }}
           name: service
@@ -258,6 +271,10 @@ spec:
         - name: disk
           mountPath: /images
           readOnly: {{ .Values.emulator.diskReadOnly }}
+        {{- if .Values.emulator.snapshotCache.enabled }}
+        - name: snapshot-cache
+          mountPath: /snapshot-cache
+        {{- end }}
         - name: dev-net-tun
           mountPath: /dev/net/tun
         {{- if .Values.emulator.kvm.enabled }}
@@ -315,6 +332,12 @@ spec:
         {{- else }}
         emptyDir: {}
         {{- end }}
+      {{- if .Values.emulator.snapshotCache.enabled }}
+      - name: snapshot-cache
+        hostPath:
+          path: {{ .Values.emulator.snapshotCache.hostPath }}
+          type: DirectoryOrCreate
+      {{- end }}
       - name: dev-net-tun
         hostPath:
           path: /dev/net/tun

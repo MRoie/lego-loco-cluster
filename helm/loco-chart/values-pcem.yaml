@@ -1,0 +1,120 @@
+# PCem emulator flavor — real Socket 7 hardware emulation instead of QEMU.
+#
+#   helm upgrade --install loco helm/loco-chart -n loco --create-namespace \
+#     -f helm/loco-chart/values-pcem.yaml
+#
+# PCem emulates a FIC VA-503+ (Super Socket 7 / VIA MVP3) with a 3dfx Voodoo3
+# 3000 and a Pentium MMX 200, and runs the Windows 98 SE + LEGO LOCO disk
+# snapshot published to GHCR. It exposes the same contract as the QEMU flavor —
+# raw RFB on 5901, HTTP health on 8080 — so the backend's VNC bridge and the
+# frontend grid pick it up with no changes.
+#
+# Trade-offs vs. the QEMU flavor, worth knowing before deploying this:
+#   * PCem's CPU core is single-threaded and there is no KVM path — it burns
+#     roughly one core per instance to hold 100% of real Pentium-MMX-200 speed.
+#     Scale replicas against cores, not against memory. (The VNC server adds
+#     only ~2% on top, since Xvnc serves the framebuffer it already owns.)
+#   * No WebRTC/GStreamer push, so instances render through the VNC path only.
+#   * Guest LAN is wired on the host side but not inside the guests. PCem's
+#     PCap backend is patched to build on Linux (SLiRP cannot carry a LAN
+#     game), and PCEM_NET_MODE=vxlan builds the same bridge+tap+VXLAN mesh the
+#     QEMU flavor uses — but each Windows guest still needs its NE2000 driver
+#     and a static IP installed before LEGO LOCO multiplayer will work.
+
+replicas: 2
+
+emulator:
+  flavor: pcem
+
+  image: loco-pcem
+  tag: dev
+  imagePullPolicy: Never       # image is side-loaded into kind/minikube
+
+  servicePort: 5901            # raw RFB — backend/server.js bridges WS to this
+  healthPort: 8080
+
+  # Each pod writes through to its own copy of the disk, so no shared PVC.
+  # The entrypoint fetches the snapshot into this emptyDir on first start.
+  diskPVC: ""
+  diskReadOnly: false
+
+  # One pull per node instead of one per pod (~500 MB each).
+  snapshotCache:
+    enabled: true
+    hostPath: /var/lib/loco/snapshot-cache
+
+  # PCem has no KVM path and does no host GL — both must stay off.
+  kvm:
+    enabled: false
+  dri:
+    enabled: false
+
+  # Cold boot is genuinely slow: BIOS POST plus a real Windows 98 boot at
+  # period-accurate speed is ~2 minutes, and the first pod on a node also
+  # pulls the disk. Startup probe is sized for that; liveness/readiness stay
+  # tight afterwards.
+  probes:
+    startup:
+      enabled: true
+      path: /health
+      initialDelaySeconds: 20
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 60     # up to 10 minutes to reach a live desktop
+    liveness:
+      enabled: true
+      path: /                  # "/" = process alive; does not flap while booting
+      initialDelaySeconds: 60
+      periodSeconds: 20
+      timeoutSeconds: 10
+      failureThreshold: 3
+    readiness:
+      enabled: true
+      path: /health            # "/health" = VNC actually serving pixels
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+
+  env:
+    SNAPSHOT_IMAGE: "ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-loco-1024x768"
+    SNAPSHOT_CACHE_DIR: "/snapshot-cache"
+    DISK_NAME: "win98-loco.vhd"
+    # Board the snapshot's Windows install is bound to — see containers/pcem/README.md
+    PCEM_MODEL: "fic_va503p"
+    PCEM_GFXCARD: "v3_3000"
+    PCEM_MEM_SIZE: "65536"
+    PCEM_VNC_MOUSE: "1"
+    SCREEN_WIDTH: "1024"
+    SCREEN_HEIGHT: "768"
+    # TigerVNC's Xvnc serves RFB from the X server itself. The x11vnc
+    # screen-grabber alternative does not survive Kubernetes — see
+    # containers/pcem/README.md before changing this.
+    VNC_BACKEND: "xvnc"
+    # Direct/tablet-style pointing: the guest cursor goes exactly where the
+    # client points, rather than being nudged by relative motion.
+    PCEM_POINTER_MODE: "absolute"
+    # Guest LAN. The disk snapshot has the Realtek NIC driver and the Windows
+    # network client installed, so the guests come up on a shared layer 2:
+    # each pod builds a bridge + tap and meshes to its peers over VXLAN, and
+    # ordinal 0 runs DHCP. See containers/pcem/README.md.
+    PCEM_NETCARD: "rtl8029as"
+    PCEM_NET_MODE: "vxlan"
+
+# kind/minikube have no NFS server; keep art-res on a hostPath.
+storage:
+  strategy:
+    hostPath:
+      enabled: true
+      path: "/tmp/loco-art-shared"
+      permissions: "777"
+    hybrid:
+      enabled: false

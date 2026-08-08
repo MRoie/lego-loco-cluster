@@ -91,3 +91,6 @@ containers/win98-loco-golden-*.qcow2.sha256
 # Allow committed release bundles under dist/ despite the broad *.tar.gz above.
 !dist/
 !dist/**
+
+# Local GHCR upload token — never commit this.
+GHCRUPTOKEN
