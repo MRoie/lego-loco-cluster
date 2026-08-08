@@ -12,7 +12,22 @@ import useWebRTC from '../hooks/useWebRTC';
  * Exit: Escape key, or click the small ✕ button in the top-right corner.
  */
 export default function FullscreenViewer({ instance, onExit, showBenchmark }) {
-  const { videoRef, loading } = useWebRTC(instance.id);
+  const { videoRef, loading, connectionQuality } = useWebRTC(instance.id);
+  // Same gate as InstanceCard — see the long comment there. `loading` alone
+  // flips false as soon as one track arrives, so an instance that never
+  // produces WebRTC media (the PCem emulator flavor pushes no RTP at all)
+  // renders a permanently black <video> instead of falling back to the VNC
+  // viewer that does work. Trust the video only while the peer connection is
+  // actually 'connected', and once it has failed stay on VNC for good rather
+  // than remounting the viewer on every transient blip.
+  const webrtcFailedRef = useRef(false);
+  if (connectionQuality?.connectionState === 'failed' ||
+      connectionQuality?.connectionState === 'disconnected') {
+    webrtcFailedRef.current = true;
+  }
+  const webrtcHealthy = !loading &&
+    connectionQuality?.connectionState === 'connected' &&
+    !webrtcFailedRef.current;
   const [showHud, setShowHud] = useState(true);
   const hudTimerRef = useRef(null);
   const containerRef = useRef(null);
@@ -78,7 +93,7 @@ export default function FullscreenViewer({ instance, onExit, showBenchmark }) {
       <div className="absolute inset-0">
         {isReady && !isDemo ? (
           <>
-            {!loading ? (
+            {webrtcHealthy ? (
               <video
                 ref={videoRef}
                 className="w-full h-full object-contain bg-black"

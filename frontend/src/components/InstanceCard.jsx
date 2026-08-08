@@ -17,6 +17,44 @@ import QualityIndicator from './QualityIndicator';
  * - isActive: whether this card is currently focused
  * - onClick: callback when card is clicked
  */
+/**
+ * The address other players type into LEGO LOCO's TCP/IP join box to join this
+ * instance's game. Click to copy — it is needed at a moment when the user is
+ * looking at a Windows 98 dialog inside a VNC canvas and cannot copy from it.
+ *
+ * `carrier: 0` means the guest's link has no carrier, so nothing it sends
+ * reaches the LAN. The address is still correct, it just will not answer yet —
+ * worth showing rather than hiding, because a greyed-out address with a reason
+ * is far less confusing than a plausible one that silently never connects.
+ */
+function JoinAddress({ guestNetwork }) {
+  const [copied, setCopied] = useState(false);
+  if (!guestNetwork?.ip) return null;
+
+  const live = guestNetwork.carrier === 1;
+  const copy = (e) => {
+    e.stopPropagation();
+    navigator.clipboard?.writeText(guestNetwork.ip).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 1200); },
+      () => {},
+    );
+  };
+
+  return (
+    <button
+      onClick={copy}
+      className={`mt-1 block w-full text-left font-mono text-[11px] leading-tight ${
+        live ? 'text-blue-700 hover:text-blue-900' : 'text-gray-400 hover:text-gray-600'
+      }`}
+      title={live
+        ? `LAN address — type this into LEGO LOCO's TCP/IP box to join this instance. Click to copy.`
+        : `LAN address ${guestNetwork.ip}, but ${guestNetwork.pcap_device || 'the guest link'} has no carrier, so the guest cannot reach the LAN yet.`}
+    >
+      {copied ? '✓ copied' : `⇄ ${guestNetwork.ip}${live ? '' : ' (no link)'}`}
+    </button>
+  );
+}
+
 export default function InstanceCard({ instance, isActive, onClick, onFullscreen }) {
   const { videoRef, loading, audioLevel, connectionQuality } = useWebRTC(instance.id);
   // Only trust the WebRTC <video> element once the peer connection has
@@ -46,6 +84,29 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
   );
   const [volume, setVolumeState] = useState(1);
   const [muted, setMuted] = useState(true);
+  const [restarting, setRestarting] = useState(false);
+
+  // Restart = delete the pod; the StatefulSet brings it back with the same
+  // ordinal, disk and DNS name. Discovery then walks it not-ready -> ready on
+  // its own, so there is nothing to poll here beyond clearing the button.
+  const handleRestart = async (e) => {
+    e.stopPropagation();
+    if (restarting) return;
+    setRestarting(true);
+    try {
+      const res = await fetch(`/api/instances/${instance.id}/restart`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error('[InstanceCard] restart failed', res.status, body);
+      }
+    } catch (err) {
+      console.error('[InstanceCard] restart request failed', err);
+    } finally {
+      // Boot takes a couple of minutes; keep the button disabled long enough
+      // that it is not mashed into a restart loop.
+      setTimeout(() => setRestarting(false), 15000);
+    }
+  };
   const levelRef = useRef(null);
 
   // Sync volume / mute to the <video> element
@@ -182,6 +243,7 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
               <span className="text-sm font-bold text-black lego-text tracking-wide uppercase">
                 {instance.name || instance.id}
               </span>
+              <JoinAddress guestNetwork={instance.guestNetwork} />
             </div>
             <div className="flex items-center space-x-2">
               <div
@@ -246,6 +308,20 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
                   title="Fullscreen control (or double-click card)"
                 >
                   ⛶
+                </button>
+              )}
+              {instance.provisioned && (
+                <button
+                  onClick={handleRestart}
+                  disabled={restarting}
+                  className={`lego-mini-button text-white shadow-lg ${
+                    restarting
+                      ? 'bg-gray-500 border-gray-700 cursor-wait'
+                      : 'bg-orange-600 border-orange-800 hover:bg-orange-500'
+                  }`}
+                  title={restarting ? 'Restarting…' : 'Restart this machine (rebuilds the pod)'}
+                >
+                  {restarting ? '…' : '⟳'}
                 </button>
               )}
             </div>

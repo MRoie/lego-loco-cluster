@@ -488,6 +488,54 @@ app.get("/api/status", (req, res) => {
  * @returns {Array} List of all available instances (static + auto-discovered)
  * @status 503 - Service unavailable if instance discovery fails
  */
+
+/**
+ * Each emulator publishes the address other guests reach it on — the one a
+ * player types into LEGO LOCO's TCP/IP join box to join that instance's game.
+ * It is a DHCP reservation keyed on the guest MAC, so it is stable across
+ * restarts and knowable before the guest has finished booting.
+ *
+ * Cached, because /api/instances is polled continuously by every open tab and
+ * this value changes about as often as the pod does. A failed probe caches a
+ * null so one unreachable instance cannot stall the list on every poll.
+ */
+const GUEST_NETWORK_TTL_MS = 15_000;
+const guestNetworkCache = new Map();
+
+function fetchGuestNetwork(instance) {
+  const cached = guestNetworkCache.get(instance.id);
+  if (cached && Date.now() - cached.at < GUEST_NETWORK_TTL_MS) {
+    return Promise.resolve(cached.value);
+  }
+
+  const host = instance.host || instance.podIP || instance.addresses?.podIP;
+  if (!host) return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    const done = (value) => {
+      guestNetworkCache.set(instance.id, { at: Date.now(), value });
+      resolve(value);
+    };
+    const url = `http://${host}:${instance.healthPort || 8080}/health`;
+    // Short timeout on purpose: this decorates the response, it must never be
+    // the reason the instance list is slow.
+    const req = http.get(url, { timeout: 1500 }, (response) => {
+      let data = "";
+      response.on("data", (chunk) => (data += chunk));
+      response.on("end", () => {
+        try {
+          const health = JSON.parse(data);
+          done(health.guest_network || null);
+        } catch {
+          done(null);
+        }
+      });
+    });
+    req.on("error", () => done(null));
+    req.on("timeout", () => { req.destroy(); done(null); });
+  });
+}
+
 app.get("/api/instances", async (req, res) => {
   try {
     logger.info("Instances request received", {
@@ -495,8 +543,12 @@ app.get("/api/instances", async (req, res) => {
       remoteAddress: req.ip || req.connection.remoteAddress
     });
     const instances = await instanceManager.getInstances();
-    logger.debug("Instances response prepared", { instanceCount: instances.length });
-    res.json(instances);
+    const decorated = await Promise.all(instances.map(async (instance) => ({
+      ...instance,
+      guestNetwork: await fetchGuestNetwork(instance),
+    })));
+    logger.debug("Instances response prepared", { instanceCount: decorated.length });
+    res.json(decorated);
   } catch (e) {
     logger.error("Instances config error", {
       error: e.message,
@@ -895,6 +947,64 @@ app.post("/api/quality/recover/:instanceId", criticalRateLimit, validate({
   } catch (e) {
     logger.error("Failed to trigger recovery", { instanceId: req.params.instanceId, error: e.message });
     res.status(500).json({ error: "Failed to trigger recovery" });
+  }
+});
+
+// Restart a single instance by deleting its pod. The StatefulSet recreates it
+// with the same ordinal, the same PVC/disk and the same DNS name, so the
+// frontend keeps the tile and simply watches it go not-ready -> ready again.
+//
+// This is deliberately not the /api/quality/recover path: that one drives
+// StreamQualityMonitor, which is not started (see qualityMonitor.start() at
+// the bottom of this file), so it 404s on every instance.
+app.post("/api/instances/:instanceId/restart", criticalRateLimit, async (req, res) => {
+  const instanceId = req.params.instanceId;
+  try {
+    const instance = await instanceManager.getInstanceById(instanceId);
+    if (!instance) {
+      return res.status(404).json({ error: `Instance ${instanceId} not found` });
+    }
+
+    const podName = instance.podName || instance.kubernetes?.targetRef?.name;
+    const namespace = instance.kubernetes?.namespace ||
+      instanceManager.kubernetesDiscovery?.getNamespace?.();
+
+    if (!podName || !namespace) {
+      return res.status(409).json({
+        error: "Instance has no pod to restart",
+        detail: "Restart requires Kubernetes discovery; static instances cannot be restarted."
+      });
+    }
+
+    const k8sApi = instanceManager.kubernetesDiscovery?.k8sApi;
+    if (!k8sApi) {
+      return res.status(503).json({ error: "Kubernetes API unavailable" });
+    }
+
+    logger.info("Restarting instance", { instanceId, podName, namespace });
+    await k8sApi.deleteNamespacedPod({ name: podName, namespace });
+
+    // Drop the discovery cache so the tile reflects the new pod promptly
+    // instead of showing the deleted one as ready for up to a cache TTL.
+    instanceManager.cachedInstances = null;
+    instanceManager.lastDiscoveryTime = null;
+
+    res.json({
+      message: `Restarting ${instanceId}`,
+      instanceId,
+      podName,
+      namespace
+    });
+  } catch (e) {
+    const status = e?.statusCode || e?.response?.statusCode;
+    logger.error("Failed to restart instance", { instanceId, error: e.message, status });
+    if (status === 403) {
+      return res.status(403).json({
+        error: "Not permitted to delete pods",
+        detail: "The backend ServiceAccount needs delete on pods (see helm/loco-chart/templates/rbac.yaml)."
+      });
+    }
+    res.status(500).json({ error: "Failed to restart instance", detail: e.message });
   }
 });
 

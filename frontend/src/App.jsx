@@ -6,6 +6,7 @@ import DiscoveryStatus from "./components/DiscoveryStatus";
 import BenchmarkOverlay from "./components/BenchmarkOverlay";
 import FullscreenViewer from "./components/FullscreenViewer";
 import useProgressiveLoading from "./hooks/useProgressiveLoading";
+import ControlsHelpModal from './components/ControlsHelpModal';
 import AppLoadingOverlay from "./components/AppLoadingOverlay";
 
 const VRScene = lazy(() => import(/* webpackChunkName: "vr" */ "./VRScene"));
@@ -175,6 +176,8 @@ export default function App() {
                   📊 BENCH
                 </button>
               )}
+              {/* Controls cheat-sheet (was painted on every tile) */}
+              <ControlsHelpModal />
               {/* Discovery Status */}
               <DiscoveryStatus status={discoveryStatus} />
               {/* VR Button */}
