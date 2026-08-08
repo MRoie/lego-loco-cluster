@@ -100,8 +100,9 @@ export default function BenchmarkOverlay({ visible = true, onToggle }) {
               className="bg-black/85 backdrop-blur-sm border-x border-b border-green-500/30 rounded-b-lg overflow-hidden"
             >
               {/* Header row */}
-              <div className="grid grid-cols-9 gap-1 px-3 py-1 text-[10px] font-mono text-gray-500 border-b border-gray-700/50">
+              <div className="grid grid-cols-10 gap-1 px-3 py-1 text-[10px] font-mono text-gray-500 border-b border-gray-700/50">
                 <span>INSTANCE</span>
+                <span>LAN IP</span>
                 <span>STATUS</span>
                 <span>FPS</span>
                 <span>LATENCY</span>
@@ -116,17 +117,40 @@ export default function BenchmarkOverlay({ visible = true, onToggle }) {
               {instances.map((inst, i) => (
                 <div
                   key={inst.id || i}
-                  className="grid grid-cols-9 gap-1 px-3 py-0.5 text-[11px] font-mono border-b border-gray-800/50 hover:bg-green-900/10"
+                  className="grid grid-cols-10 gap-1 px-3 py-0.5 text-[11px] font-mono border-b border-gray-800/50 hover:bg-green-900/10"
                 >
                   <span className="text-blue-300 truncate" title={inst.id}>
                     emu-{inst.instanceId ?? i}
                   </span>
+                  {/* The address a player types into LEGO LOCO's TCP/IP join
+                      box to join this instance. Dimmed when the guest's link
+                      has no carrier: the address is right, it just cannot
+                      answer yet, which is worth distinguishing from wrong. */}
+                  <span
+                    className={inst.guestLink ? 'text-cyan-300 truncate' : 'text-gray-600 truncate'}
+                    title={inst.guestIp
+                      ? (inst.guestLink
+                          ? `${inst.guestIp} — LOCO join address for this instance`
+                          : `${inst.guestIp} — guest link has no carrier, cannot be reached yet`)
+                      : 'no guest LAN'}
+                  >
+                    {inst.guestIp || '--'}
+                  </span>
                   <span className={inst.healthy ? 'text-green-400' : 'text-red-400'}>
                     {inst.healthy ? 'OK' : 'ERR'}
                   </span>
-                  <span className={getFpsColor(inst.fps || 0)}>
-                    {inst.fps || 0}
-                  </span>
+                  {/* PCem reports no frame rate — for it the meaningful
+                      number is whether it is holding real-time speed. */}
+                  {inst.speedPercent != null && !inst.fps ? (
+                    <span
+                      className={inst.speedPercent >= 90 ? 'text-green-400' : 'text-yellow-400'}
+                      title="emulated CPU speed vs. real time"
+                    >
+                      {inst.speedPercent}%
+                    </span>
+                  ) : (
+                    <span className={getFpsColor(inst.fps || 0)}>{inst.fps || 0}</span>
+                  )}
                   <span className={getLatColor(inst.latency || 0)}>
                     {inst.latency ? `${inst.latency.toFixed(0)}ms` : '--'}
                   </span>
@@ -143,8 +167,9 @@ export default function BenchmarkOverlay({ visible = true, onToggle }) {
               ))}
 
               {/* Summary row */}
-              <div className="grid grid-cols-9 gap-1 px-3 py-1 text-[11px] font-mono bg-gray-900/60 border-t border-green-500/20">
+              <div className="grid grid-cols-10 gap-1 px-3 py-1 text-[11px] font-mono bg-gray-900/60 border-t border-green-500/20">
                 <span className="text-white font-bold">TOTAL</span>
+                <span />
                 <span className="text-gray-400">{summary.healthyCount || 0}/{instances.length}</span>
                 <span className={getFpsColor(summary.avgFps || 0)}>
                   avg {summary.avgFps || 0}

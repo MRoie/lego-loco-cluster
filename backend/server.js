@@ -1198,18 +1198,32 @@ app.get("/api/benchmark/live", async (req, res) => {
             const latency = Date.now() - t0;
             try {
               const h = JSON.parse(data);
+              // Two emulator flavors publish health here and they do not agree
+              // on field names. Reading only QEMU's shape made every PCem
+              // instance show up as ERR with three red crosses while it was
+              // running perfectly — the columns were reporting the absence of
+              // a field, not the state of the machine. Accept either.
               resolve({
                 id: instance.id,
                 instanceId: instance.instanceId || instance.id,
                 host,
-                healthy: h.overall_status === "healthy",
+                emulator: h.emulator || "qemu",
+                healthy: h.overall_status === "healthy" || h.ready === true,
                 fps: h.video?.estimated_frame_rate || 0,
+                // PCem has no frame-rate meter; what matters for it is whether
+                // it is holding real-time speed against the emulated Pentium.
+                speedPercent: h.video?.emulated_speed_percent ?? null,
                 latency,
                 cpu: h.performance?.cpu_usage || 0,
                 memory: h.performance?.memory_usage || 0,
-                qemuHealthy: h.qemu_healthy || false,
-                displayActive: h.video?.display_active || false,
-                networkOk: (h.network?.bridge_up && h.network?.tap_up) || false,
+                qemuHealthy: h.qemu_healthy || h.pcem?.running || false,
+                displayActive: h.video?.display_active || h.video?.vnc_available || false,
+                networkOk: (h.network?.bridge_up && h.network?.tap_up) ||
+                  h.guest_network?.carrier === 1 || false,
+                // The address other guests reach this one on — what a player
+                // types into LEGO LOCO's TCP/IP join box.
+                guestIp: h.guest_network?.ip || null,
+                guestLink: h.guest_network?.carrier === 1,
                 vncAvailable: h.video?.vnc_available || false,
                 audioRunning: h.audio?.pulse_running || false,
               });

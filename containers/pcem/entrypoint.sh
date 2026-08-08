@@ -88,6 +88,7 @@ set -euo pipefail
 # and PCEM_MOUSE_SPEED in agreement. Like the computer name, it is imported at
 # logon, so it governs from the *next* boot onwards.
 : "${GUEST_MOUSE_ACCEL:=0}"
+: "${GUEST_MOUSE_THRESHOLD:=500}"
 : "${GUEST_NAME_PREFIX:=LOCO-}"
 : "${GUEST_WORKGROUP:=LOCOLAND}"
 # Guest addressing. Ordinal N gets ${GUEST_SUBNET}.$((GUEST_IP_BASE + N)) by
@@ -634,8 +635,13 @@ inject_guest_identity() {
     if [ "$GUEST_MOUSE_ACCEL" = "0" ]; then
       printf '[HKEY_CURRENT_USER\\Control Panel\\Mouse]\r\n'
       printf '"MouseSpeed"="0"\r\n'
-      printf '"MouseThreshold1"="0"\r\n'
-      printf '"MouseThreshold2"="0"\r\n'
+      # High, not zero. The ballistics double a packet that *reaches* the
+      # threshold, so a threshold of 0 means every packet qualifies — setting
+      # these to 0 to "turn acceleration off" asks for the opposite of what it
+      # looks like. Putting them above any packet we will ever emit
+      # (PCEM_MOUSE_MAX_PACKET is 120) is what actually makes a mickey a pixel.
+      printf '"MouseThreshold1"="%s"\r\n' "$GUEST_MOUSE_THRESHOLD"
+      printf '"MouseThreshold2"="%s"\r\n' "$GUEST_MOUSE_THRESHOLD"
       printf '\r\n'
     fi
   } > "$reg"
