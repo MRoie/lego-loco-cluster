@@ -117,7 +117,7 @@ COPY --from=builder /out/runtime-deps.txt /tmp/runtime-deps.txt
 RUN apt-get update && apt-get install -y --no-install-recommends \
         $(cat /tmp/runtime-deps.txt) \
         tigervnc-standalone-server xvfb x11vnc xdotool x11-utils \
-        python3 curl ca-certificates procps tini mtools iproute2 libpcap0.8 dnsmasq \
+        python3 curl ca-certificates procps tini mtools iproute2 ethtool libpcap0.8 dnsmasq \
     && rm -rf /var/lib/apt/lists/* /tmp/runtime-deps.txt
 
 COPY --from=builder /out/pcem /usr/local/bin/pcem

@@ -329,44 +329,62 @@ configured per-instance inside Windows.
 
 ## Known gaps
 
-- **The identity import costs one reboot** (verified: the second boot comes up
-  with no name-collision dialog). `inject_guest_identity` writes
-  `LOCOID.REG` plus a StartUp batch file onto the disk; Windows imports it at
-  logon, but reads the computer name at *boot*, so the unique name only takes
-  effect on the following boot. The first boot of a fresh disk still shows the
-  name-collision dialog. Note the StartUp batch file rather than a WIN.INI
-  `run=` line: `run=` takes a space-separated list of *programs*, so
-  `run=regedit /s C:\LOCOID.REG` launches three things, the first being an
-  interactive Registry Editor window that steals focus from the game.
-- **Cloned guests share a computer name until then.** Every instance boots from the same
-  golden disk, so once they are actually on a LAN Windows reports *"Error 38:
-  The computer name you specified is already in use on the network"* at
-  startup and Microsoft Networking fails to load. It is dismissable and does
-  not stop IP traffic, but it needs a per-instance identity. The QEMU flavor
-  solves this with a generated identity floppy; the equivalent here would be
-  the entrypoint writing a per-ordinal `.REG` into the disk with mtools before
-  launch (the computer name lives in the registry, which cannot be edited
-  offline with hivex/chntpw — those are NT-only).
-- **DHCP does not complete; the guests use APIPA.** Windows sends a
-  DHCPDISCOVER, the server answers with an OFFER, and no DHCPREQUEST ever
-  follows — with the hand-rolled `mini-dhcp.py` *and* with dnsmasq, so it is
-  not the packet format. Windows falls back to a `169.254.x` link-local
-  address, which works for LAN play (the guests are on one L2 segment, and
-  APIPA's own duplicate-address detection proves they see each other's ARP)
-  but is not deterministic. Worth fixing so instances get stable addresses;
-  not a blocker.
-- **`vxlan` mode is deployed but unproven.** `direct` mode is verified end to
-  end: two containers on a user-defined Docker network, and one guest pings
-  the other at 0% loss (`169.254.146.55 -> 169.254.146.54`, ~17 ms average).
-  The VXLAN mesh runs in the cluster with the same code but has not had a
-  guest-to-guest ping put through it.
-- **No WebRTC path.** The QEMU flavor pushes VP8/Opus RTP to the backend for
-  the `<video>` tile; PCem does not, so instances render over VNC only.
-- **The frontend's deep-health panel reads QEMU-shaped keys.** It branches on
-  `qemu_healthy` / `qemu_cpu` (`backend/services/streamQualityMonitor.js`,
-  `frontend/src/components/QualityIndicator.jsx`), which PCem does not emit,
-  so the benchmark overlay shows `QEMU ✗ / DISPLAY ✗ / NETWORK ✗` even while
-  the instance is live and `/api/instances/live` reports it ready.
+**Guest NetBIOS names collide.** Every guest reports the same Windows name
+(`W5C5G7` in the DHCP log), because the `LOCOID.REG` import does not appear to
+take effect. The file and its StartUp `.BAT` are both verifiably written to the
+right paths on the disk, and `regedit /s` should apply them at logon — but
+neither the computer name nor the `Control Panel\Mouse` values it sets ever
+show up in the guest's behaviour. Something between "the file is on the disk"
+and "Windows has read it" is broken and has not been found. DirectPlay over
+TCP/IP with an explicit address does not care, but Microsoft Networking will.
+
+**In-game pointer travels half distance.** The absolute-pointer model covers
+distance by relying on the guest doubling large packets, which it does on the
+desktop and does not inside a game. Setting `PCEM_MOUSE_SPEED=0` inverts the
+assumption — exact in-game, 2x overshoot on the desktop. Measured attempts to
+remove the doubling at the source (`MouseSpeed=0`, then `MouseThreshold1/2` at
+0 and at 500) all failed: this guest doubles regardless, so `Control
+Panel\Mouse` is not what governs the curve here. The real fix is probably to
+move the guest off the 1200-baud serial mouse onto PS/2 — 200 Hz and a +/-255
+range remove the reason large packets are needed for speed at all — but that
+needs a driver installed inside Windows.
+
+**LEGO LOCO does not fill the guest screen.** The emulator fills the VNC
+framebuffer (see *Filling the view*), but the game plays in a fixed-size window
+inside an 800x600 desktop, so the world view is a pane with the game's own
+scrolling around it. `GUEST_RESOLUTION` exists to match the desktop to the game
+and is deliberately left unset: a desktop smaller than the game window would
+make it worse, and this has not been measured with the game actually running.
+
+**Automating a LOCO launch is unreliable.** Double-clicking the desktop icon
+selects it rather than opening it — the two clicks land outside Windows' double-
+click time even at a 0.08s hold — and click-then-Enter does not launch it
+either. The pointer itself is provably landing on target, so this is the launch
+path, not the input path. Consequently the in-game LAN lobby (briefcase ->
+pencil/binoculars -> TCP -> green check) has never been driven end to end.
+
+### Fixed, but worth knowing about
+
+Three bugs made the guest LAN look plumbed while carrying nothing. All three
+were silent — every interface read healthy to `ip link`:
+
+* **The tap had no carrier.** A tap only has carrier while a process holds its
+  `/dev/net/tun` fd, and PCem's PCap backend attaches with libpcap and never
+  opens it. Replaced with a veth pair.
+* **The VXLAN mesh loop died on its first DNS miss.** Backgrounded under
+  `set -euo pipefail`, and `getent hosts` exits 2 for a name that does not
+  resolve. Ordinal 0 starts before ordinal 1 exists, so the one pod that also
+  runs DHCP lost its peer list seconds after boot and never rebuilt it.
+* **DHCP replies reached the guest with a broken UDP checksum.** A locally
+  generated reply leaves the stack with `CHECKSUM_PARTIAL`, and since every
+  device in the path advertises tx-checksumming the kernel never completes it.
+  A kernel peer would not care; Windows 98 checksums in software, found it
+  wrong, and dropped every OFFER. Fixed with `ethtool -K ... tx off`. The tell
+  was that the guest's own DISCOVERs (checksummed by Windows) were accepted and
+  it answered ARP (no checksum), so only checksummed L4 was dying.
+
+Note for future captures: this Win98 image emits a nonsensical BOOTP `secs`
+value and dnsmasq mirrors it back. It is not a symptom of anything.
 
 ## Layout
 

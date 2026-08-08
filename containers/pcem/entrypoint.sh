@@ -470,6 +470,34 @@ setup_guest_lan() {
     log_warn "POD_IP unset — VXLAN mesh skipped, the guest link is local-only"
   fi
 
+  # Turn off TX checksum offload on everything the guest's traffic crosses.
+  #
+  # This is the second reason DHCP never completed, and it is invisible without
+  # a packet capture. A reply generated on this host — dnsmasq's DHCPOFFER —
+  # leaves the stack with skb->ip_summed = CHECKSUM_PARTIAL: the UDP checksum
+  # field holds only the pseudo-header partial sum, on the understanding that
+  # the NIC will finish it. Since every device in the path advertises
+  # tx-checksumming, the kernel never calls skb_checksum_help(), so nothing ever
+  # does. A kernel peer would not care. But libpcap hands PCem the raw bytes,
+  # PCem hands them to the emulated NE2000, and Windows 98 computes the checksum
+  # in software, finds it wrong, and silently discards the datagram. The OFFER
+  # is on the wire and correct in every other respect — broadcast MAC,
+  # 255.255.255.255, broadcast flag set — and the client simply never sees it.
+  #
+  # The tell: the guest's own DISCOVERs arrive fine (Windows checksums them in
+  # software) and it answers ARP (no checksum at all), so the path and PCem's
+  # RX are provably good and only checksummed L4 dies.
+  #
+  # The veth's bridge-side end is the load-bearing one — it is the device the
+  # frame is transmitted on before veth_xmit hands it over — but the others are
+  # free.
+  local dev
+  for dev in "$PCEM_VETH_PEER" "$PCEM_VETH" "$PCEM_BRIDGE"; do
+    [ -e "/sys/class/net/${dev}" ] || continue
+    ethtool -K "$dev" tx off >/dev/null 2>&1 || \
+      log_warn "could not disable TX checksum offload on ${dev} — DHCP replies may reach the guest with a bad UDP checksum"
+  done
+
   # Carrier is the thing that was broken before, so say it out loud rather than
   # leaving it to be discovered by a silent DHCP failure ten minutes later.
   local carrier
@@ -538,17 +566,49 @@ start_guest_dhcp() {
 # written once. Head-end replication: one "all-zero MAC" entry per peer makes
 # the kernel flood broadcast/unknown-unicast to each of them, which is what
 # DirectPlay's session discovery needs.
+# Head-end replication: one all-zeros FDB entry per peer pod tells the VXLAN
+# device where to send frames it has no better destination for. With
+# `nolearning` and no remote/group on the device, a vxlan with no such entry has
+# nowhere to send anything and vxlan_xmit() drops every frame — visible as
+# tx_packets=0 with tx_dropped climbing.
+#
+# `set +e` and the `|| ip=""` are load-bearing, not defensive noise. This runs
+# backgrounded while `set -euo pipefail` is in effect, and `getent hosts` exits
+# 2 for a name that does not resolve. Under pipefail that status became the
+# assignment's status, and errexit then killed the whole subshell on the first
+# unresolvable peer. StatefulSet ordinal 0 starts before ordinal 1 exists, so
+# that lookup was guaranteed to fail on the first pass of the first pod — the
+# one pod that also runs DHCP. The mesh loop died seconds after starting and
+# silently never ran again, so ordinal 0 could never reach any guest but its
+# own. Nothing logged, and `ip link` showed a perfectly healthy vxlan device.
 mesh_vxlan_peers() {
   local svc="${EMULATOR_SERVICE_NAME:-}" ns="${POD_NAMESPACE:-default}"
   local replicas="${EMULATOR_REPLICAS:-0}" i peer ip
   [ -n "$svc" ] || return 0
+  set +e
+  local -A announced=()
   while :; do
     i=0
     while [ "$i" -lt "$replicas" ]; do
       peer="${svc}-${i}.${svc}.${ns}.svc.cluster.local"
-      ip="$(getent hosts "$peer" 2>/dev/null | awk '{print $1; exit}')"
+      ip="$(getent hosts "$peer" 2>/dev/null | awk '{print $1; exit}')" || ip=""
       if [ -n "$ip" ] && [ "$ip" != "${POD_IP:-}" ]; then
-        bridge fdb append 00:00:00:00:00:00 dev "vxlan${VXLAN_ID}" dst "$ip" 2>/dev/null || true
+        # `append`, and dedupe by reading the table back. The all-zeros entry is
+        # a *list* of head-end destinations, so `bridge fdb replace` on it fails
+        # with "Operation not supported" — append is the only verb it takes, and
+        # appending blindly every 30s would pile up a duplicate per pass.
+        if ! bridge fdb show dev "vxlan${VXLAN_ID}" self 2>/dev/null |
+             grep -q "^00:00:00:00:00:00 dst ${ip} "; then
+          if bridge fdb append 00:00:00:00:00:00 dev "vxlan${VXLAN_ID}" dst "$ip" 2>/dev/null; then
+            log_ok "VXLAN peer ${svc}-${i} at ${ip}"
+          else
+            log_warn "could not add VXLAN head-end entry for ${svc}-${i} (${ip})"
+          fi
+        fi
+        announced["peer-$i"]=""
+      elif [ -z "$ip" ] && [ "${announced[peer-$i]:-}" != "1" ]; then
+        log_warn "VXLAN peer ${svc}-${i} does not resolve yet — retrying every 30s"
+        announced["peer-$i"]=1
       fi
       i=$((i + 1))
     done
