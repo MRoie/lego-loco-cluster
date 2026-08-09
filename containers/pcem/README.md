@@ -433,6 +433,20 @@ were silent — every interface read healthy to `ip link`:
 Note for future captures: this Win98 image emits a nonsensical BOOTP `secs`
 value and dnsmasq mirrors it back. It is not a symptom of anything.
 
+## Tools
+
+Built while debugging this container, because nothing existing answered the
+question. `.claude/skills/win98-guest-forensics/` documents how to use them
+together.
+
+| Tool | What it is for |
+|---|---|
+| `scripts/win9x-hive-dump.py` | Read a Win9x CREG registry hive. hivex and chntpw are NT-only, so this is the only way to see what is actually in `SYSTEM.DAT`. `--find` marks hits live vs deleted; `--diff` compares two guests. |
+| `scripts/nbt-names.py` | Ask a guest which NetBIOS names it has *registered* — what it announces, rather than what its registry says. |
+| `scripts/vnc-drive.py` | Drive the guest GUI over RFB: move, click, type, screenshot. |
+| `scripts/vnc-screenshot.py` | Single frame grab. |
+| `scripts/pcem-snapshot.sh` | Package a guest disk as an OCI image. |
+
 ## Layout
 
 | Path | Purpose |
