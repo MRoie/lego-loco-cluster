@@ -89,6 +89,11 @@ set -euo pipefail
 # logon, so it governs from the *next* boot onwards.
 : "${GUEST_MOUSE_ACCEL:=0}"
 : "${GUEST_MOUSE_THRESHOLD:=500}"
+# Launch LEGO LOCO from WIN.INI's [windows] run= at logon. Driving the desktop
+# icon over VNC is not reliable, so the launch is moved off the GUI. Short 8.3
+# path because run= takes bare program paths with no quoting.
+: "${GUEST_AUTOSTART_LOCO:=1}"
+: "${GUEST_LOCO_PATH:=C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE}"
 : "${GUEST_NAME_PREFIX:=LOCO-}"
 : "${GUEST_WORKGROUP:=LOCOLAND}"
 # Guest addressing. Ordinal N gets ${GUEST_SUBNET}.$((GUEST_IP_BASE + N)) by
@@ -638,6 +643,89 @@ EOF
   fi
 }
 
+# Append a line to the guest's AUTOEXEC.BAT, once. Idempotent because this runs
+# on every pod start and the disk survives restarts — appending blindly would
+# grow the file without bound.
+append_autoexec_line() {
+  local mtoolsrc="$1" line="$2"
+  local tmp="${RUN_DIR}/autoexec.bat"
+
+  MTOOLSRC="$mtoolsrc" MTOOLS_SKIP_CHECK=1 mtype c:/AUTOEXEC.BAT > "$tmp" 2>/dev/null || : > "$tmp"
+  if grep -qiF "$line" "$tmp" 2>/dev/null; then
+    return 0
+  fi
+  # CRLF, because this is read by COMMAND.COM.
+  printf '%s\r\n' "$line" >> "$tmp"
+  if MTOOLSRC="$mtoolsrc" MTOOLS_SKIP_CHECK=1 mcopy -o "$tmp" c:/AUTOEXEC.BAT 2>/dev/null; then
+    log_ok "AUTOEXEC.BAT: added '${line}'"
+  else
+    log_warn "could not update AUTOEXEC.BAT"
+  fi
+}
+
+# Set a key in a section of a guest .INI file.
+#
+# Used for WIN.INI's [windows] run=, which is how LEGO LOCO gets launched
+# without anyone clicking anything. Driving the desktop icon over VNC is not
+# reliable — a double-click registers as two single clicks even at an 0.08s
+# hold, and click-then-Enter does not open it either — so the launch is moved
+# off the GUI entirely.
+#
+# run= takes a space-separated list of *programs*, with no arguments. That is
+# why this passes a bare short-name path: an earlier attempt at
+# "run=regedit /s C:\LOCOID.REG" made Windows try to launch three separate
+# things, one of which was an interactive Registry Editor that stole focus.
+set_guest_ini_key() {
+  local mtoolsrc="$1" inipath="$2" section="$3" key="$4" value="$5"
+  local tmp="${RUN_DIR}/guest.ini"
+
+  MTOOLSRC="$mtoolsrc" MTOOLS_SKIP_CHECK=1 mtype "$inipath" > "$tmp" 2>/dev/null || {
+    log_warn "could not read ${inipath}"
+    return 1
+  }
+
+  SECTION="$section" KEY="$key" VALUE="$value" python3 - "$tmp" <<'PY'
+import os, sys, pathlib
+
+path = pathlib.Path(sys.argv[1])
+section, key, value = os.environ["SECTION"], os.environ["KEY"], os.environ["VALUE"]
+
+# Keep CRLF and the original bytes: this file is decades old, is not UTF-8, and
+# Windows will happily choke on a stray lone LF.
+raw = path.read_bytes().decode("latin-1")
+lines = raw.split("\r\n")
+
+out, in_section, done = [], False, False
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        # Leaving the target section without having found the key: add it here,
+        # so the key lands inside its own section rather than at end of file.
+        if in_section and not done:
+            out.append("%s=%s" % (key, value))
+            done = True
+        in_section = stripped.lower() == ("[%s]" % section).lower()
+    elif in_section and not done and stripped.lower().startswith(key.lower() + "="):
+        out.append("%s=%s" % (key, value))
+        done = True
+        continue
+    out.append(line)
+
+if not done:
+    if not in_section:
+        out.append("[%s]" % section)
+    out.append("%s=%s" % (key, value))
+
+path.write_bytes("\r\n".join(out).encode("latin-1"))
+PY
+
+  if MTOOLSRC="$mtoolsrc" MTOOLS_SKIP_CHECK=1 mcopy -o "$tmp" "$inipath" 2>/dev/null; then
+    log_ok "$(basename "$inipath"): [${section}] ${key}=${value}"
+  else
+    log_warn "could not write ${inipath}"
+  fi
+}
+
 # Give each instance its own computer name by writing a .REG onto the guest
 # filesystem and having Windows import it at logon.
 #
@@ -711,18 +799,60 @@ inject_guest_identity() {
     return 0
   }
 
-  # A batch file in the StartUp folder, NOT a WIN.INI "run=" line: run= takes a
-  # space-separated list of *programs*, so "run=regedit /s C:\LOCOID.REG" makes
-  # Windows launch three things — regedit with no arguments (which opens the
-  # Registry Editor window and steals focus), plus "/s" and the path as if they
-  # were programs too.
-  local bat="${RUN_DIR}/locoid.bat"
-  printf '@echo off\r\nregedit /s C:\\LOCOID.REG\r\n' > "$bat"
+  # Import it from AUTOEXEC.BAT, in real mode, before Windows starts.
+  #
+  # The StartUp-folder approach this replaces could never have worked, for a
+  # reason that is structural rather than a bug: Windows reads the computer name
+  # when it initialises networking at boot, and the StartUp folder runs at the
+  # *end* of logon. Even on a perfect run the name would only take effect on the
+  # following boot — and in practice it never took effect at all, so every guest
+  # kept the image's baked-in name and the second one to join the LAN put up
+  # "Error 38: The computer name you specified is already in use on the network".
+  #
+  # REGEDIT.EXE is the same binary in real mode, where /L and /R point it at the
+  # registry hives directly. At AUTOEXEC time Windows has not loaded, so the
+  # hives are not in use and the merge lands before anything reads them. This is
+  # the documented Win9x registry-recovery procedure, used here for its timing.
+  #
+  # The marker file is how we tell "the script did not run" from "the script ran
+  # and the setting did not stick" — the two failures look identical from
+  # outside and we have already lost an afternoon to not being able to
+  # distinguish them.
+  local init="${RUN_DIR}/locoinit.bat"
+  {
+    printf '@ECHO OFF\r\n'
+    printf 'REM Written by the loco-pcem entrypoint. Do not edit by hand.\r\n'
+    printf 'IF NOT EXIST C:\\LOCOID.REG GOTO END\r\n'
+    printf 'IF NOT EXIST C:\\WINDOWS\\REGEDIT.EXE GOTO NOREG\r\n'
+    printf 'C:\\WINDOWS\\REGEDIT.EXE /L:C:\\WINDOWS\\SYSTEM.DAT /R:C:\\WINDOWS\\USER.DAT C:\\LOCOID.REG\r\n'
+    printf 'ECHO imported %s > C:\\LOCOINIT.LOG\r\n' "$name"
+    printf 'GOTO END\r\n'
+    printf ':NOREG\r\n'
+    printf 'ECHO no-regedit > C:\\LOCOINIT.LOG\r\n'
+    printf ':END\r\n'
+  } > "$init"
+  MTOOLSRC="$mtoolsrc" MTOOLS_SKIP_CHECK=1 mcopy -o "$init" c:/LOCOINIT.BAT 2>/dev/null || {
+    log_warn "could not write C:\\LOCOINIT.BAT"
+    return 0
+  }
+  append_autoexec_line "$mtoolsrc" 'CALL C:\LOCOINIT.BAT'
+
+  # Keep a StartUp-folder script too, purely as an instrument. It writes a
+  # *different* marker, so one boot tells us whether the StartUp folder executes
+  # at all on this image — the question we could not answer while both the
+  # delivery and the effect were failing silently. If AUTOEXEC does the job this
+  # is redundant; if it does not, this is the fallback, one boot late.
+  local stup="${RUN_DIR}/locostup.bat"
+  printf '@ECHO OFF\r\nECHO startup-ran > C:\\LOCOSTUP.LOG\r\nREGEDIT /S C:\\LOCOID.REG\r\n' > "$stup"
   MTOOLSRC="$mtoolsrc" MTOOLS_SKIP_CHECK=1 \
-    mcopy -o "$bat" "c:/WINDOWS/Start Menu/Programs/StartUp/LOCOID.BAT" 2>/dev/null || \
+    mcopy -o "$stup" "c:/WINDOWS/Start Menu/Programs/StartUp/LOCOID.BAT" 2>/dev/null || \
     MTOOLSRC="$mtoolsrc" MTOOLS_SKIP_CHECK=1 \
-      mcopy -o "$bat" "c:/WINDOWS/STARTM~1/PROGRAMS/STARTUP/LOCOID.BAT" 2>/dev/null || \
-      log_warn "could not place the identity script in StartUp"
+      mcopy -o "$stup" "c:/WINDOWS/STARTM~1/PROGRAMS/STARTUP/LOCOID.BAT" 2>/dev/null || \
+      log_warn "could not place the StartUp probe"
+
+  if [ "$GUEST_AUTOSTART_LOCO" = "1" ]; then
+    set_guest_ini_key "$mtoolsrc" c:/WINDOWS/WIN.INI windows run "$GUEST_LOCO_PATH" || true
+  fi
 
   if [ -n "$GUEST_RESOLUTION" ]; then
     log_ok "Guest identity: computer name ${name}, workgroup ${GUEST_WORKGROUP}, display ${GUEST_RESOLUTION}x${GUEST_COLOUR_DEPTH}bpp"

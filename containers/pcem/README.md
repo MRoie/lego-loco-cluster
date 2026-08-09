@@ -356,14 +356,39 @@ scrolling around it. `GUEST_RESOLUTION` exists to match the desktop to the game
 and is deliberately left unset: a desktop smaller than the game window would
 make it worse, and this has not been measured with the game actually running.
 
-**Automating a LOCO launch is unreliable.** Double-clicking the desktop icon
-selects it rather than opening it — the two clicks land outside Windows' double-
-click time even at a 0.08s hold — and click-then-Enter does not launch it
-either. The pointer itself is provably landing on target, so this is the launch
-path, not the input path. Consequently the in-game LAN lobby (briefcase ->
-pencil/binoculars -> TCP -> green check) has never been driven end to end.
+**Guest identity does not stop Error 38 yet.** The name now genuinely reaches
+the registry (see below), but the second guest still reports "the computer name
+you specified is already in use", so Windows is taking its NetBIOS name from
+something other than the `VxD\VNETSUP\ComputerName` we set — the image's
+original name is still present in the hive alongside ours. Under investigation.
 
 ### Fixed, but worth knowing about
+
+**Launching the game, and setting the guest's identity, both needed a mechanism
+that runs before the desktop.** Driving the desktop icon over VNC never worked —
+a double-click registers as two single clicks even at an 0.08s hold, and
+click-then-Enter does not open it either, while the pointer is provably landing
+on target. And the StartUp folder could never have set the computer name even in
+principle: Windows reads it when it initialises networking at boot, and StartUp
+runs at the end of logon.
+
+Both are now off the GUI entirely:
+
+* `WIN.INI` `[windows] run=` launches LEGO LOCO at logon. It takes a
+  space-separated list of *programs* with no arguments, which is why it gets a
+  bare 8.3 path — an earlier `run=regedit /s C:\LOCOID.REG` made Windows try to
+  launch three separate things, one of which was an interactive Registry Editor
+  that stole focus.
+* `AUTOEXEC.BAT` calls `C:\LOCOINIT.BAT`, which merges `LOCOID.REG` using
+  real-mode `REGEDIT.EXE /L:...SYSTEM.DAT /R:...USER.DAT`. At AUTOEXEC time
+  Windows has not loaded, so the hives are not in use and the merge lands before
+  anything reads them. This is the documented Win9x registry-recovery procedure,
+  used here for its timing. Verified: the injected name is now in `SYSTEM.DAT`.
+
+Both write a marker file (`LOCOINIT.LOG`, `LOCOSTUP.LOG`) so "the script did not
+run" can be told apart from "the script ran and the setting did not stick" —
+those two failures look identical from outside and cost an afternoon each.
+
 
 Three bugs made the guest LAN look plumbed while carrying nothing. All three
 were silent — every interface read healthy to `ip link`:
