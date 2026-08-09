@@ -759,6 +759,26 @@ inject_guest_identity() {
     printf '"ComputerName"="%s"\r\n' "$name"
     printf '"Workgroup"="%s"\r\n' "$GUEST_WORKGROUP"
     printf '\r\n'
+    # The name Windows actually registers on the network lives HERE, not under
+    # VNETSUP. Both keys are live on this image; setting only VNETSUP left every
+    # clone announcing the image's baked-in name, so the second guest onto the
+    # LAN hit "Error 38: the computer name you specified is already in use".
+    #
+    # The two values above are the control that proves it: same file, same key,
+    # same import — Workgroup landed (LOCOLAND registered on the wire on both
+    # guests) while ComputerName did not. Workgroup has one source, so VNETSUP's
+    # copy is used; ComputerName has two, and this one wins.
+    #
+    # It looks like an NT-only key. It is not — it is live on Windows 98 SE.
+    printf '[HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Control\\ComputerName\\ComputerName]\r\n'
+    printf '"ComputerName"="%s"\r\n' "$name"
+    printf '\r\n'
+    # TCP/IP host name, which is what goes out as DHCP option 12. Cosmetic for
+    # the game, but it is how the lease file identifies a guest, so keeping it
+    # in step makes the DHCP log readable.
+    printf '[HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\VxD\\MSTCP]\r\n'
+    printf '"HostName"="%s"\r\n' "$name"
+    printf '\r\n'
     # Desktop resolution. LEGO Loco plays in a fixed-size window, so on a
     # roomier desktop the world view is a small scrolling pane with scrollbars
     # down the side. Matching the desktop to the game's window makes the game

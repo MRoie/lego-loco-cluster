@@ -356,13 +356,35 @@ scrolling around it. `GUEST_RESOLUTION` exists to match the desktop to the game
 and is deliberately left unset: a desktop smaller than the game window would
 make it worse, and this has not been measured with the game actually running.
 
-**Guest identity does not stop Error 38 yet.** The name now genuinely reaches
-the registry (see below), but the second guest still reports "the computer name
-you specified is already in use", so Windows is taking its NetBIOS name from
-something other than the `VxD\VNETSUP\ComputerName` we set — the image's
-original name is still present in the hive alongside ours. Under investigation.
 
 ### Fixed, but worth knowing about
+
+**Windows 98 has two live computer-name keys, and only one of them counts.**
+
+```
+HKLM\System\CurrentControlSet\Services\VxD\VNETSUP\ComputerName    <- looks right, is ignored
+HKLM\System\CurrentControlSet\Control\ComputerName\ComputerName     <- what actually gets registered
+```
+
+Setting only the first left every clone announcing the image's baked-in name, so
+the second guest onto the LAN hit *Error 38: the computer name you specified is
+already in use on the network*, and never registered a name at all.
+
+The two values in `VNETSUP` are the control that proves it — same file, same key,
+same import — `Workgroup` landed while `ComputerName` did not. `Workgroup` has
+one source, so VNETSUP's copy is used; `ComputerName` has two, and
+`Control\ComputerName` wins. The second key looks NT-only. It is not.
+
+A NetBIOS node-status probe is the fastest way to check this from outside the
+guest, and it distinguishes "the registry says X" from "the machine announces X":
+
+```
+192.168.10.10   LOCO-00 <00> UNIQUE   LOCOLAND <00> GROUP
+192.168.10.11   LOCO-01 <00> UNIQUE   LOCOLAND <00> GROUP
+```
+
+Before the fix, `.11` registered `LOCOLAND` and nothing else.
+
 
 **Launching the game, and setting the guest's identity, both needed a mechanism
 that runs before the desktop.** Driving the desktop icon over VNC never worked —
