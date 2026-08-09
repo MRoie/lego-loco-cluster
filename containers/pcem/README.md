@@ -167,27 +167,24 @@ emits the mouse packet that closes the gap:
   through `pcem_guest_size()` — which reads `blit_rect`, the framebuffer PCem
   actually scales. Do not use `winsizex`/`winsizey` for this: they track the
   window, and under `vid_resize=2` they keep their 640x480 initialiser forever.
-- **Ballistics.** The guest doubles a packet above some size. Measured on this
-  snapshot: 2 mickeys moves 2 pixels, 5 mickeys moves 10 — so the boundary is
-  *lower* than the `MouseThreshold1` of 6 the documentation promises, and
-  Windows' test is `>=` rather than `>`. Rather than pin the boundary down, the
-  model never emits a packet inside the uncertain band between
-  `PCEM_MOUSE_CREEP` (2, known 1:1) and `PCEM_MOUSE_DOUBLE_MIN` (8, known to
-  double).
+- **Ballistics — and why this is still not solved.** The guest doubles a packet
+  above some size (measured: 2 mickeys moves 2 px, 5 moves 10), so the model
+  never emits inside the uncertain band between `PCEM_MOUSE_CREEP` (2, known
+  1:1) and `PCEM_MOUSE_DOUBLE_MIN` (8, known to double). Distance is covered by
+  emitting `want/2` and letting the guest double it; only the last few pixels
+  creep.
 
-  **Speed comes from the doubling, accuracy from the creep.** The emulated
-  serial mouse is the limit: `mouse_serial_poll()` writes a 3-byte Microsoft
-  packet into the UART FIFO and the guest reads it at the protocol's 1200 baud,
-  so roughly 40 packets a second. Pixels per second is pixels *per packet*
-  times 40 — creeping 2 at a time is a useless ~100 px/s. So distance is
-  covered by emitting `want/2` and letting the guest double it (~250 px per
-  packet), and only the last `2 x DOUBLE_MIN` pixels are creeped. Anywhere to
-  anywhere in about 0.2s.
+  That is exact on the desktop and **wrong inside the game**, and the reason is
+  now known: LEGO LOCO calls `SystemParametersInfo(SPI_SETMOUSE)` at startup and
+  installs its *own* acceleration curve. It has no DirectInput import at all —
+  it drives the Windows system cursor through `GetCursorPos`/`SetCursorPos`. So
+  the model is open loop against a transfer function that changes when the game
+  launches, which is also why writing `Control Panel\Mouse` never helped: LOCO
+  overwrites the live values afterwards.
 
-  Always halving is what an earlier version did, and it broke inside a game: a
-  cursor driven through DirectInput gets no acceleration and travels half as
-  far as predicted. The creep band is what keeps the endgame exact either way —
-  the final approach never relies on the guest doubling anything.
+  No choice of constants can be right in both regimes. See *Making the pointer
+  real-time* below.
+
 - **Edge re-sync.** Parking the client pointer against a screen edge pushes the
   guest cursor into the same edge, which re-establishes the model exactly. Any
   drift is one corner-flick away from being corrected.
@@ -206,6 +203,65 @@ move 256 192 sleep 3 shot b.png` and diffing the two frames isolates the cursor.
 `PCEM_VNC_MOUSE_DEBUG=1` traces every poll — absolute position, window rect,
 target, model and emitted packet — which is the only way to tell "the client's
 input never arrived" apart from "the guest has no driver bound to this mouse".
+
+## Making the pointer real-time
+
+The pointer is exact on the desktop and wrong inside the game, and no tuning of
+the relative model fixes that. This is the design to move to, with the facts it
+rests on measured against the deployed system.
+
+**Measured latency budget** — four comparable serial quanta, no single villain:
+
+| Hop | Cost |
+|---|---|
+| noVNC's mouse throttle (`MOUSE_MOVE_DELAY = 17`, coalescing) | 8–25 ms; the VR path already bypasses it |
+| Backend WS↔TCP bridge | <1 ms, no coalescing (but Nagle is on toward Xvnc — one line to fix) |
+| **PCem's mouse sampling clock** | **20.0 ms** — `pollmouse_delay = 2` gating a 100 Hz loop |
+| Xvnc frame clock (`FrameRate` 60) | 16.7–33.3 ms, bimodal because it beats against the 50 Hz cursor clock |
+| Browser compositor | 3–20 ms |
+
+The 20 ms sampling clock is the throughput limit — measured at **49.9 Hz** on
+both live pods, three independent ways. Creep mode's ~100 px/s is exactly
+2 px × 49.9. The UART is *not* a limit: PCem does not emulate 1200 baud (the
+divisor is stored and used for timing nowhere), and the serial FIFO drains
+333 packets/s against an offered 50.
+
+**Four facts that kill the obvious designs:**
+
+1. The Voodoo3 hardware-cursor register is not a position oracle on this image —
+   `SYSTEM.INI` has `display.drv=pnpdrvr.drv` (Standard PCI Graphics Adapter),
+   no 3dfx driver, so `hwcursor.ena` is permanently 0 and the cursor is software
+   painted into VRAM. That also means there is no sprite to hide or export.
+2. LEGO LOCO has **no DirectInput import**. It uses `GetCursorPos`,
+   `SetCursorPos`, `SetCapture`, `SystemParametersInfoA`. The in-game difference
+   is not DirectInput bypassing acceleration — it is LOCO installing its own
+   curve with `SPI_SETMOUSE`, which is also why the registry campaign failed.
+3. Framebuffer template-matching the cursor is hopeless against LOCO's moving
+   trains and water.
+4. There is no better device to switch to: it is already PS/2, gameport is
+   ~20 Hz, and PCem v17 has no USB.
+
+**The design.** Put an absolute pointer *inside* the guest, where the ballistics
+do not exist, and let it report back — closing the loop that has been open all
+along:
+
+- A **mailbox device in PCem** (new source file, I/O ports + a seqlock struct in
+  shared memory). The host writes the target in guest pixels; the guest writes
+  back what it observes.
+- A **~200-line Win32 agent** in the guest that polls the mailbox, calls
+  `mouse_event(MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE)` — which applies no
+  ballistics at all — then calls `GetCursorPos()` and writes the result back.
+
+`GetCursorPos()` is the oracle `hwCurLoc` was supposed to be: it works on this
+image, it returns the hotspot (so no hotspot calibration), and it sees the truth
+*inside LOCO*, because LOCO uses the system cursor.
+
+Because the guest polls the mailbox, this also steps around the 20 ms host
+sampling clock entirely.
+
+The relative model in `patches/vnc-mouse.py` is demoted to a fallback: if the
+agent's heartbeat goes stale it takes over, restricted to sub-threshold packets —
+exact by construction, slower. Never fast-but-wrong.
 
 ## Filling the view
 

@@ -114,42 +114,53 @@ static int pcem_guest_travel(int d)
 
 /* Choose the packet to emit for a desired displacement.
 
-   The emulated serial mouse is the speed limit: mouse_serial_poll() writes a
-   3-byte Microsoft packet straight into the UART FIFO, and the guest's driver
-   reads it at the protocol's 1200 baud — order of 40 packets a second. Pixels
-   per second is therefore pixels *per packet* times ~40, and creeping two
-   pixels at a time works out at a uselessly slow ~100 px/s.
+   MEASURED FACTS, replacing a story that was wrong in every particular:
 
-   So use the guest's own doubling for the distance and exact steps only for
-   the last few pixels:
+   The emulator samples the host pointer at 49.9 Hz, not the ~1250 Hz an
+   earlier version of this comment claimed. pollmouse() (pc.c) carries
+   pollmouse_delay = 2 and does work on every second call of a 100 Hz loop.
+   That 20 ms clock — not the mouse device — is what sets pixels per second,
+   and it is why creep mode measured ~100 px/s: 2 px x 49.9 packets/s exactly.
 
-     |want| <= creep        emit it as-is; travels 1:1, lands exactly
-     |want| <  2 * dmin     creep, because halving would land in the band
-                            where we do not know whether the guest doubles
-     otherwise              emit want/2 and let the guest double it
+   The UART was never the constraint either. PCem does not emulate 1200 baud:
+   the divisor is stored and read back and used for timing nowhere. serial.c
+   arms the receive timer at a hardcoded 1000 us per byte, giving 333
+   packets/s against an offered 50 — six times the headroom, and no packet is
+   ever lost to a full FIFO.
 
-   Above 2*dmin that is one packet per ~250 pixels (max_packet is 120, and
-   mouse_serial_poll clamps to +/-127), so a full-width sweep is a handful of
-   packets, and the creep phase is bounded at 2*dmin/creep = 8 more. Roughly
-   0.2s from anywhere to anywhere, against 8s for pure creeping.
+   And with mouse_type >= 2 the guest has a PS/2 mouse, which clamps at
+   +255/-256 (mouse_ps2.c), not the serial mouse's +/-127. Capping at 127
+   throws away half the reach of every packet to honour a limit belonging to a
+   device that is not in the machine.
 
-   The tempting simplification — always halve — is what the previous version
-   of this did, and it broke inside a game, where a cursor driven through
-   DirectInput gets no acceleration and travels half as far as predicted. The
-   creep band is what makes the endgame exact regardless: the final approach
-   never relies on the guest doubling anything. */
+   THE REMAINING PROBLEM, stated honestly: this model is open loop against a
+   transfer function nobody has measured. Windows' default ballistics are live
+   on the desktop, and LEGO LOCO installs its *own* curve with
+   SystemParametersInfo(SPI_SETMOUSE) at startup — which is the real reason
+   in-game travel differs, and the real reason the registry campaign against
+   Control Panel\Mouse never worked. LOCO has no DirectInput import at all; it
+   drives the Windows system cursor through GetCursorPos/SetCursorPos.
+
+   So no choice of constants here can be right in both regimes. Small packets
+   stay exact by construction because Windows applies no ballistics below its
+   threshold; that is the guarantee this function trades speed for. The real
+   fix is to stop guessing and close the loop — see the design notes in
+   containers/pcem/README.md. */
 static int pcem_step_for(int want)
 {
         int creep = pcem_env_int("PCEM_MOUSE_CREEP", 2);
         int dmin = pcem_env_int("PCEM_MOUSE_DOUBLE_MIN", 8);
         int speed = pcem_env_int("PCEM_MOUSE_SPEED", 1);
         int max_packet = pcem_env_int("PCEM_MOUSE_MAX_PACKET", 120);
+        int hard_max = pcem_env_int("PCEM_MOUSE_DEVICE_MAX", 255);
         int magnitude = want < 0 ? -want : want;
         int sign = want < 0 ? -1 : 1;
         int step;
 
-        if (max_packet > 127)
-                max_packet = 127;       /* mouse_serial_poll() clamps here */
+        /* Device limit: 255 for PS/2, 127 for the serial mouse. Set
+           PCEM_MOUSE_DEVICE_MAX to match PCEM_MOUSE_TYPE. */
+        if (max_packet > hard_max)
+                max_packet = hard_max;
 
         if (speed < 1)
         {

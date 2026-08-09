@@ -28,24 +28,26 @@ set -euo pipefail
 : "${PCEM_POINTER_MODE:=absolute}"
 # Guest pointer ballistics, used to predict where a mouse packet lands.
 #
-# The emulated serial mouse reports at the Microsoft protocol's 1200 baud —
-# about 40 three-byte packets a second — so tracking speed is (pixels per
-# packet) x 40. Exact-but-tiny packets are therefore far too slow to feel
-# live, and the model instead uses the guest's own doubling to cover distance
-# and switches to exact steps for the last few pixels.
+# MEASURED, correcting an earlier account that was wrong throughout: the
+# emulator samples the host pointer at 49.9 Hz (pollmouse_delay=2 gating a
+# 100 Hz loop), and that clock — not the mouse device — sets pixels per second.
+# PCem does not emulate 1200 baud at all; the UART drains 333 packets/s against
+# an offered 50, so nothing is ever lost to a full FIFO.
 #
-# PCEM_MOUSE_CREEP is the largest packet the guest is known to move 1:1, and
-# PCEM_MOUSE_DOUBLE_MIN the smallest it is known to double. Both are measured
-# on this snapshot: 2 mickeys moves 2 pixels, 5 moves 10. Packets between them
-# are never emitted, so the uncertain band in the middle costs nothing.
+# PCEM_MOUSE_CREEP is the largest packet the guest moves 1:1 and
+# PCEM_MOUSE_DOUBLE_MIN the smallest it is known to double; packets between
+# them are never emitted, so the uncertain band costs nothing.
 #
-# To re-measure on a different image: park the pointer at 0,0, ask for a
-# mid-screen position and screenshot where the guest cursor actually landed —
-# see "Direct (absolute) pointing" in README.md.
+# Note this model is open loop against a curve that CHANGES: LEGO LOCO calls
+# SystemParametersInfo(SPI_SETMOUSE) at startup and installs its own, which is
+# why in-game travel differs and why writing Control Panel\Mouse never helped.
+# LOCO has no DirectInput import — it drives the Windows system cursor.
 : "${PCEM_MOUSE_CREEP:=2}"
 : "${PCEM_MOUSE_DOUBLE_MIN:=8}"
 : "${PCEM_MOUSE_SPEED:=1}"
-: "${PCEM_MOUSE_MAX_PACKET:=120}"   # mouse_serial_poll() clamps at 127
+# Per-packet limit of the emulated device: 255 for PS/2, 127 for serial.
+: "${PCEM_MOUSE_DEVICE_MAX:=255}"
+: "${PCEM_MOUSE_MAX_PACKET:=120}"
 : "${PCEM_NETCARD:=none}"      # none | ne2000 | rtl8029as
 # Guest LAN. LEGO LOCO multiplayer is DirectPlay over TCP/IP, which needs the
 # two guests on one layer-2 segment — SLiRP (PCem's default) is host-NAT and
@@ -983,6 +985,7 @@ start_pcem() {
   PCEM_MOUSE_DOUBLE_MIN="$PCEM_MOUSE_DOUBLE_MIN" \
   PCEM_MOUSE_SPEED="$PCEM_MOUSE_SPEED" \
   PCEM_MOUSE_MAX_PACKET="$PCEM_MOUSE_MAX_PACKET" \
+  PCEM_MOUSE_DEVICE_MAX="$PCEM_MOUSE_DEVICE_MAX" \
   PCEM_VNC_MOUSE_DEBUG="${PCEM_VNC_MOUSE_DEBUG:-0}" \
   SDL_VIDEODRIVER=x11 \
   LIBGL_ALWAYS_SOFTWARE=1 \
