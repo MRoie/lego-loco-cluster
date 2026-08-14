@@ -634,7 +634,11 @@ export default function VRScene({ onExit }) {
   };
 
   useEffect(() => {
-    fetch('/api/config/instances')
+    // /api/instances, NOT /api/config/instances: the latter is a static
+    // config file that lists two instances forever, while the grid uses live
+    // Kubernetes discovery. Scaling the cluster to four left the VR view
+    // stuck at two — same fossil-config failure mode as /api/status.
+    fetch('/api/instances')
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data) && data.length) {

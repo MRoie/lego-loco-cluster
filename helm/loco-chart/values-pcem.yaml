@@ -21,7 +21,10 @@
 #     QEMU flavor uses — but each Windows guest still needs its NE2000 driver
 #     and a static IP installed before LEGO LOCO multiplayer will work.
 
-replicas: 2
+# 4 = the 2x2 test. Each PCem pod pins ~1 core to hold real-time speed —
+# scale against cores, not memory. Ordinals self-provision: names, reserved
+# IPs (.10+N) and the VXLAN mesh are all functions of the ordinal.
+replicas: 4
 
 emulator:
   flavor: pcem

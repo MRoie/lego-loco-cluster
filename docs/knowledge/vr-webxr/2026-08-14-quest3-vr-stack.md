@@ -124,9 +124,15 @@ guest cursor by frame-differencing; LOCO's menu animates. Template-match with
 - Immersive entry, controller ergonomics and spatial-audio placement have not
   yet had a passing on-headset review since these fixes; everything above is
   machine-verified except feel.
-- The 2×2 four-instance layout fits the wall spacing by construction
-  (active-tile pop-out instead of overlap-scale) but has not been reviewed on
-  the headset either.
+- The 2×2 four-instance layout is machine-verified live: four tiles at
+  (±0.775, ±0.575), all four textures >98% non-black, active pop-out clearing
+  every neighbour (needs 1.248/0.936, spacing gives 1.550/1.150), HUD at
+  `vnc 4/4`. On-headset review still pending.
+- A ninth defect for the list: the VR scene read its instance list from
+  `/api/config/instances`, a static two-entry config file, while the grid
+  used live discovery — scaling the cluster changed the grid and not VR.
+  Same fossil-config failure as `/api/status`; both now derive from the
+  cluster.
 - WebRTC console noise ("Peer connection lost") is the dormant QEMU-flavor
   video path retrying; the VNC canvas path the tiles actually use is
   unaffected.
