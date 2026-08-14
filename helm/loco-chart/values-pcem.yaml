@@ -102,26 +102,27 @@ emulator:
     # Direct/tablet-style pointing: the guest cursor goes exactly where the
     # client points, rather than being nudged by relative motion.
     PCEM_POINTER_MODE: "absolute"
-    # Pointer experiment left running on the cluster, recorded here rather than
-    # shipped, because it was not verified cleanly enough to be a default.
+    # PS/2 mouse with guest acceleration off — measured exact, not hopeful.
+    # Template-matched cursor tracking (scripts/cursor-locate.py) shows gain
+    # 1.000 on both axes in the LOCO menu AND in-world, zero drift over a
+    # five-leg path, and the cursor reaching the true screen corners — which
+    # was the original complaint. Clicks land where aimed with a 1.0s hold.
     #
-    #   PCEM_MOUSE_TYPE: "2"     # PS/2 rather than the serial mouse
-    #   PCEM_MOUSE_SPEED: "0"    # tell the model to assume no guest ballistics
-    #
-    # The guest DOES have the PS/2 driver installed (SYSTEM.DAT:
-    # Class\Mouse\0001 = "PS/2 Compatible Mouse Port"), contradicting an older
-    # note that PS/2 leaves the cursor frozen — it tracks fine. PS/2 also allows
-    # +/-255 per packet against the serial mouse's +/-127.
-    #
-    # But it does not fix the in-game pointer, and it was never going to: the
-    # problem is not the device. LEGO LOCO installs its own acceleration curve
-    # with SPI_SETMOUSE at startup, so the open-loop model faces a transfer
-    # function that changes when the game launches. Measurements with these two
-    # set showed a constant ~45px offset at two targets and a third reading that
-    # had to be discarded — LOCO's animated menu defeats frame-differencing, so
-    # any further work here needs a cursor-isolating measurement first.
-    #
-    # See "Making the pointer real-time" in containers/pcem/README.md.
+    # The pieces have to agree: mouse_type 2 (PS/2; the driver IS installed,
+    # Class\Mouse\0001), MouseSpeed=0 delivered into the guest registry by
+    # LOCOID.REG at AUTOEXEC time, and PCEM_MOUSE_SPEED=0 telling the model to
+    # assume the 1:1 curve those two produce. An older note claimed the
+    # registry values "did not take" — that conclusion came from frame-diff
+    # measurements LOCO's animated menu had poisoned. They took.
+    PCEM_MOUSE_TYPE: "2"
+    PCEM_MOUSE_SPEED: "0"
+    # Native 1024x768 in the guest, matching the VNC framebuffer 1:1. This
+    # deletes the scaling layer: no stretch blur, and guest pixels ARE
+    # framebuffer pixels, so the pointer mapping is the identity. Written into
+    # LOCOID.REG (Config\0001\Display\Settings) and imported at AUTOEXEC
+    # time, so it applies from the first boot of each fresh disk copy.
+    GUEST_RESOLUTION: "1024,768"
+    # Costs a log line per poll and is how every pointer bug so far was found.
     PCEM_VNC_MOUSE_DEBUG: "1"
     # Guest LAN. The disk snapshot has the Realtek NIC driver and the Windows
     # network client installed, so the guests come up on a shared layer 2:

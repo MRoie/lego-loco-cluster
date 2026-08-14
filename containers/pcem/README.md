@@ -206,9 +206,28 @@ input never arrived" apart from "the guest has no driver bound to this mouse".
 
 ## Making the pointer real-time
 
-The pointer is exact on the desktop and wrong inside the game, and no tuning of
-the relative model fixes that. This is the design to move to, with the facts it
-rests on measured against the deployed system.
+RESOLVED for the current stack — measured, not asserted. With the three pieces
+in agreement (PS/2 `mouse_type = 2`; `MouseSpeed=0` delivered into the guest
+registry by `LOCOID.REG`; `PCEM_MOUSE_SPEED=0` so the model assumes the 1:1
+curve those two produce) and the guest at native 1024x768
+(`GUEST_RESOLUTION=1024,768`, making the pointer mapping the identity),
+template-matched cursor tracking (`scripts/cursor-locate.py`) measures:
+
+* menu: pixel-perfect (match score 0.0000), zero drift over a closed path
+* in-world: gain 1.000/1.000 at every probe, constant sub-4px offset
+* the true screen corners reachable — the original complaint
+* clicks land where aimed (1.0s hold; LOCO ignores short clicks)
+
+An earlier conclusion that "the registry values did not take" was wrong: the
+values were live in the hive all along, and the measurements that condemned
+them were frame-diffs poisoned by LOCO's animated menu. Measure cursors by
+matching the sprite, never by diffing frames.
+
+The guest-agent design below is kept because it is the answer if a *future*
+game or driver reinstates a curve the model cannot assume away — it closes the
+loop with `GetCursorPos()` as the oracle. It is not currently needed.
+
+The measured facts it rests on:
 
 **Measured latency budget** — four comparable serial quanta, no single villain:
 
@@ -394,26 +413,20 @@ show up in the guest's behaviour. Something between "the file is on the disk"
 and "Windows has read it" is broken and has not been found. DirectPlay over
 TCP/IP with an explicit address does not care, but Microsoft Networking will.
 
-**In-game pointer travels half distance.** The absolute-pointer model covers
-distance by relying on the guest doubling large packets, which it does on the
-desktop and does not inside a game. Setting `PCEM_MOUSE_SPEED=0` inverts the
-assumption — exact in-game, 2x overshoot on the desktop. Measured attempts to
-remove the doubling at the source (`MouseSpeed=0`, then `MouseThreshold1/2` at
-0 and at 500) all failed: this guest doubles regardless, so `Control
-Panel\Mouse` is not what governs the curve here. The real fix is probably to
-move the guest off the 1200-baud serial mouse onto PS/2 — 200 Hz and a +/-255
-range remove the reason large packets are needed for speed at all — but that
-needs a driver installed inside Windows.
-
-**LEGO LOCO does not fill the guest screen.** The emulator fills the VNC
-framebuffer (see *Filling the view*), but the game plays in a fixed-size window
-inside an 800x600 desktop, so the world view is a pane with the game's own
-scrolling around it. `GUEST_RESOLUTION` exists to match the desktop to the game
-and is deliberately left unset: a desktop smaller than the game window would
-make it worse, and this has not been measured with the game actually running.
-
 
 ### Fixed, but worth knowing about
+
+**The in-game pointer and the scrollbars fell to one config, together.**
+`GUEST_RESOLUTION=1024,768` puts the guest at the framebuffer's own size, so
+the pointer mapping is the identity and the world view fills the screen
+with no scrollbars at all; PS/2 + `MouseSpeed=0` (verified live in the hive
+with `win9x-hive-dump.py`) makes the guest curve 1:1 so the model's assumption
+is simply true. Both were verified by template-matching the cursor sprite —
+`scripts/cursor-locate.py` — after frame-diff measurements had twice produced
+numbers wrong enough to send the work in the wrong direction. The templates in
+`test-assets/` are resolution-specific: re-extract them if the guest mode
+changes.
+
 
 **Windows 98 has two live computer-name keys, and only one of them counts.**
 
