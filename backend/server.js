@@ -469,13 +469,58 @@ app.get("/api/config/:name", (req, res) => {
 });
 
 // Simple cluster status endpoint used by the UI for boot progress
-app.get("/api/status", (req, res) => {
+/**
+ * Live per-instance status, derived from each emulator's own health endpoint.
+ *
+ * This used to serve a static config file, which meant it reported whatever
+ * was written there forever — in practice "booting" for every instance while
+ * two fully running guests served VNC. The VR scene renders this string on
+ * the tiles, so the lie was on screen continuously.
+ */
+const statusCache = new Map();
+const STATUS_TTL_MS = 5_000;
+
+function fetchInstanceStatus(instance) {
+  const cached = statusCache.get(instance.id);
+  if (cached && Date.now() - cached.at < STATUS_TTL_MS) {
+    return Promise.resolve(cached.value);
+  }
+  const host = instance.host || instance.podIP || instance.addresses?.podIP;
+  if (!host) return Promise.resolve("unknown");
+  return new Promise((resolve) => {
+    const done = (value) => {
+      statusCache.set(instance.id, { at: Date.now(), value });
+      resolve(value);
+    };
+    const req = http.get(
+      `http://${host}:${instance.healthPort || 8080}/health`,
+      { timeout: 1500 },
+      (response) => {
+        let data = "";
+        response.on("data", (chunk) => (data += chunk));
+        response.on("end", () => {
+          try {
+            const h = JSON.parse(data);
+            if (h.ready === true || h.overall_status === "healthy") return done("ready");
+            if (h.pcem?.running || h.qemu_healthy) return done("booting");
+            done("error");
+          } catch {
+            done("unknown");
+          }
+        });
+      });
+    req.on("error", () => done("unreachable"));
+    req.on("timeout", () => { req.destroy(); done("unreachable"); });
+  });
+}
+
+app.get("/api/status", async (req, res) => {
   try {
-    logger.info("Status request received");
-    const data = loadConfig("status");
-    res.json(data);
+    const instances = await instanceManager.getInstances();
+    const entries = await Promise.all(instances.map(async (i) => [i.id, await fetchInstanceStatus(i)]));
+    res.json(Object.fromEntries(entries));
   } catch (e) {
-    logger.error("Status config error", { error: e.message });
+    logger.error("Status error", { error: e.message });
     res.status(503).json({});
   }
 });

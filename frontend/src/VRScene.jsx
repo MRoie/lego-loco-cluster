@@ -37,6 +37,18 @@ const VNC_LASER_RESERVED = [
 ];
 
 if (typeof window !== 'undefined' && window.AFRAME &&
+    !window.AFRAME.components['vnc-canvas-refresh']) {
+  // noVNC repaints its canvas; THREE re-uploads only when told. A component
+  // tick runs inside A-Frame's render loop, which follows the XR session's
+  // frame clock in immersive mode — a window rAF loop does not.
+  window.AFRAME.registerComponent('vnc-canvas-refresh', {
+    tick() {
+      if (this.el.vncTexture) this.el.vncTexture.needsUpdate = true;
+    },
+  });
+}
+
+if (typeof window !== 'undefined' && window.AFRAME &&
     !window.AFRAME.components['vnc-laser-input']) {
   window.AFRAME.registerComponent('vnc-laser-input', {
     init() {
@@ -136,30 +148,25 @@ function positionForIndex(i, cols, rows) {
   const x = (i % cols) - (cols - 1) / 2;
   const row = Math.floor(i / cols);
   const y = (rows - 1) / 2 - row;
-  // +1.5: centre the wall at standing eye height. With a local-floor VR
-  // reference the headset supplies the user's real height above the rig, so
-  // content at y=0 sits at the user's FEET — the "green void" review, where
-  // both screens hid below the sight line.
-  return { x: x * 1.4, y: y * 1.0 + 1.5 };
+  // Positions are RELATIVE to the tile wall entity, which itself sits at
+  // standing eye height — so scaling the wall expands it around the centre
+  // of view instead of lifting it off the floor. Spacing leaves room for the
+  // active tile's pop-out without overlap, including in the 2x2 layout four
+  // instances produce.
+  return { x: x * 1.55, y: y * 1.15 };
 }
 
-function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio, muted, audioLevel, onAudioLevel }) {
+function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio, muted, audioLevel, onAudioLevel, wallZ }) {
   const vncRef = useRef(null);
   const planeRef = useRef(null);
   const textureRef = useRef(null);
   const [textureCreated, setTextureCreated] = useState(false);
 
-  // noVNC repaints its canvas on every framebuffer update; THREE only
-  // re-uploads when told. One rAF loop per tile, alive for the tile's life.
-  useEffect(() => {
-    let raf;
-    const refresh = () => {
-      if (textureRef.current) textureRef.current.needsUpdate = true;
-      raf = requestAnimationFrame(refresh);
-    };
-    raf = requestAnimationFrame(refresh);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  // Texture refresh lives in an A-Frame component tick (see
+  // vnc-canvas-refresh below), NOT a window requestAnimationFrame loop:
+  // window rAF stops firing inside an immersive XR session — rendering moves
+  // to the session's own clock — so a rAF-driven refresh freezes the moment
+  // the headset takes over. That was "video stuck in VR, fluid on the web".
   const { videoRef: rtcVideoRef, audioLevel: tileAudioLevel } = useWebRTC(inst.id);
   const pos = positionForIndex(idx, cols, rows);
   // Guest audio: raw PCM over /proxy/audio/<id>/ into an AudioWorklet.
@@ -171,7 +178,7 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   // stream is live; the effect rebuilds onto the worklet source when it is.
   const { setVolume, resumeContext } = useSpatialAudio(
     rtcVideoRef,
-    [pos.x, pos.y, -3],
+    [pos.x, pos.y + 1.5, wallZ],
     { mono: monoAudio, sourceNode: pcm.sourceNode },
     sharedAudioCtx,
   );
@@ -221,6 +228,9 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
         mesh.material = new THREE.MeshBasicMaterial({ map: tex });
         mesh.material.needsUpdate = true;
         textureRef.current = tex;
+        // Hand the texture to the vnc-canvas-refresh component on this
+        // entity, whose tick runs on the XR frame clock.
+        plane.vncTexture = tex;
         setTextureCreated(true);
       };
       applyTexture();
@@ -298,10 +308,11 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
           // if the class is missing the laser passes straight through.
           if (el) el.classList.add('tile');
         }}
-        position={`${pos.x} ${pos.y} -3`}
+        vnc-canvas-refresh=""
+        position={`${pos.x} ${pos.y} ${active === idx ? 0.25 : 0}`}
         geometry="primitive: plane; width: 1.2; height: 0.9"
         material={`color: ${active === idx ? '#FFD700' : '#F5F5DC'}; side: double`}
-        scale={active === idx ? '1.4 1.4 1' : '1 1 1'}
+        scale={active === idx ? '1.08 1.08 1' : '1 1 1'}
         onClick={handleClick}
       >
         {/* LEGO-style border for VR tiles */}
@@ -329,7 +340,10 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
           />
         )}
         
-        {status && status !== 'ready' && (
+        {/* A live texture is ground truth; never contradict it with a
+            status feed. /api/status once said "booting" forever over two
+            perfectly running, VNC-connected guests. */}
+        {status && status !== 'ready' && !textureCreated && (
           <a-text
             value={status}
             color={active === idx ? '#000000' : '#FFFFFF'}
@@ -406,6 +420,39 @@ export default function VRScene({ onExit }) {
   // Sync the AudioContext listener with the VR camera rig position
   useVRAudioListener(sharedAudioCtx);
 
+  // Where the screen wall sits and how big it is. The reviewer's complaint
+  // was concrete: too far, no way to move or resize, and overlap once
+  // scaled. Distance and scale are user-adjustable and remembered; overlap
+  // is prevented structurally (the active tile pops FORWARD instead of
+  // growing over its neighbours).
+  const [wallZ, setWallZ] = useState(() => {
+    const v = parseFloat(localStorage.getItem('vrWallZ'));
+    return Number.isFinite(v) ? Math.min(-1.2, Math.max(-4.5, v)) : -2.4;
+  });
+  const [wallScale, setWallScale] = useState(() => {
+    const v = parseFloat(localStorage.getItem('vrWallScale'));
+    return Number.isFinite(v) ? Math.min(2.2, Math.max(0.5, v)) : 1;
+  });
+  useEffect(() => { localStorage.setItem('vrWallZ', String(wallZ)); }, [wallZ]);
+  useEffect(() => { localStorage.setItem('vrWallScale', String(wallScale)); }, [wallScale]);
+
+  useEffect(() => {
+    const left = document.getElementById('leftController');
+    if (!left) return undefined;
+    const onStick = (e) => {
+      const { x, y } = e.detail || {};
+      if (typeof y === 'number' && Math.abs(y) > 0.25) {
+        // Push forward (stick up, negative y) to push the wall away.
+        setWallZ((z) => Math.min(-1.2, Math.max(-4.5, z + (y > 0 ? 0.04 : -0.04) * Math.abs(y))));
+      }
+      if (typeof x === 'number' && Math.abs(x) > 0.25) {
+        setWallScale((s) => Math.min(2.2, Math.max(0.5, s * (1 + 0.02 * x))));
+      }
+    };
+    left.addEventListener('thumbstickmoved', onStick);
+    return () => left.removeEventListener('thumbstickmoved', onStick);
+  }, []);
+
   // Unlock audio from INSIDE immersive mode. The DOM "Enable Audio" button
   // does not exist once the headset takes over, so a session that never
   // clicked it beforehand stayed silent with no way to fix it. enter-vr is a
@@ -441,8 +488,9 @@ export default function VRScene({ onExit }) {
     hud.setAttribute('text', 'value',
       `tile ${active + 1}/${instances.length} ${activeInst ? activeInst.id : ''}` +
       ` | vnc ${connectedVNCs.size}/${instances.length}` +
-      ` | audio ${audioResumed ? 'on' : 'press trigger'}`);
-  }, [active, instances, connectedVNCs, audioResumed]);
+      ` | audio ${audioResumed ? 'on' : 'press trigger'}` +
+      ` | wall ${Math.abs(wallZ).toFixed(1)}m x${wallScale.toFixed(2)} (L-stick)`);
+  }, [active, instances, connectedVNCs, audioResumed, wallZ, wallScale]);
 
   // Performance recorder for spatial audio metrics
   const {
@@ -869,10 +917,22 @@ export default function VRScene({ onExit }) {
         <a-assets>
         </a-assets>
         
-        <a-entity>
+        {/* The tile wall. One parent owns where the screens ARE — at eye
+            height, adjustable with the LEFT thumbstick (fwd/back = closer or
+            farther, left/right = smaller or larger), persisted per browser.
+            Scaling happens about eye height, so growing the wall does not
+            lift it away from the horizon. movement-controls on the rig was a
+            reference to a library this app has never shipped, which is why
+            nothing could ever be moved. */}
+        <a-entity
+          id="tileWall"
+          position={`0 1.5 ${wallZ}`}
+          scale={`${wallScale} ${wallScale} 1`}
+        >
           {instances.map((inst, idx) => (
             <VRTile
               key={inst.id}
+              wallZ={wallZ}
               inst={inst}
               idx={idx}
               active={active}
