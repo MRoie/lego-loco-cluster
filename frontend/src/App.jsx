@@ -75,6 +75,10 @@ export default function App() {
   const [focused, setFocused] = useState(null);
   const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(false);
   const [fullscreenInstance, setFullscreenInstance] = useState(null);
+  // Empty-slot launch: which grid slot is provisioning (null = none), and an
+  // inline error pinned to the slot it happened on (e.g. the 409 at capacity).
+  const [provisioningSlot, setProvisioningSlot] = useState(null);
+  const [launchError, setLaunchError] = useState(null);
 
   // Enter fullscreen control mode for an instance
   const enterFullscreen = useCallback((instance) => {
@@ -85,6 +89,29 @@ export default function App() {
   const exitFullscreen = useCallback(() => {
     setFullscreenInstance(null);
   }, []);
+
+  // Clicking an empty slot scales the emulator StatefulSet up by one. The
+  // slot stays in "Provisioning..." for ~20s after the POST succeeds so the
+  // discovery polling has time to replace it with a real card (the new pod
+  // then shows the usual booting/health states for the ~4-5 min PCem boot).
+  const launchInstance = useCallback(async (slotIndex) => {
+    if (provisioningSlot !== null) return; // one launch in flight at a time
+    setLaunchError(null);
+    setProvisioningSlot(slotIndex);
+    try {
+      const res = await fetch('/api/instances/launch', { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLaunchError({ slot: slotIndex, message: body.error || `Launch failed (HTTP ${res.status})` });
+        setProvisioningSlot(null);
+        return;
+      }
+      setTimeout(() => setProvisioningSlot(null), 20000);
+    } catch (err) {
+      setLaunchError({ slot: slotIndex, message: err.message || 'Launch request failed' });
+      setProvisioningSlot(null);
+    }
+  }, [provisioningSlot]);
 
   // Global Escape key to exit fullscreen
   useEffect(() => {
@@ -262,14 +289,31 @@ export default function App() {
                       }}
                       onFullscreen={() => enterFullscreen(instance)}
                     />
+                  ) : provisioningSlot === index ? (
+                    <motion.div className="w-full h-full lego-empty-slot flex items-center justify-center text-gray-600 lego-shimmer">
+                      <div className="text-center">
+                        <motion.div
+                          className="w-16 h-16 border-3 border-blue-500 rounded-lg mx-auto mb-3 flex items-center justify-center bg-white/50"
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+                        >
+                          <span className="text-3xl text-blue-600">⟳</span>
+                        </motion.div>
+                        <p className="text-sm font-bold lego-text mb-1 text-gray-700">Provisioning...</p>
+                        <p className="text-xs lego-text text-gray-600">
+                          Booting a new instance — this takes a few minutes
+                        </p>
+                      </div>
+                    </motion.div>
                   ) : (
                     <motion.div
-                      className="w-full h-full lego-empty-slot flex items-center justify-center text-gray-600 lego-shimmer cursor-pointer"
-                      whileHover={{
+                      className={`w-full h-full lego-empty-slot flex items-center justify-center text-gray-600 lego-shimmer ${provisioningSlot === null ? 'cursor-pointer' : 'cursor-default'}`}
+                      whileHover={provisioningSlot === null ? {
                         scale: 1.02,
                         y: -2
-                      }}
-                      whileTap={{ scale: 0.98 }}
+                      } : {}}
+                      whileTap={provisioningSlot === null ? { scale: 0.98 } : {}}
+                      onClick={() => launchInstance(index)}
                     >
                       <div className="text-center">
                         <motion.div
@@ -282,6 +326,9 @@ export default function App() {
                         <p className="text-xs lego-text text-gray-600">
                           {showOnlyProvisioned ? 'No provisioned instance' : 'Available for deployment'}
                         </p>
+                        {launchError && launchError.slot === index && (
+                          <p className="text-xs lego-text text-red-600 mt-1">{launchError.message}</p>
+                        )}
                       </div>
                     </motion.div>
                   )}

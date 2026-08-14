@@ -138,7 +138,8 @@ RUN ldd /usr/local/bin/pcem | grep -F "not found" && exit 1 || true
 
 COPY entrypoint.sh /entrypoint.sh
 COPY scripts/ /usr/local/bin/
-RUN chmod +x /entrypoint.sh /usr/local/bin/pull-snapshot.sh /usr/local/bin/health-server.py
+RUN chmod +x /entrypoint.sh /usr/local/bin/pull-snapshot.sh /usr/local/bin/health-server.py \
+             /usr/local/bin/loco-autoname.py
 
 # gotcha #3: on Linux PCem's config/ROM root is $HOME/.pcem, taken from
 # wxFileName::GetHomeDir() unconditionally — never the executable's own

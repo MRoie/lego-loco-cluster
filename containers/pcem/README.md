@@ -71,6 +71,8 @@ pulls 500 MB" into "one pull per node".
 | `PCEM_VID_RESIZE` | `2` | 2 pins the window to `SCREEN_*` and stretches the guest to fill it — no black bars |
 | `PCEM_FULLSCREEN_SCALE` | `0` | 0 stretch, 1 = 4:3, 2 = square pixels, 3 = integer multiples |
 | `GUEST_RESOLUTION` | *(unset)* | e.g. `640,480` — Windows desktop resolution, applied from the next boot |
+| `GUEST_AUTONAME` | `1` | type `LOCO-<NN>` into LOCO's main-menu ticket over RFB once the menu appears |
+| `GUEST_SHORTCUTS` | `1` | `POSTBAG.BAT` / `SAVEGAME.BAT` Explorer launchers on the guest desktop |
 | `PCEM_NETCARD` | `none` | `ne2000` or `rtl8029as` |
 | `PCEM_NET_MODE` | `none` | `direct` (bridge onto an interface) or `vxlan` (bridge+tap meshed to peer pods) |
 | `PCEM_MAC` | derived | must be unique per instance; defaults to `52:54:00:10:c0:<ordinal>` |
@@ -514,6 +516,37 @@ were silent — every interface read healthy to `ip link`:
 Note for future captures: this Win98 image emits a nonsensical BOOTP `secs`
 value and dnsmasq mirrors it back. It is not a symptom of anything.
 
+## In-game name and desktop shortcuts
+
+**In-game name** (`GUEST_AUTONAME=1`, default). The computer name reaches
+Windows through `LOCOID.REG`, but the name LEGO LOCO shows other players is
+game state — the red "ticket" on the main menu — which no offline file edit
+reaches. `scripts/loco-autoname.py` (stdlib-only, the minimal subset of
+`scripts/vnc-drive.py`'s RFB client) runs backgrounded from the entrypoint
+after PCem starts: it polls a 450x130 slice of the framebuffer every 10 s
+(up to 8 min) for the menu's pixel signature — the strongly red ticket
+around x 370-820, y 600-730 *plus* the white name strip at x 440-770,
+y 650-672; nothing else in the boot sequence shows both at once — then
+clicks the field, clears it (End + 24 Backspaces: the field survives
+reboots), and types the name at ~80 ms a key. It deliberately does **not**
+press Enter or click the green check — both start the game; whoever owns
+starting the session still does that. `/run/pcem/autoname.done` marks
+success and `/run/pcem/autoname.log` says what happened either way; every
+failure path exits 0, so a missed menu costs the name, never the pod.
+
+**Desktop shortcuts** (`GUEST_SHORTCUTS=1`, default). `POSTBAG.BAT` and
+`SAVEGAME.BAT` land on the guest desktop, each `@echo off` + `start
+C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\ART-RES\<dir>` — on Win98 `start
+<dir>` opens an Explorer window. Those two dirs are the sync/share surface
+for the upcoming postbag-over-network feature, so they get a one-click view
+for players and for anyone debugging over VNC. `.BAT` rather than real
+`.lnk`, because a Shell Link's target is a LinkTargetIDList of binary shell
+item IDs — fiddly to forge offline and silently ignored by Win98 when
+malformed. The dirs are `mmd`-created first if the game has not made them
+(exists-errors ignored), so the launchers never open an error box. Written
+by the same pre-boot mtools pass as the identity files, so like them they
+take effect on the boot after the one that writes them.
+
 ## Tools
 
 Built while debugging this container, because nothing existing answered the
@@ -537,5 +570,6 @@ together.
 | `patches/vnc-mouse.py` | absolute-pointer support for remote clients |
 | `scripts/pull-snapshot.sh` | curl-only OCI blob puller for the disk image |
 | `scripts/health-server.py` | `/health` (readiness) and `/` (liveness) |
+| `scripts/loco-autoname.py` | types the instance name into LOCO's main-menu ticket |
 | `nvr-seed/` | known-good CMOS per board, for unattended first boot |
 | `standalone/` | the original bring-up investigation and its log |

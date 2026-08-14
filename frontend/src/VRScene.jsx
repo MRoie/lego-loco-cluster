@@ -633,24 +633,41 @@ export default function VRScene({ onExit }) {
     localStorage.setItem('vrKeyboardMap', JSON.stringify(mergedKeyboard));
   };
 
+  // Adopt a fresh instance list, growing the per-tile arrays without
+  // clobbering the volumes/mutes of tiles the user already touched. Keyed
+  // comparison by id: a changed set re-renders, an identical one is a no-op
+  // so the poll below does not churn the scene every 10 seconds.
+  const adoptInstances = useCallback((data) => {
+    setInstances((prev) => {
+      if (prev.length === data.length &&
+          prev.every((p2, i) => p2.id === data[i].id)) return prev;
+      vncRefs.current.length = data.length;
+      setVolumes((v) => Array.from({ length: data.length }, (_, i) => v[i] ?? 1));
+      setMutedTiles((m) => Array.from({ length: data.length }, (_, i) => m[i] ?? false));
+      setAudioLevels((a) => Array.from({ length: data.length }, (_, i) => a[i] ?? 0));
+      return data;
+    });
+  }, []);
+
   useEffect(() => {
     // /api/instances, NOT /api/config/instances: the latter is a static
     // config file that lists two instances forever, while the grid uses live
     // Kubernetes discovery. Scaling the cluster to four left the VR view
     // stuck at two — same fossil-config failure mode as /api/status.
-    fetch('/api/instances')
+    //
+    // Polled, not fetched once: an instance launched from the grid (or by a
+    // scale-up) must appear in the headset without leaving VR.
+    const load = () => fetch('/api/instances')
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data) && data.length) {
-          setInstances(data);
-          vncRefs.current = new Array(data.length);
-          setVolumes(new Array(data.length).fill(1));
-          setMutedTiles(new Array(data.length).fill(false));
-          setAudioLevels(new Array(data.length).fill(0));
+          adoptInstances(data);
         } else {
           throw new Error('no data');
         }
-      })
+      });
+    const instancesInterval = setInterval(() => { load().catch(() => {}); }, 10000);
+    load()
       .catch(() => {
         setInstances(
           Array.from({ length: 3 }, (_, i) => ({ id: `placeholder-${i}` }))
@@ -670,8 +687,8 @@ export default function VRScene({ onExit }) {
     }, 5000);
     
     fetch('/api/status').then((r) => r.json()).then(setStatus).catch(() => {});
-    return () => clearInterval(interval);
-  }, []);
+    return () => { clearInterval(interval); clearInterval(instancesInterval); };
+  }, [adoptInstances]);
 
   // Update active index when activeIds change
   useEffect(() => {
@@ -1023,12 +1040,34 @@ export default function VRScene({ onExit }) {
             oculus-touch-controls="hand: right"
             hand-tracking-controls="hand: right"
             laser-controls
-            raycaster="objects: .tile"
+            raycaster="objects: .tile, .vr-ui"
             cursor="fuse: false"
             vnc-laser-input=""
           ></a-entity>
           <VRToast message={toast} />
         </a-entity>
+
+        {/* The way back. Every other exit is DOM, and DOM does not exist in
+            immersive mode — the review literally could not leave VR. Laser
+            or gaze click: leave the XR session, then hand back to the grid. */}
+        <a-entity
+          position="0 0.75 -1.6"
+          ref={(el) => {
+            if (!el || el.dataset.exitWired) return;
+            el.dataset.exitWired = '1';
+            el.classList.add('vr-ui');
+            el.addEventListener('click', () => {
+              const scene = el.sceneEl;
+              try {
+                if (scene && scene.is('vr-mode')) scene.exitVR();
+              } catch { /* leaving VR is best-effort; exit regardless */ }
+              setTimeout(() => onExit && onExit(), 150);
+            });
+          }}
+          geometry="primitive: plane; width: 0.55; height: 0.16"
+          material="color: #C4281C; side: double"
+          text="value: EXIT VR; align: center; color: white; width: 2.2"
+        ></a-entity>
       </a-scene>
     </div>
   );

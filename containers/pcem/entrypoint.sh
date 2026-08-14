@@ -104,6 +104,14 @@ set -euo pipefail
 # path because run= takes bare program paths with no quoting.
 : "${GUEST_AUTOSTART_LOCO:=1}"
 : "${GUEST_LOCO_PATH:=C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\EXE\LOCO.EXE}"
+# Type the instance name into LEGO LOCO's red main-menu ticket once the menu
+# appears. The in-game name is game state, not registry state, so the .REG
+# mechanism above cannot reach it — scripts/loco-autoname.py drives the GUI
+# over RFB instead (see start_autoname()).
+: "${GUEST_AUTONAME:=1}"
+# Desktop launchers for the LOCO postbag/savegame dirs — the sync/share
+# surface for the upcoming postbag-over-network feature.
+: "${GUEST_SHORTCUTS:=1}"
 : "${GUEST_NAME_PREFIX:=LOCO-}"
 : "${GUEST_WORKGROUP:=LOCOLAND}"
 # Guest addressing. Ordinal N gets ${GUEST_SUBNET}.$((GUEST_IP_BASE + N)) by
@@ -416,6 +424,9 @@ instance_ordinal() {
 # into LEGO LOCO's TCP/IP join box.
 guest_mac_for() { printf '52:54:00:10:c0:%02x' "$1"; }
 guest_ip_for()  { echo "${GUEST_SUBNET}.$((GUEST_IP_BASE + $1))"; }
+# The one name this instance goes by everywhere: NetBIOS computer name, DHCP
+# host name, and what loco-autoname.py types into the game's ticket.
+guest_name()    { printf '%s%02d' "$GUEST_NAME_PREFIX" "$(instance_ordinal)"; }
 
 GUEST_IP=""
 PCAP_DEVICE=""
@@ -754,9 +765,8 @@ inject_guest_identity() {
   [ "$GUEST_IDENTITY" = "1" ] || return 0
   command -v mcopy >/dev/null 2>&1 || { log_warn "mtools missing; skipping guest identity"; return 0; }
 
-  local ordinal name reg mtoolsrc
-  ordinal="$(instance_ordinal)"
-  name="$(printf '%s%02d' "$GUEST_NAME_PREFIX" "$ordinal")"
+  local name reg mtoolsrc
+  name="$(guest_name)"
 
   mtoolsrc="${RUN_DIR}/mtoolsrc"
   printf 'drive c: file="%s" offset=32256\n' "$DISK_PATH" > "$mtoolsrc"
@@ -889,6 +899,52 @@ inject_guest_identity() {
   else
     log_ok "Guest identity: computer name ${name}, workgroup ${GUEST_WORKGROUP}"
   fi
+}
+
+# Desktop launchers for LEGO LOCO's POSTBAG and SAVEGAME directories.
+#
+# These two dirs are the sync/share surface for the upcoming postbag-over-
+# network feature: mail sent between guests lands as files in POSTBAG, and
+# SAVEGAME is what a shared session resumes from. Putting them on the desktop
+# gives players — and anyone debugging over VNC — a one-click Explorer view of
+# what arrived, instead of a spelunk four directories deep.
+#
+# .BAT launchers rather than real .lnk shortcuts: a Shell Link's target is a
+# LinkTargetIDList of binary shell item IDs that Explorer resolves against its
+# own namespace — fiddly to forge offline and silently ignored by Win98 when
+# malformed. `start <dir>` from a batch file opens the same Explorer window,
+# and a batch file is plain text mtools can write. Same pre-boot mtools pass
+# as inject_guest_identity, so the shortcuts appear from the next boot.
+inject_desktop_shortcuts() {
+  [ "$GUEST_SHORTCUTS" = "1" ] || return 0
+  command -v mcopy >/dev/null 2>&1 || { log_warn "mtools missing; skipping desktop shortcuts"; return 0; }
+
+  # Same drive mapping inject_guest_identity writes; rewritten here so this
+  # function stands alone when GUEST_IDENTITY=0.
+  local mtoolsrc="${RUN_DIR}/mtoolsrc"
+  printf 'drive c: file="%s" offset=32256\n' "$DISK_PATH" > "$mtoolsrc"
+
+  # 8.3 spellings throughout — mtools addresses the FAT short names, and
+  # COMMAND.COM wants an unquoted path (the long one has spaces).
+  local base='c:/PROGRA~1/LEGOME~1/CONSTR~1/LEGOLO~1/ART-RES'
+  local dosbase='C:\PROGRA~1\LEGOME~1\CONSTR~1\LEGOLO~1\ART-RES'
+
+  local sub bat
+  for sub in POSTBAG SAVEGAME; do
+    # Create the dir if the game has not yet — a launcher into a missing dir
+    # opens an error box instead of a window. mmd errors when it already
+    # exists, which is the common case; ignore it.
+    MTOOLSRC="$mtoolsrc" MTOOLS_SKIP_CHECK=1 mmd "${base}/${sub}" 2>/dev/null || true
+
+    bat="${RUN_DIR}/${sub}.bat"
+    # CRLF: read by COMMAND.COM. On Win98, `start <dir>` opens Explorer on it.
+    printf '@echo off\r\nstart %s\\%s\r\n' "$dosbase" "$sub" > "$bat"
+    if MTOOLSRC="$mtoolsrc" MTOOLS_SKIP_CHECK=1 mcopy -o "$bat" "c:/WINDOWS/Desktop/${sub}.BAT" 2>/dev/null; then
+      log_ok "Desktop shortcut ${sub}.BAT -> ${dosbase}\\${sub}"
+    else
+      log_warn "could not write desktop shortcut ${sub}.BAT"
+    fi
+  done
 }
 
 ########################################################################
@@ -1064,6 +1120,23 @@ start_pcem() {
   log_ok "PCem started (pid ${PCEM_PID})"
 }
 
+# Watch for LEGO LOCO's main menu and type this instance's name into its red
+# ticket (scripts/loco-autoname.py). Backgrounded: the menu is minutes of
+# guest boot away, and the script exits 0 on every path — a missed menu costs
+# the in-game name, never the pod. ${RUN_DIR}/autoname.done marks success,
+# which is how "the menu never showed" is told apart from "it typed the name"
+# without watching the log scroll by.
+start_autoname() {
+  [ "$GUEST_AUTONAME" = "1" ] || return 0
+  LOCO_GUEST_NAME="$(guest_name)" \
+  AUTONAME_HOST=127.0.0.1 \
+  AUTONAME_PORT="$VNC_PORT" \
+  AUTONAME_MARKER="${RUN_DIR}/autoname.done" \
+    python3 /usr/local/bin/loco-autoname.py >"${RUN_DIR}/autoname.log" 2>&1 &
+  echo $! > "${RUN_DIR}/autoname.pid"
+  log_ok "Autoname watcher started for $(guest_name) (log: ${RUN_DIR}/autoname.log)"
+}
+
 # The SDL render window ("PCem v17 - ...") is separate from the tiny wx
 # top-level frame (gotcha #12). Only the former should be visible.
 find_sdl_window() {
@@ -1172,6 +1245,7 @@ main() {
   prepare_pcem_home
   setup_guest_lan
   inject_guest_identity
+  inject_desktop_shortcuts
   start_guest_dhcp
   render_config
   write_global_config
@@ -1183,6 +1257,7 @@ main() {
   start_pcem
   place_window || true
   bios_autokey
+  start_autoname
 
   log_ok "Ready — VNC on :${VNC_PORT}, health on :${HEALTH_PORT}"
   wait "$PCEM_PID"

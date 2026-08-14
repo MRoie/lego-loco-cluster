@@ -1053,6 +1053,132 @@ app.post("/api/instances/:instanceId/restart", criticalRateLimit, async (req, re
   }
 });
 
+// ---- Launch / scale: empty-slot provisioning ----
+//
+// The dashboard grid is a fixed 3x3, so nine replicas is a hard ceiling: a
+// tenth pod would have no tile to land on.
+const EMULATOR_MAX_REPLICAS = 9;
+
+// The StatefulSet name is deliberately not hardcoded: prefer an explicit env
+// override, then derive it the way discovery maps a pod to its parent (pod
+// name minus the "-<ordinal>" suffix), and only then fall back to the
+// headless-service name, which matches the StatefulSet name in the Helm chart.
+function resolveEmulatorStatefulSetName() {
+  if (process.env.EMULATOR_STATEFULSET_NAME) {
+    return process.env.EMULATOR_STATEFULSET_NAME;
+  }
+  for (const inst of instanceManager.cachedInstances || []) {
+    const podName = inst.podName || inst.kubernetes?.targetRef?.name;
+    if (podName && /-\d+$/.test(podName)) {
+      return podName.replace(/-\d+$/, '');
+    }
+  }
+  return instanceManager.kubernetesDiscovery?.serviceName || 'loco-loco-emulator';
+}
+
+async function readEmulatorReplicas() {
+  const discovery = instanceManager.kubernetesDiscovery;
+  const namespace = discovery.getNamespace();
+  const name = resolveEmulatorStatefulSetName();
+  const response = await discovery.k8sAppsApi.readNamespacedStatefulSet({ name, namespace });
+  // Handle both old (response.body) and new (response directly) client formats
+  const body = response?.body || response;
+  return { name, namespace, replicas: body?.spec?.replicas ?? 0 };
+}
+
+// Patch spec.replicas on the emulator StatefulSet and drop the discovery
+// cache the way the restart endpoint does, so the grid reflects the change
+// promptly instead of after a cache TTL.
+async function scaleEmulatorStatefulSet(replicas) {
+  const discovery = instanceManager.kubernetesDiscovery;
+  const namespace = discovery.getNamespace();
+  const name = resolveEmulatorStatefulSetName();
+
+  // client-node v1 requires the patch content type via header middleware; a
+  // merge patch is enough for a single scalar field.
+  const k8s = discovery.k8s;
+  const patchOptions = k8s?.setHeaderOptions && k8s?.PatchStrategy
+    ? k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch)
+    : undefined;
+
+  await discovery.k8sAppsApi.patchNamespacedStatefulSet(
+    { name, namespace, body: { spec: { replicas } } },
+    patchOptions
+  );
+
+  instanceManager.cachedInstances = null;
+  instanceManager.lastDiscoveryTime = null;
+
+  return { name, namespace, replicas };
+}
+
+function sendScaleError(res, e, action) {
+  const status = e?.statusCode || e?.response?.statusCode;
+  logger.error(`Failed to ${action}`, { error: e.message, status });
+  if (status === 403) {
+    return res.status(403).json({
+      error: "Not permitted to patch statefulsets",
+      detail: "The backend ServiceAccount needs patch on statefulsets (see helm/loco-chart/templates/rbac.yaml)."
+    });
+  }
+  return res.status(500).json({ error: `Failed to ${action}`, detail: e.message });
+}
+
+// Boot a new instance by scaling the emulator StatefulSet up by one. Each pod
+// self-provisions its identity (name, IP) from its ordinal, so "launch" is
+// nothing more than replicas+1 — discovery then surfaces the new pod as a
+// booting tile on the grid.
+app.post("/api/instances/launch", criticalRateLimit, async (req, res) => {
+  try {
+    if (!instanceManager.kubernetesDiscovery?.k8sAppsApi) {
+      return res.status(503).json({ error: "Kubernetes API unavailable" });
+    }
+
+    const { name, namespace, replicas } = await readEmulatorReplicas();
+    if (replicas >= EMULATOR_MAX_REPLICAS) {
+      return res.status(409).json({
+        error: `All ${EMULATOR_MAX_REPLICAS} slots are in use — the 3x3 grid is full`,
+        replicas
+      });
+    }
+
+    const desired = replicas + 1;
+    await scaleEmulatorStatefulSet(desired);
+    logger.info("Launching new emulator instance", { statefulSet: name, namespace, replicas: desired });
+    res.json({
+      message: `Launching instance ${desired - 1} (${desired}/${EMULATOR_MAX_REPLICAS} slots)`,
+      replicas: desired
+    });
+  } catch (e) {
+    sendScaleError(res, e, "launch instance");
+  }
+});
+
+// Explicit scale control for operators — same mechanics as launch, but the
+// caller picks the replica count (1..9; 0 would kill the whole grid).
+app.post("/api/instances/scale", criticalRateLimit, validate({
+  body: { replicas: { type: 'number', required: true } }
+}), async (req, res) => {
+  try {
+    if (!instanceManager.kubernetesDiscovery?.k8sAppsApi) {
+      return res.status(503).json({ error: "Kubernetes API unavailable" });
+    }
+
+    const replicas = req.body.replicas;
+    if (!Number.isInteger(replicas) || replicas < 1 || replicas > EMULATOR_MAX_REPLICAS) {
+      return res.status(400).json({
+        error: `replicas must be an integer between 1 and ${EMULATOR_MAX_REPLICAS}`
+      });
+    }
+
+    const { name, namespace } = await scaleEmulatorStatefulSet(replicas);
+    logger.info("Scaled emulator StatefulSet", { statefulSet: name, namespace, replicas });
+    res.json({ message: `Scaled ${name} to ${replicas} replicas`, replicas });
+  } catch (e) {
+    sendScaleError(res, e, "scale instances");
+  }
+});
+
 // Get recovery status and attempts
 app.get("/api/quality/recovery-status", (req, res) => {
   try {
