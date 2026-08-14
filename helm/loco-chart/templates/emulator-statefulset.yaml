@@ -152,6 +152,9 @@ spec:
           value: "42"
         - name: VXLAN_PORT
           value: "4789"
+        # Guest audio PCM tap (PCem entrypoint start_audio())
+        - name: AUDIO_PORT
+          value: {{ .Values.emulator.audioPort | default 5902 | quote }}
         {{- if .Values.emulator.env }}
         {{- range $key, $value := .Values.emulator.env }}
         {{- if ne $key "SOCKET_MASTER_HOST" }}
@@ -232,6 +235,9 @@ spec:
           name: service
         - containerPort: {{ .Values.emulator.healthPort }}
           name: health
+        - containerPort: {{ .Values.emulator.audioPort | default 5902 }}
+          name: audio
+          protocol: TCP
         - containerPort: 4444
           name: lan-socket
           protocol: TCP

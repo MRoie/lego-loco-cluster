@@ -20,3 +20,11 @@ spec:
     {{- if .Values.frontend.nodePort }}
     nodePort: {{ .Values.frontend.nodePort }}
     {{- end }}
+  {{- if .Values.frontend.tlsNodePort }}
+  # Rides the kind extraPortMapping host 6080 -> 30080, which nothing else
+  # claims; WebXR headsets on the LAN need https to get a secure context.
+  - name: https
+    port: {{ .Values.frontend.tlsPort }}
+    targetPort: {{ .Values.frontend.tlsPort }}
+    nodePort: {{ .Values.frontend.tlsNodePort }}
+  {{- end }}

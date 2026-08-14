@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import VNCViewerSwitcher from './VNCViewerSwitcher';
 import useWebRTC from '../hooks/useWebRTC';
+import usePCMAudio from '../hooks/usePCMAudio';
 import useInstanceRecorder from '../hooks/useInstanceRecorder';
 import AudioSinkSelector from './AudioSinkSelector';
 import QualityIndicator from './QualityIndicator';
@@ -57,6 +58,10 @@ function JoinAddress({ guestNetwork }) {
 
 export default function InstanceCard({ instance, isActive, onClick, onFullscreen }) {
   const { videoRef, loading, audioLevel, connectionQuality } = useWebRTC(instance.id);
+  // Guest audio: PCM from the pod through its own gain node — no spatial
+  // panner in the grid, so connect straight to the speakers.
+  const pcm = usePCMAudio(instance.id, null, { connect: true });
+  const { isReady: pcmReady, setVolume: setPcmVolume, resume: resumePcm, audioLevel: pcmLevel } = pcm;
   // Only trust the WebRTC <video> element once the peer connection has
   // actually reached 'connected'. `loading` alone is unreliable: it flips
   // to false the moment a single track arrives via ontrack, even if ICE
@@ -117,14 +122,24 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
     vid.muted = muted;
   }, [volume, muted, videoRef]);
 
-  // Animate the audio level meter bar
+  // Sync volume / mute to the guest PCM gain as well. Ramped, not stepped —
+  // the gain node clicks otherwise.
+  useEffect(() => {
+    if (!pcmReady) return;
+    setPcmVolume(muted ? 0 : volume);
+  }, [volume, muted, pcmReady, setPcmVolume]);
+
+  // Animate the audio level meter bar. PCM level once the guest-audio path
+  // is up (it meters pre-gain, so it moves even while muted); WebRTC's
+  // otherwise.
+  const liveLevel = pcmReady ? pcmLevel : audioLevel;
   useEffect(() => {
     if (!levelRef.current) return;
-    const pct = Math.min(audioLevel * 100, 100);
+    const pct = Math.min(liveLevel * 100, 100);
     levelRef.current.style.width = `${pct}%`;
     levelRef.current.style.backgroundColor =
       pct > 75 ? '#ef4444' : pct > 40 ? '#eab308' : '#22c55e';
-  }, [audioLevel]);
+  }, [liveLevel]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -262,7 +277,7 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
             {/* Mute toggle + Volume slider + Record + Fullscreen */}
             <div className="flex items-center gap-2">
               <button
-                onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
+                onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); resumePcm(); }}
                 className={`lego-mini-button text-xs font-bold shadow-lg ${
                   muted
                     ? 'bg-gray-400 border-gray-600 text-white'

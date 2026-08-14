@@ -1566,11 +1566,123 @@ function createVNCBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
   tcpSocket.setTimeout(30000); // 30 second idle timeout
 }
 
+// Port every emulator pod exposes raw guest PCM on (PulseAudio's
+// module-simple-protocol-tcp, started by the PCem entrypoint). One knob, not
+// per-instance: all instances run the same container.
+const EMULATOR_AUDIO_PORT = parseInt(process.env.EMULATOR_AUDIO_PORT || '5902', 10);
+const EMULATOR_AUDIO_RATE = parseInt(process.env.EMULATOR_AUDIO_RATE || '48000', 10);
+
+/**
+ * Create a one-way TCP->WebSocket bridge for guest audio.
+ *
+ * Mirrors createVNCBridge but strictly server-to-client: the upstream is a
+ * headerless s16le PCM stream (48 kHz stereo) from the pod's PulseAudio tap,
+ * and the browser has nothing to say back. The first frame sent is a single
+ * JSON text message describing the format so the client never has to guess;
+ * everything after it is binary PCM.
+ *
+ * @param {WebSocket} ws - WebSocket connection from client
+ * @param {string} targetUrl - VNC target ("host:port") — only the host is used;
+ *                             audio always lives on EMULATOR_AUDIO_PORT
+ * @param {string} instanceId - Instance identifier for logging
+ * @param {string} traceId - Distributed trace identifier
+ */
+function createAudioBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
+  const logCtx = { instanceId, traceId };
+
+  // Reuse the instance's VNC target for the host; the PCM port is fixed.
+  let host;
+  if (targetUrl.includes('://')) {
+    host = url.parse(targetUrl).hostname;
+  } else {
+    host = targetUrl.split(':')[0] || 'localhost';
+  }
+  const port = EMULATOR_AUDIO_PORT;
+
+  logger.info("Creating audio bridge", { ...logCtx, host, port });
+
+  let connectionClosed = false;
+  const cleanupConnection = (reason = 'unknown') => {
+    if (connectionClosed) return;
+    connectionClosed = true;
+    logger.info("Audio connection cleanup", { ...logCtx, reason });
+    if (tcpSocket && !tcpSocket.destroyed) {
+      tcpSocket.destroy();
+    }
+    if (ws.readyState === ws.OPEN) {
+      ws.close();
+    }
+  };
+
+  const tcpSocket = net.createConnection(port, host);
+  // Audio chunks are small and continuous; Nagle would batch them into
+  // bursty, later-arriving segments for no bandwidth win worth having.
+  tcpSocket.setNoDelay(true);
+
+  const connectionTimeout = setTimeout(() => {
+    logger.error("Audio TCP connection timeout", { ...logCtx, timeoutMs: 10000 });
+    cleanupConnection('tcp_timeout');
+  }, 10000);
+
+  tcpSocket.on('connect', () => {
+    clearTimeout(connectionTimeout);
+    logger.info("Audio TCP connected", { ...logCtx, host, port });
+    // One text frame up front so the client can configure its player before
+    // the first PCM bytes land. The stream itself is headerless.
+    if (ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'format',
+        rate: EMULATOR_AUDIO_RATE,
+        channels: 2,
+        format: 's16le',
+      }));
+    }
+  });
+
+  tcpSocket.on('data', (data) => {
+    if (connectionClosed || ws.readyState !== ws.OPEN) return;
+    // Latency-shedding: if the client isn't draining (slow network, tab in
+    // the background), DROP the chunk rather than queue it. Buffered PCM is
+    // pure added latency — it can never be played "later", only late — so
+    // the queue must never be allowed to accumulate.
+    if (ws.bufferedAmount > 65536) return;
+    ws.send(data);
+  });
+
+  tcpSocket.on('error', (err) => {
+    logger.error("Audio TCP socket error", { ...logCtx, error: err.message, code: err.code, host, port });
+    cleanupConnection('tcp_error');
+  });
+
+  tcpSocket.on('close', () => cleanupConnection('tcp_closed'));
+
+  // One-way bridge: the client has no business writing PCM back. Swallow
+  // anything that does arrive (application-level pings included) rather than
+  // feeding it to the PulseAudio socket.
+  ws.on('message', () => {});
+
+  ws.on('close', (code, reason) => {
+    logger.info("Audio WebSocket closed", { ...logCtx, code, reason: reason?.toString() });
+    cleanupConnection('ws_closed');
+  });
+
+  ws.on('error', (err) => {
+    logger.error("Audio WebSocket error", { ...logCtx, error: err.message });
+    cleanupConnection('ws_error');
+  });
+}
+
 // --- WebSocket Support for VNC ---
 // VNC WebSocket server for handling VNC connections
 const vncWss = new WebSocketServer({ noServer: true });
 vncWss.on("error", (err) => {
   logger.error("VNC WebSocket server error", { error: err.message });
+});
+
+// Guest audio WebSocket server (one-way PCM out of the emulator pods)
+const audioWss = new WebSocketServer({ noServer: true });
+audioWss.on("error", (err) => {
+  logger.error("Audio WebSocket server error", { error: err.message });
 });
 
 // WebSocket server for active focus updates
@@ -1783,6 +1895,34 @@ activeWss.on("connection", (ws) => {
 // Handle WebSocket upgrades for VNC connections
 server.on("upgrade", (req, socket, head) => {
   logger.debug("WebSocket upgrade request", { url: req.url });
+
+  // Guest audio: /proxy/audio/:instanceId — tested BEFORE the VNC match so a
+  // future loosening of that pattern can never shadow this one. nginx already
+  // forwards all of /proxy/ with upgrade headers, so no config change there.
+  const audioMatch = req.url.match(/^\/proxy\/audio\/([^\/\?]+)/);
+  if (audioMatch) {
+    const instanceId = audioMatch[1];
+    const query = url.parse(req.url, true).query;
+    const traceId = query.traceId || `gen-${Date.now()}`;
+
+    logger.info("Audio Upgrade Request", { instanceId, traceId, url: req.url });
+
+    getInstanceTarget(instanceId).then(target => {
+      if (target) {
+        audioWss.handleUpgrade(req, socket, head, (ws) => {
+          createAudioBridge(ws, target, instanceId, traceId);
+        });
+      } else {
+        logger.error("Audio WebSocket proxy: Unknown instance", { instanceId });
+        socket.destroy();
+      }
+    }).catch(error => {
+      logger.error("Audio WebSocket proxy error", { instanceId, error: error.message });
+      socket.destroy();
+    });
+
+    return;
+  }
 
   // Match VNC proxy URLs
   // /proxy/vnc/:instanceId?traceId=...

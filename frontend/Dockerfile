@@ -37,8 +37,8 @@ RUN if [ "$VITE_DEFAULT_VR" = "true" ]; then npm run build:vr; else npm run buil
 # Production stage
 FROM node:18-slim AS production
 
-# Install nginx and gettext
-RUN apt-get update && apt-get install -y nginx gettext-base && rm -rf /var/lib/apt/lists/*
+# Install nginx, gettext, and openssl (self-signed TLS fallback in entrypoint)
+RUN apt-get update && apt-get install -y nginx gettext-base openssl && rm -rf /var/lib/apt/lists/*
 
 # Copy built app
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -54,7 +54,7 @@ COPY --from=builder /app/nginx.conf.template /etc/nginx/templates/default.conf.t
 COPY --from=builder /app/docker-entrypoint.sh /docker-entrypoint.sh
 RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
-EXPOSE 3000
+EXPOSE 3000 3443
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

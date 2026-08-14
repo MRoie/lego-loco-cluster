@@ -18,6 +18,9 @@ spec:
   - name: vnc
     port: {{ .Values.emulator.servicePort }}
     targetPort: {{ .Values.emulator.servicePort }}
+  - name: audio
+    port: {{ .Values.emulator.audioPort | default 5902 }}
+    targetPort: {{ .Values.emulator.audioPort | default 5902 }}
   - name: health
     port: 8080
     targetPort: 8080

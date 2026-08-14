@@ -30,6 +30,7 @@ spec:
         imagePullPolicy: {{ .Values.frontend.imagePullPolicy | default "IfNotPresent" }}
         ports:
         - containerPort: {{ .Values.frontend.servicePort }}
+        - containerPort: {{ .Values.frontend.tlsPort }}
         resources:
           {{- toYaml .Values.frontend.resources | nindent 10 }}
         startupProbe:
@@ -57,10 +58,25 @@ spec:
           value: "{{ .Values.backend.servicePort }}"
         - name: FRONTEND_PORT
           value: "{{ .Values.frontend.servicePort }}"
+        - name: TLS_PORT
+          value: "{{ .Values.frontend.tlsPort }}"
+        - name: TLS_SAN_IP
+          value: "{{ .Values.frontend.env.TLS_SAN_IP }}"
         volumeMounts:
         - name: config
           mountPath: /usr/share/nginx/html/config
+        {{- if .Values.frontend.tlsSecret }}
+        # Real certs win over the entrypoint's self-signed fallback
+        - name: tls-certs
+          mountPath: /etc/nginx/certs
+          readOnly: true
+        {{- end }}
       volumes:
       - name: config
         configMap:
           name: {{ include "loco.fullname" . }}-instances
+      {{- if .Values.frontend.tlsSecret }}
+      - name: tls-certs
+        secret:
+          secretName: {{ .Values.frontend.tlsSecret }}
+      {{- end }}

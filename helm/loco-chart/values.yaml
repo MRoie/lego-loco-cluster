@@ -94,6 +94,9 @@ emulator:
   serviceType: ClusterIP
   servicePort: 5901
   healthPort: 8080
+  # Raw guest PCM (PulseAudio module-simple-protocol-tcp in the PCem
+  # entrypoint); the backend's /proxy/audio bridge dials it.
+  audioPort: 5902
   diskPVC: win98-disk
   diskReadOnly: false
 
@@ -226,6 +229,15 @@ frontend:
   tag: latest
   imagePullPolicy: Never  # Use local images
   servicePort: 3000
+  # HTTPS listener: WebXR needs a secure context, and LAN headsets reach the
+  # site by IP where plain http does not qualify (localhost does).
+  tlsPort: 3443
+  # kind already maps host 6080 to nodePort 30080 and no service claims it,
+  # so the https port rides that otherwise-dead mapping.
+  tlsNodePort: 30080
+  # Set to the name of a kubernetes.io/tls Secret to mount real certs at
+  # /etc/nginx/certs; empty means the entrypoint self-signs at startup.
+  tlsSecret: ""
   resources:
     requests:
       memory: "128Mi"
@@ -237,6 +249,9 @@ frontend:
     BACKEND_HOST: "loco-loco-backend"
     BACKEND_PORT: "3001"
     FRONTEND_PORT: "3000"
+    # LAN IP baked into the self-signed cert SAN — override per site; the
+    # DHCP lease means it can change out from under the cert.
+    TLS_SAN_IP: "192.168.1.18"
 
 git:
   userName: "Loco Watcher"

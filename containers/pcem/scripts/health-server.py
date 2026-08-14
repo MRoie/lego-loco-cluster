@@ -26,6 +26,8 @@ RUN_DIR = os.environ.get("PCEM_RUN_DIR", "/run/pcem")
 # background thread and requests are served from the last snapshot.
 SAMPLE_INTERVAL = float(os.environ.get("PCEM_HEALTH_SAMPLE_INTERVAL", "2"))
 VNC_PORT = int(os.environ.get("PCEM_VNC_PORT", "5901"))
+AUDIO_ENABLE = os.environ.get("PCEM_AUDIO_ENABLE", "1") == "1"
+AUDIO_PORT = int(os.environ.get("PCEM_AUDIO_PORT", "5902"))
 INSTANCE_ID = os.environ.get("PCEM_INSTANCE_ID", "pcem-0")
 DISK_PATH = os.environ.get("PCEM_DISK_PATH", "")
 DISPLAY = os.environ.get("DISPLAY", ":99")
@@ -148,6 +150,7 @@ def status():
     pcem_alive, pcem_pid = _pid_alive("pcem")
     vnc_up = _port_listening(VNC_PORT)
     title = _sdl_window() if pcem_alive else None
+    pulse_alive, pulse_pid = _pid_alive("pulse")
 
     body = {
         "instance": INSTANCE_ID,
@@ -163,6 +166,18 @@ def status():
         "disk": {
             "path": DISK_PATH,
             "present": bool(DISK_PATH) and os.path.exists(DISK_PATH),
+        },
+        # Guest audio: the in-pod PulseAudio daemon and its raw-PCM tap.
+        # Deliberately kept out of "ready" below — video must never depend on
+        # audio, so a dead daemon degrades sound and nothing else. Same
+        # passive /proc/net/tcp check as VNC: dialling the PCM port would open
+        # a real capture stream on module-simple-protocol-tcp every probe.
+        "audio": {
+            "enabled": AUDIO_ENABLE,
+            "pulse_running": pulse_alive,
+            "pulse_pid": pulse_pid,
+            "pcm_port": AUDIO_PORT,
+            "pcm_available": AUDIO_ENABLE and _port_listening(AUDIO_PORT),
         },
         # The address other guests reach this one on — what a player types into
         # LEGO LOCO's TCP/IP join box to join this instance's game. It is a

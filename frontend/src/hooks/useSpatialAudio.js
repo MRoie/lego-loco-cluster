@@ -25,7 +25,9 @@ export const SPATIAL_DEFAULTS = {
  *
  * @param {React.RefObject} videoRef - ref to the <video> / <audio> element
  * @param {number[]} position - [x, y, z] initial position
- * @param {object} [options] - override any key from SPATIAL_DEFAULTS
+ * @param {object} [options] - override any key from SPATIAL_DEFAULTS; pass
+ *   options.sourceNode (any AudioNode, e.g. usePCMAudio's gain) to spatialise
+ *   an existing Web Audio node instead of tapping a media element
  * @param {AudioContext} [sharedCtx] - optional shared AudioContext
  */
 export default function useSpatialAudio(
@@ -36,25 +38,41 @@ export default function useSpatialAudio(
 ) {
   const mono = !!(options.mono ?? SPATIAL_DEFAULTS.mono);
   const cfg = { ...SPATIAL_DEFAULTS, ...options, mono };
+  const sourceNode = options.sourceNode || null;
   const ctxRef = useRef(null);
   const gainRef = useRef(null);
   const pannerRef = useRef(null);
   const sourceRef = useRef(null);
+  // First node downstream of an external sourceNode (merger or panner). Kept
+  // so teardown can detach just this edge — a blanket disconnect() would also
+  // sever connections the node's owner made (e.g. a flat destination path).
+  const externalHeadRef = useRef(null);
   const ownsCtx = useRef(false);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     let interval;
     function setup() {
-      const vid = videoRef.current;
-      if (!vid || !vid.srcObject || ctxRef.current) return;
+      if (ctxRef.current) return;
 
-      const ctx =
-        sharedCtx || new (window.AudioContext || window.webkitAudioContext)();
-      ownsCtx.current = !sharedCtx;
+      let ctx, src;
+      if (sourceNode) {
+        // An existing Web Audio node (the PCM worklet path). No media element
+        // to poll for, and the node dictates the context — Web Audio nodes
+        // cannot connect across contexts.
+        ctx = sourceNode.context;
+        ownsCtx.current = false;
+        src = sourceNode;
+      } else {
+        const vid = videoRef.current;
+        if (!vid || !vid.srcObject) return;
+
+        ctx =
+          sharedCtx || new (window.AudioContext || window.webkitAudioContext)();
+        ownsCtx.current = !sharedCtx;
+        src = ctx.createMediaStreamSource(vid.srcObject);
+      }
       ctxRef.current = ctx;
-
-      const src = ctx.createMediaStreamSource(vid.srcObject);
       sourceRef.current = src;
 
       // Choose panning model: 'equalpower' for mono fallback, 'HRTF' for 3D
@@ -82,8 +100,10 @@ export default function useSpatialAudio(
         const merger = ctx.createChannelMerger(1);
         src.connect(merger);
         merger.connect(panner);
+        externalHeadRef.current = merger;
       } else {
         src.connect(panner);
+        externalHeadRef.current = panner;
       }
       panner.connect(gain).connect(ctx.destination);
 
@@ -92,11 +112,23 @@ export default function useSpatialAudio(
       setIsReady(true);
       clearInterval(interval);
     }
-    interval = setInterval(setup, 500);
-    setup();
+    if (sourceNode) {
+      // The node is already live — no srcObject to wait for.
+      setup();
+    } else {
+      interval = setInterval(setup, 500);
+      setup();
+    }
     return () => {
       clearInterval(interval);
-      if (sourceRef.current) sourceRef.current.disconnect();
+      if (sourceRef.current) {
+        if (sourceNode && externalHeadRef.current) {
+          // Detach only our edge; the node's owner keeps its other routes.
+          try { sourceRef.current.disconnect(externalHeadRef.current); } catch { /* already detached */ }
+        } else {
+          sourceRef.current.disconnect();
+        }
+      }
       if (gainRef.current) gainRef.current.disconnect();
       if (pannerRef.current) pannerRef.current.disconnect();
       if (ownsCtx.current && ctxRef.current) ctxRef.current.close();
@@ -104,11 +136,12 @@ export default function useSpatialAudio(
       gainRef.current = null;
       pannerRef.current = null;
       sourceRef.current = null;
+      externalHeadRef.current = null;
       ownsCtx.current = false;
       setIsReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoRef, position[0], position[1], position[2], mono, sharedCtx]);
+  }, [videoRef, position[0], position[1], position[2], mono, sharedCtx, sourceNode]);
 
   /** Smoothly ramp volume to the target value. */
   const setVolume = useCallback(

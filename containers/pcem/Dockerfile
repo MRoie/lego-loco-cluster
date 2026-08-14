@@ -114,10 +114,16 @@ LABEL org.opencontainers.image.title="lego-loco PCem emulator" \
 
 COPY --from=builder /out/runtime-deps.txt /tmp/runtime-deps.txt
 
+# pulseaudio: PCem renders sound through OpenAL, and OpenAL-soft with no audio
+# server reachable falls through its backend list to ALSA — i.e. the *node's*
+# /dev/snd. A private in-pod daemon gives it a null sink to render into, and
+# module-simple-protocol-tcp re-exposes those samples as raw PCM for the
+# backend's audio bridge (see entrypoint.sh start_audio()).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         $(cat /tmp/runtime-deps.txt) \
         tigervnc-standalone-server xvfb x11vnc xdotool x11-utils \
         python3 curl ca-certificates procps tini mtools iproute2 ethtool libpcap0.8 dnsmasq \
+        pulseaudio pulseaudio-utils \
     && rm -rf /var/lib/apt/lists/* /tmp/runtime-deps.txt
 
 COPY --from=builder /out/pcem /usr/local/bin/pcem
@@ -150,6 +156,6 @@ ENV HOME=/pcem \
 RUN mkdir -p /pcem /images /config && chmod 777 /pcem /images
 
 VOLUME ["/images"]
-EXPOSE 5901 8080
+EXPOSE 5901 5902 8080
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]

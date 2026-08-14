@@ -16,6 +16,14 @@ set -euo pipefail
 : "${VNC_BACKEND:=xvnc}"   # xvnc (TigerVNC, RFB-native) | x11vnc (Xvfb + screen grabber)
 : "${HEALTH_PORT:=8080}"
 
+# Guest audio: a private PulseAudio daemon with a null sink for PCem's OpenAL
+# output, plus a raw-PCM TCP tap the backend bridges to the browser. See
+# start_audio() for why this exists at all (OpenAL falls back to the *host*
+# sound card without it).
+: "${AUDIO_ENABLE:=1}"
+: "${AUDIO_PORT:=5902}"
+: "${AUDIO_RATE:=48000}"   # matches PCem's FREQ (48 kHz stereo S16)
+
 : "${PCEM_HOME:=/pcem}"
 : "${DISK_DIR:=/images}"
 : "${DISK_NAME:=win98-loco.vhd}"
@@ -884,6 +892,56 @@ inject_guest_identity() {
 }
 
 ########################################################################
+# 2c. Guest audio
+#
+# PCem's sound path is OpenAL, not SDL — SDL only carries video here. With no
+# audio daemon in the pod, OpenAL-soft walks its backend list until something
+# opens, lands on ALSA, and opens the *node's* /dev/snd: the LAN game plays
+# out of the Kubernetes host's speakers. So run a private PulseAudio daemon
+# whose only sink is a null sink; nothing ever reaches real hardware, and the
+# null sink's .monitor is a capture tap that module-simple-protocol-tcp
+# re-exposes as headerless s16le PCM on ${AUDIO_PORT} for the backend's
+# WebSocket audio bridge.
+########################################################################
+AUDIO_READY=0
+
+start_audio() {
+  [ "$AUDIO_ENABLE" = "1" ] || { log "Guest audio disabled (AUDIO_ENABLE=${AUDIO_ENABLE})"; return 0; }
+  command -v pulseaudio >/dev/null 2>&1 || { log_warn "pulseaudio not installed; continuing without guest audio"; return 0; }
+
+  local pa="${RUN_DIR}/pulse.pa"
+  cat > "$pa" <<EOF
+# Native protocol on a pod-local socket — this is what PCem's OpenAL connects
+# to. auth-anonymous because the pod is single-tenant and PCem has no cookie.
+load-module module-native-protocol-unix socket=${RUN_DIR}/pulse.sock auth-anonymous=1
+# The only sink: renders to nowhere, and its .monitor is the capture tap.
+load-module module-null-sink sink_name=loco rate=${AUDIO_RATE} channels=2
+set-default-sink loco
+# Raw PCM out to the cluster. Fixed format so nothing downstream negotiates.
+load-module module-simple-protocol-tcp source=loco.monitor record=true format=s16le rate=${AUDIO_RATE} channels=2 port=${AUDIO_PORT} listen=0.0.0.0
+EOF
+
+  # -n: do NOT load default.pa — it probes ALSA and grabs /dev/snd, the exact
+  # behaviour this daemon exists to prevent. exit-idle-time=-1: no browser
+  # connected between sessions must not shut the daemon down.
+  pulseaudio -n --file="$pa" --daemonize=no --exit-idle-time=-1 \
+      --log-target=stderr >"${RUN_DIR}/pulse.log" 2>&1 &
+  echo $! > "${RUN_DIR}/pulse.pid"
+
+  for _ in $(seq 1 25); do
+    if [ -S "${RUN_DIR}/pulse.sock" ]; then
+      AUDIO_READY=1
+      log_ok "PulseAudio up — null sink 'loco' @ ${AUDIO_RATE}Hz, PCM tap on :${AUDIO_PORT}"
+      return 0
+    fi
+    sleep 0.2
+  done
+  # Video must never depend on audio: a daemon that failed to start costs
+  # sound, not the pod.
+  log_warn "PulseAudio socket never appeared (see ${RUN_DIR}/pulse.log) — continuing without guest audio"
+}
+
+########################################################################
 # 3. Display + VNC
 #
 # Two backends. `xvnc` (default) runs TigerVNC's Xvnc, which *is* an X server
@@ -978,6 +1036,17 @@ wait_for_vnc() {
 ########################################################################
 start_pcem() {
   cd "$PCEM_HOME"
+
+  # Point OpenAL at our daemon, explicitly. PCem's audio is OpenAL (not SDL),
+  # and OpenAL-soft only *prefers* Pulse — if the connection races or fails it
+  # silently falls through to ALSA and opens the host sound card via /dev/snd.
+  # ALSOFT_DRIVERS=pulse pins the backend so the failure mode is "no sound",
+  # never "sound on the node's speakers".
+  if [ "$AUDIO_READY" = "1" ]; then
+    export PULSE_SERVER="unix:${RUN_DIR}/pulse.sock"
+    export ALSOFT_DRIVERS=pulse
+  fi
+
   HOME="$PCEM_HOME" \
   PCEM_VNC_MOUSE="$PCEM_VNC_MOUSE" \
   PCEM_POINTER_MODE="$PCEM_POINTER_MODE" \
@@ -1063,6 +1132,8 @@ bios_autokey() {
 start_health() {
   PCEM_RUN_DIR="$RUN_DIR" \
   PCEM_VNC_PORT="$VNC_PORT" \
+  PCEM_AUDIO_ENABLE="$AUDIO_ENABLE" \
+  PCEM_AUDIO_PORT="$AUDIO_PORT" \
   PCEM_INSTANCE_ID="$INSTANCE_ID" \
   PCEM_DISK_PATH="$DISK_PATH" \
   PCEM_GUEST_IP="$GUEST_IP" \
@@ -1106,6 +1177,8 @@ main() {
   write_global_config
   start_display
   start_vnc
+  # Before PCem: OpenAL picks its backend once, at device open.
+  start_audio
   start_health
   start_pcem
   place_window || true
