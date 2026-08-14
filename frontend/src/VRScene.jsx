@@ -136,13 +136,30 @@ function positionForIndex(i, cols, rows) {
   const x = (i % cols) - (cols - 1) / 2;
   const row = Math.floor(i / cols);
   const y = (rows - 1) / 2 - row;
-  return { x: x * 1.4, y: y * 1.0 };
+  // +1.5: centre the wall at standing eye height. With a local-floor VR
+  // reference the headset supplies the user's real height above the rig, so
+  // content at y=0 sits at the user's FEET — the "green void" review, where
+  // both screens hid below the sight line.
+  return { x: x * 1.4, y: y * 1.0 + 1.5 };
 }
 
 function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio, muted, audioLevel, onAudioLevel }) {
   const vncRef = useRef(null);
   const planeRef = useRef(null);
+  const textureRef = useRef(null);
   const [textureCreated, setTextureCreated] = useState(false);
+
+  // noVNC repaints its canvas on every framebuffer update; THREE only
+  // re-uploads when told. One rAF loop per tile, alive for the tile's life.
+  useEffect(() => {
+    let raf;
+    const refresh = () => {
+      if (textureRef.current) textureRef.current.needsUpdate = true;
+      raf = requestAnimationFrame(refresh);
+    };
+    raf = requestAnimationFrame(refresh);
+    return () => cancelAnimationFrame(raf);
+  }, []);
   const { videoRef: rtcVideoRef, audioLevel: tileAudioLevel } = useWebRTC(inst.id);
   const pos = positionForIndex(idx, cols, rows);
   // Guest audio: raw PCM over /proxy/audio/<id>/ into an AudioWorklet.
@@ -179,58 +196,36 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   const handleVNCConnect = (instanceId) => {
     console.log(`VR: VNC connected for ${instanceId}`);
     
-    // Get the canvas from the VNC viewer
+    // Texture the tile straight from noVNC's canvas. The old code pushed the
+    // canvas through <a-asset-item src={canvas}> — setting a DOM object as an
+    // attribute stringifies it to "[object HTMLCanvasElement]", so the
+    // material src pointed at nothing and every tile rendered black. THREE
+    // takes a canvas directly.
     const canvas = vncRef.current?.getCanvas();
     if (canvas && planeRef.current) {
-      // Create a canvas texture for A-Frame
-      const scene = document.querySelector('a-scene');
-      if (scene) {
-        // Register the canvas as a texture asset
-        const textureId = `vnc-texture-${idx}`;
-        
-        // Remove existing texture if any
-        const existingAsset = scene.querySelector(`#${textureId}`);
-        if (existingAsset) {
-          existingAsset.remove();
+      const plane = planeRef.current;
+      const THREE = window.AFRAME && window.AFRAME.THREE;
+      const applyTexture = () => {
+        const mesh = plane.getObject3D && plane.getObject3D('mesh');
+        if (!mesh || !THREE) {
+          // A-Frame may not have built the mesh yet on a fresh mount.
+          setTimeout(applyTexture, 200);
+          return;
         }
-
-        // Create new canvas asset
-        const canvasAsset = document.createElement('a-asset-item');
-        canvasAsset.setAttribute('id', textureId);
-        canvasAsset.setAttribute('src', canvas);
-        
-        // Add to assets
-        let assets = scene.querySelector('a-assets');
-        if (!assets) {
-          assets = document.createElement('a-assets');
-          scene.appendChild(assets);
+        const tex = new THREE.CanvasTexture(canvas);
+        if ('colorSpace' in tex && THREE.SRGBColorSpace) {
+          tex.colorSpace = THREE.SRGBColorSpace;
         }
-        assets.appendChild(canvasAsset);
-
-        // Apply texture to plane
-        const plane = planeRef.current;
-        plane.setAttribute('material', {
-          src: `#${textureId}`,
-          transparent: false,
-          shader: 'flat'
-        });
-
+        tex.minFilter = THREE.LinearFilter;   // NPOT canvas: no mipmaps
+        tex.generateMipmaps = false;
+        mesh.material = new THREE.MeshBasicMaterial({ map: tex });
+        mesh.material.needsUpdate = true;
+        textureRef.current = tex;
         setTextureCreated(true);
-        
-        // Set up continuous texture updates
-        const updateTexture = () => {
-          if (canvas && plane.getAttribute('material')) {
-            const material = plane.components.material.material;
-            if (material && material.map) {
-              material.map.needsUpdate = true;
-            }
-          }
-          requestAnimationFrame(updateTexture);
-        };
-        updateTexture();
-      }
+      };
+      applyTexture();
     }
-    
+
     if (onVNCReady) onVNCReady(idx, vncRef.current);
   };
 
@@ -296,12 +291,17 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
       <video ref={rtcVideoRef} className="hidden" />
       
       <a-entity
-        className="tile"
+        ref={(el) => {
+          planeRef.current = el;
+          // React does not reliably map className -> class on custom
+          // elements, and the controllers' raycaster filters on ".tile";
+          // if the class is missing the laser passes straight through.
+          if (el) el.classList.add('tile');
+        }}
         position={`${pos.x} ${pos.y} -3`}
         geometry="primitive: plane; width: 1.2; height: 0.9"
         material={`color: ${active === idx ? '#FFD700' : '#F5F5DC'}; side: double`}
         scale={active === idx ? '1.4 1.4 1' : '1 1 1'}
-        ref={planeRef}
         onClick={handleClick}
       >
         {/* LEGO-style border for VR tiles */}
@@ -405,6 +405,44 @@ export default function VRScene({ onExit }) {
 
   // Sync the AudioContext listener with the VR camera rig position
   useVRAudioListener(sharedAudioCtx);
+
+  // Unlock audio from INSIDE immersive mode. The DOM "Enable Audio" button
+  // does not exist once the headset takes over, so a session that never
+  // clicked it beforehand stayed silent with no way to fix it. enter-vr is a
+  // user gesture, and so is every controller button.
+  useEffect(() => {
+    const scene = document.querySelector('a-scene');
+    if (!scene) return undefined;
+    const unlock = () => { handleAudioResume(); };
+    scene.addEventListener('enter-vr', unlock);
+    const controllers = ['leftController', 'rightController']
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+    controllers.forEach((c) => {
+      c.addEventListener('triggerdown', unlock);
+      c.addEventListener('gripdown', unlock);
+    });
+    return () => {
+      scene.removeEventListener('enter-vr', unlock);
+      controllers.forEach((c) => {
+        c.removeEventListener('triggerdown', unlock);
+        c.removeEventListener('gripdown', unlock);
+      });
+    };
+  }, [handleAudioResume]);
+
+  // Feed the camera-locked HUD. Plain attribute writes — the entity lives
+  // outside React's render on purpose, so headset pose changes never
+  // re-render the tree.
+  useEffect(() => {
+    const hud = document.getElementById('vrHud');
+    if (!hud) return;
+    const activeInst = instances[active];
+    hud.setAttribute('text', 'value',
+      `tile ${active + 1}/${instances.length} ${activeInst ? activeInst.id : ''}` +
+      ` | vnc ${connectedVNCs.size}/${instances.length}` +
+      ` | audio ${audioResumed ? 'on' : 'press trigger'}`);
+  }, [active, instances, connectedVNCs, audioResumed]);
 
   // Performance recorder for spatial audio metrics
   const {
@@ -856,13 +894,16 @@ export default function VRScene({ onExit }) {
           ))}
         </a-entity>
         
-        <a-sky color="#00A651"></a-sky>
+        {/* Sky-blue sky; the green went to the baseplate below, where LEGO
+            green belongs. An all-green sphere with no horizon reads as a
+            void with no way to orient. */}
+        <a-sky color="#5C9DD6"></a-sky>
         
         {/* LEGO baseplate grid pattern in 3D space */}
         <a-entity
           geometry="primitive: plane; width: 20; height: 20"
-          material="color: #00A651; opacity: 0.8"
-          position="0 -2 -5"
+          material="color: #00A651; opacity: 1"
+          position="0 0 -5"
           rotation="-90 0 0"
         >
           {/* Grid lines for LEGO baseplate effect */}
@@ -882,17 +923,30 @@ export default function VRScene({ onExit }) {
           ))}
         </a-entity>
         
-        <a-entity 
-          id="rig" 
-          movement-controls 
-          position="0 1.6 3"
+        {/* Rig at floor level: with local-floor XR the headset adds the
+            user's physical height, so a 1.6 here doubled it — the reviewer
+            floated ~3.3m up. The camera keeps 1.6 for DESKTOP only; in VR
+            A-Frame replaces the camera pose with the headset's. */}
+        <a-entity
+          id="rig"
+          movement-controls
+          position="0 0 0.6"
         >
           <a-entity
             camera
+            position="0 1.6 0"
             look-controls
             wasd-controls
             cursor="rayOrigin: mouse"
-          ></a-entity>
+          >
+            {/* In-headset HUD: the DOM overlays do not exist in immersive
+                mode, which read as "no stats". Locked to the camera. */}
+            <a-entity
+              position="0 -0.42 -0.9"
+              text="value: ; align: center; color: #9be7a1; width: 1.6"
+              id="vrHud"
+            ></a-entity>
+          </a-entity>
           
           <a-entity
             id="leftController"
