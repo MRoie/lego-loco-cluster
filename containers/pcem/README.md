@@ -223,6 +223,18 @@ values were live in the hive all along, and the measurements that condemned
 them were frame-diffs poisoned by LOCO's animated menu. Measure cursors by
 matching the sprite, never by diffing frames.
 
+**Certified through the frontend path too** — the exact route a browser or a
+VR headset uses (`ws://…:3000/proxy/vnc/<id>/`, nginx → backend bridge → Xvnc):
+`scripts/vnc-drive.py` speaks WebSocket as well as TCP, and the same
+measurement through the WS path gives the same pixel-exact result — score
+0.0000 at every stop, gain 1.000/1.000, zero drift — independently re-run and
+with the WS framing stress-tested (a 3 MB framebuffer update crossing the
+bridge intact is itself a byte-level integrity test). Motion-to-update latency
+through the full loop: **p50 112 ms** (`scripts/vnc-latency-probe.py`), which
+is the server-side floor a client adds its own compositor and network to. The
+backend bridge sets `setNoDelay(true)` toward Xvnc — Node 18 defaults Nagle on,
+which is invisible in-cluster and a real cost for a headset on the LAN.
+
 The guest-agent design below is kept because it is the answer if a *future*
 game or driver reinstates a curve the model cannot assume away — it closes the
 loop with `GetCursorPos()` as the oracle. It is not currently needed.

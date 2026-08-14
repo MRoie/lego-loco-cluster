@@ -1420,6 +1420,11 @@ function createVNCBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
 
   // Create TCP connection to VNC server
   const tcpSocket = net.createConnection(port, host);
+  // Pointer events are tiny writes on an interactive path; Nagle would hold
+  // them for the previous segment's ACK. In-cluster the RTT makes that ~free,
+  // but a headset on the LAN talks through this exact socket — and Node 18's
+  // net.createConnection defaults noDelay to false.
+  tcpSocket.setNoDelay(true);
 
   // TCP connection timeout (10 seconds)
   const connectionTimeout = setTimeout(() => {

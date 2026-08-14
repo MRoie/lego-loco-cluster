@@ -15,6 +15,16 @@ this much".
     scripts/vnc-drive.py localhost:5901 key Escape sleep 1 shot menu.png
     scripts/vnc-drive.py localhost:5901 cursor          # where is the guest cursor?
 
+The target may also be a WebSocket URL, which drives the same RFB stream
+through the frontend/backend bridge — the exact path a browser or headset
+uses:
+
+    scripts/vnc-drive.py ws://localhost:3000/proxy/vnc/instance-0/ shot x.png
+
+The bridge relays raw RFB bytes inside binary WS frames, so everything above
+the transport is identical; `WSSocket` below is a socket-shaped adapter that
+speaks RFC 6455 (stdlib only) and re-exposes the byte stream.
+
 Actions (applied in order):
     move X Y            absolute pointer move
     click X Y [BUTTON]  move then press+release (button defaults to 1)
@@ -34,13 +44,178 @@ Actions (applied in order):
 """
 
 import argparse
+import base64
+import hashlib
+import os
 import socket
 import struct
 import sys
 import time
 import zlib
+from urllib.parse import urlparse
 
 RFB_VERSION = b"RFB 003.008\n"
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+
+class WSSocket:
+    """RFC 6455 client that quacks like a socket (recv/sendall/settimeout).
+
+    The backend's VNC bridge relays raw RFB bytes inside *binary* WS frames in
+    both directions, so once the HTTP Upgrade is done this class only has to
+    (de)frame: every sendall() becomes one masked binary frame, and recv()
+    drains a byte buffer that frames are decoded into as they arrive. RFB
+    messages do not align with frame boundaries — the buffer is the whole
+    point. Fragmented messages coalesce for free (continuation payloads are
+    appended to the same buffer), pings are answered with pongs, and a Close
+    frame surfaces as a closed connection.
+    """
+
+    def __init__(self, url, timeout=20):
+        u = urlparse(url)
+        if u.scheme not in ("ws", "wss"):
+            raise ValueError(f"not a websocket url: {url}")
+        host = u.hostname
+        port = u.port or (443 if u.scheme == "wss" else 80)
+        path = u.path or "/"
+        if u.query:
+            path += "?" + u.query
+        self.sock = socket.create_connection((host, port), timeout=timeout)
+        if u.scheme == "wss":
+            import ssl
+            self.sock = ssl.create_default_context().wrap_socket(
+                self.sock, server_hostname=host)
+        self.sock.settimeout(timeout)
+        self._raw = bytearray()      # undecoded wire bytes (may end mid-frame)
+        self._payload = bytearray()  # decoded RFB bytes ready for recv()
+        self._handshake(host, port, path)
+
+    def _handshake(self, host, port, path):
+        key = base64.b64encode(os.urandom(16)).decode()
+        request = (
+            f"GET {path} HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            "Sec-WebSocket-Version: 13\r\n"
+            "\r\n")
+        self.sock.sendall(request.encode())
+        # Read headers; anything after the blank line is already frame data.
+        buf = bytearray()
+        while b"\r\n\r\n" not in buf:
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise RFBError("connection closed during WebSocket handshake")
+            buf += chunk
+        head, _, rest = bytes(buf).partition(b"\r\n\r\n")
+        status = head.split(b"\r\n", 1)[0].decode(errors="replace")
+        if " 101" not in status:
+            raise RFBError(f"WebSocket upgrade refused: {status}")
+        accept = None
+        for line in head.split(b"\r\n")[1:]:
+            name, _, value = line.partition(b":")
+            if name.strip().lower() == b"sec-websocket-accept":
+                accept = value.strip().decode()
+        expected = base64.b64encode(
+            hashlib.sha1((key + WS_GUID).encode()).digest()).decode()
+        if accept != expected:
+            raise RFBError(f"bad Sec-WebSocket-Accept: {accept!r}")
+        self._raw += rest
+        self._decode_frames()
+
+    # -- socket face ------------------------------------------------------
+    def settimeout(self, timeout):
+        self.sock.settimeout(timeout)
+
+    def sendall(self, data):
+        self._send_frame(0x2, data)
+
+    def recv(self, count):
+        """Return up to `count` decoded bytes, like socket.recv."""
+        while not self._payload:
+            self._pump()
+        out = bytes(self._payload[:count])
+        del self._payload[:count]
+        return out
+
+    def close(self):
+        try:
+            self._send_frame(0x8, b"")
+        except OSError:
+            pass
+        self.sock.close()
+
+    # -- framing ----------------------------------------------------------
+    def _send_frame(self, opcode, data):
+        header = bytearray([0x80 | opcode])
+        length = len(data)
+        if length < 126:
+            header.append(0x80 | length)
+        elif length < 65536:
+            header.append(0x80 | 126)
+            header += struct.pack(">H", length)
+        else:
+            header.append(0x80 | 127)
+            header += struct.pack(">Q", length)
+        mask = os.urandom(4)                    # client frames MUST be masked
+        header += mask
+        masked = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+        self.sock.sendall(bytes(header) + masked)
+
+    def _pump(self):
+        """Read some wire bytes and decode whatever complete frames arrived.
+
+        A read timeout can land mid-frame; the partial frame simply stays in
+        self._raw and the next pump continues it, so timeouts are safe to use
+        for polling.
+        """
+        chunk = self.sock.recv(65536)
+        if not chunk:
+            raise RFBError("WebSocket connection closed")
+        self._raw += chunk
+        self._decode_frames()
+
+    def _decode_frames(self):
+        while True:
+            if len(self._raw) < 2:
+                return
+            b0, b1 = self._raw[0], self._raw[1]
+            opcode = b0 & 0x0F
+            masked = bool(b1 & 0x80)
+            length = b1 & 0x7F
+            offset = 2
+            if length == 126:
+                if len(self._raw) < offset + 2:
+                    return
+                length = struct.unpack_from(">H", self._raw, offset)[0]
+                offset += 2
+            elif length == 127:
+                if len(self._raw) < offset + 8:
+                    return
+                length = struct.unpack_from(">Q", self._raw, offset)[0]
+                offset += 8
+            if masked:                          # servers shouldn't, but cope
+                if len(self._raw) < offset + 4:
+                    return
+                mask = bytes(self._raw[offset:offset + 4])
+                offset += 4
+            if len(self._raw) < offset + length:
+                return
+            payload = bytes(self._raw[offset:offset + length])
+            del self._raw[:offset + length]
+            if masked:
+                payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+            if opcode in (0x0, 0x1, 0x2):       # data (+ continuations)
+                self._payload += payload
+            elif opcode == 0x9:                 # ping -> pong, same payload
+                self._send_frame(0xA, payload)
+            elif opcode == 0xA:                 # unsolicited pong
+                pass
+            elif opcode == 0x8:
+                raise RFBError("WebSocket closed by server")
+            else:
+                raise RFBError(f"unexpected WebSocket opcode {opcode:#x}")
 
 # Enough of the X keysym table to drive an installer and a game menu.
 KEYSYMS = {
@@ -59,13 +234,18 @@ class RFBError(RuntimeError):
 
 
 class Client:
-    def __init__(self, host, port, timeout=20, key_delay=0.06, settle=0.7, hold=0.6):
+    def __init__(self, target, timeout=20, key_delay=0.06, settle=0.7, hold=0.6):
         self.key_delay = key_delay
         self.settle = settle
         # LEGO LOCO ignores a 200 ms press; it samples the button on its own
         # slow polling loop, so the press has to outlast one of its frames.
         self.hold = hold
-        self.sock = socket.create_connection((host, port), timeout=timeout)
+        if target.startswith(("ws://", "wss://")):
+            self.sock = WSSocket(target, timeout=timeout)
+        else:
+            host, _, port = target.partition(":")
+            self.sock = socket.create_connection((host, int(port or 5901)),
+                                                 timeout=timeout)
         self.sock.settimeout(timeout)
         self.timeout = timeout
         self.buttons = 0
@@ -354,7 +534,9 @@ def run_actions(client, actions):
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("target", help="host:port (port defaults to 5901)")
+    parser.add_argument("target",
+                        help="host:port (port defaults to 5901), or a "
+                             "ws://host:port/path websocket URL")
     parser.add_argument("actions", nargs="+")
     parser.add_argument("--timeout", type=float, default=25)
     parser.add_argument("--hold", type=float, default=0.6,
@@ -368,8 +550,7 @@ def main():
                              "guest is busy and drops keys")
     args = parser.parse_args()
 
-    host, _, port = args.target.partition(":")
-    client = Client(host, int(port or 5901), timeout=args.timeout, key_delay=args.key_delay, settle=args.settle, hold=args.hold)
+    client = Client(args.target, timeout=args.timeout, key_delay=args.key_delay, settle=args.settle, hold=args.hold)
     print(f"connected: {client.name} {client.width}x{client.height}")
     run_actions(client, args.actions)
 
