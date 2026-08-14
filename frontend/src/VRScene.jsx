@@ -3,13 +3,134 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useActive } from './ActiveContext';
 import useWebRTC from './hooks/useWebRTC';
 import useSpatialAudio from './hooks/useSpatialAudio';
+import usePCMAudio from './hooks/usePCMAudio';
 import useVRAudioListener from './hooks/useVRAudioListener';
 import usePerformanceRecorder from './hooks/usePerformanceRecorder';
 import useVideoRecorder from './hooks/useVideoRecorder';
 import { FORMAT_KEYS, EXPORT_FORMATS } from './utils/mediaExport';
-import VRReactVNCViewer from './components/VRReactVNCViewer';
+import VRNoVNCViewer from './components/VRNoVNCViewer';
 import ControlsConfig from './components/ControlsConfig';
 import VRToast from './components/VRToast';
+
+/* The controller-to-guest pointer, as one A-Frame component on the entity that
+ * owns the raycaster.
+ *
+ * Design rules, each earned the hard way:
+ *  - ONLY discrete edge events set buttons. A-Frame's cursor `click` requires
+ *    the analog trigger to cross a driver-defined threshold with down and up
+ *    on the same entity, which is exactly the "inconsistent full click" the
+ *    headset user reported. triggerdown/triggerup are unambiguous edges.
+ *  - One button mask, owned here. Left = trigger (RFB bit 0x1), right = grip
+ *    or B (bit 0x4), wheel = thumbstick pulses (bits 0x8/0x10). The guest
+ *    needs right-click; nothing else in the scene may repurpose these events.
+ *  - A release is delivered even if the ray has left the tile, at the last
+ *    known position — otherwise a press-move-release off the edge leaves the
+ *    guest with a stuck button.
+ *  - Hover streams continuously (~30 Hz) with the current mask, so the guest
+ *    cursor tracks the laser and press-move-release is a drag.
+ * The component only computes UV; the tile maps UV to framebuffer pixels,
+ * because only the tile knows its canvas.
+ */
+const VNC_LASER_RESERVED = [
+  'triggerdown', 'triggerup', 'gripdown', 'gripup',
+  'bbuttondown', 'bbuttonup', 'pinchstarted', 'pinchended',
+];
+
+if (typeof window !== 'undefined' && window.AFRAME &&
+    !window.AFRAME.components['vnc-laser-input']) {
+  window.AFRAME.registerComponent('vnc-laser-input', {
+    init() {
+      this.mask = 0;
+      this.lastEl = null;
+      this.lastUV = null;
+      this.wheelArmed = true;
+      this.wheelTimer = null;
+      this.tick = window.AFRAME.utils.throttleTick(this.hoverTick, 33, this);
+
+      this.handlers = {
+        triggerdown: () => this.setBit(0x1, true),
+        triggerup: () => this.setBit(0x1, false),
+        pinchstarted: () => this.setBit(0x1, true),
+        pinchended: () => this.setBit(0x1, false),
+        gripdown: () => this.setBit(0x4, true),
+        gripup: () => this.setBit(0x4, false),
+        bbuttondown: () => this.setBit(0x4, true),
+        bbuttonup: () => this.setBit(0x4, false),
+        thumbstickmoved: (e) => this.wheel(e.detail && e.detail.y),
+      };
+      Object.entries(this.handlers).forEach(([ev, fn]) =>
+        this.el.addEventListener(ev, fn));
+    },
+
+    remove() {
+      Object.entries(this.handlers).forEach(([ev, fn]) =>
+        this.el.removeEventListener(ev, fn));
+      if (this.wheelTimer) clearTimeout(this.wheelTimer);
+    },
+
+    intersection() {
+      const rc = this.el.components.raycaster;
+      const hit = rc && rc.intersections && rc.intersections[0];
+      return (hit && hit.uv && hit.object && hit.object.el) ? hit : null;
+    },
+
+    setBit(bit, on) {
+      const next = on ? (this.mask | bit) : (this.mask & ~bit);
+      if (next === this.mask) return;
+      this.mask = next;
+      this.emitPointer(on);
+    },
+
+    // RFB wheel = a momentary press of button 4 (up) or 5 (down). Pulse the
+    // bit and restore, edge-triggered with hysteresis so one flick is one
+    // notch, auto-repeating while held hard over.
+    wheel(y) {
+      if (typeof y !== 'number') return;
+      const mag = Math.abs(y);
+      if (mag < 0.3) {
+        this.wheelArmed = true;
+        if (this.wheelTimer) { clearTimeout(this.wheelTimer); this.wheelTimer = null; }
+        return;
+      }
+      if (mag < 0.6 || !this.wheelArmed) return;
+      this.wheelArmed = false;
+      const bit = y < 0 ? 0x8 : 0x10;
+      const base = this.mask;
+      this.mask = base | bit;
+      this.emitPointer(true);
+      this.mask = base;
+      this.emitPointer(false);
+      this.wheelTimer = setTimeout(() => { this.wheelArmed = true; this.wheel(y); }, 150);
+    },
+
+    emitPointer(pressedEdge) {
+      const hit = this.intersection();
+      let el = this.lastEl;
+      let uv = this.lastUV;
+      if (hit) {
+        el = hit.object.el;
+        uv = { x: hit.uv.x, y: hit.uv.y };
+        this.lastEl = el;
+        this.lastUV = uv;
+      }
+      if (!el || !uv) return;
+      el.dispatchEvent(new CustomEvent('vnc-pointer', {
+        detail: { u: uv.x, v: uv.y, mask: this.mask,
+                  pressed: !!pressedEdge && this.mask !== 0 },
+      }));
+    },
+
+    hoverTick() {
+      const hit = this.intersection();
+      if (!hit) return;
+      const uv = hit.uv;
+      const moved = hit.object.el !== this.lastEl || !this.lastUV ||
+        Math.abs(uv.x - this.lastUV.x) > 0.001 ||
+        Math.abs(uv.y - this.lastUV.y) > 0.001;
+      if (moved) this.emitPointer(false);
+    },
+  });
+}
 
 function positionForIndex(i, cols, rows) {
   const x = (i % cols) - (cols - 1) / 2;
@@ -24,17 +145,26 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   const [textureCreated, setTextureCreated] = useState(false);
   const { videoRef: rtcVideoRef, audioLevel: tileAudioLevel } = useWebRTC(inst.id);
   const pos = positionForIndex(idx, cols, rows);
+  // Guest audio: raw PCM over /proxy/audio/<id>/ into an AudioWorklet.
+  // createContext: false — all tiles must share VRScene's one AudioContext
+  // (the VR listener is synced to it), so wait for it instead of making one.
+  const pcm = usePCMAudio(inst.id, sharedAudioCtx, { createContext: false });
+  // While pcm.sourceNode is null useSpatialAudio falls back to its videoRef
+  // (WebRTC) path, so tiles keep sounding exactly as before until the PCM
+  // stream is live; the effect rebuilds onto the worklet source when it is.
   const { setVolume, resumeContext } = useSpatialAudio(
     rtcVideoRef,
     [pos.x, pos.y, -3],
-    { mono: monoAudio },
+    { mono: monoAudio, sourceNode: pcm.sourceNode },
     sharedAudioCtx,
   );
+  // PCM meter once the guest-audio path is live, WebRTC's meter otherwise.
+  const liveAudioLevel = pcm.isReady ? pcm.audioLevel : tileAudioLevel;
 
   // Propagate audio level up to parent for per-tile meters
   useEffect(() => {
-    if (onAudioLevel) onAudioLevel(idx, tileAudioLevel);
-  }, [tileAudioLevel, idx, onAudioLevel]);
+    if (onAudioLevel) onAudioLevel(idx, liveAudioLevel);
+  }, [liveAudioLevel, idx, onAudioLevel]);
 
 
   useEffect(() => {
@@ -117,29 +247,47 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   };
 
   const handleClick = () => {
+    // Selection only. The old code also fired a fake left-click at (320,240) —
+    // the centre of a screen size this guest does not even run — so merely
+    // selecting a tile clicked something random in the game.
     setActive(idx);
     setActiveIds([inst.id]);
-    
-    if (vncRef.current) {
-      const connectionState = vncRef.current.getConnectionState();
-      if (connectionState.connected) {
-        vncRef.current.sendMouse(320, 240, 1);
-        setTimeout(() => {
-          vncRef.current.sendMouse(320, 240, 0);
-        }, 100);
-      }
-    }
   };
+
+  // The laser component emits UV-space pointer events on this tile's plane;
+  // only here do UVs become framebuffer pixels, because only this tile knows
+  // its canvas. UV origin is bottom-left, framebuffer origin is top-left.
+  useEffect(() => {
+    const plane = planeRef.current;
+    if (!plane) return undefined;
+    const onPointer = (e) => {
+      const { u, v, mask, pressed } = e.detail;
+      if (pressed) {
+        setActive(idx);
+        setActiveIds([inst.id]);
+      }
+      const ref = vncRef.current;
+      if (!ref || !ref.getConnectionState().connected) return;
+      const canvas = ref.getCanvas();
+      const w = (canvas && canvas.width) || 1024;
+      const h = (canvas && canvas.height) || 768;
+      const x = Math.max(0, Math.min(w - 1, Math.round(u * (w - 1))));
+      const y = Math.max(0, Math.min(h - 1, Math.round((1 - v) * (h - 1))));
+      ref.sendMouse(x, y, mask);
+    };
+    plane.addEventListener('vnc-pointer', onPointer);
+    return () => plane.removeEventListener('vnc-pointer', onPointer);
+  }, [idx, inst.id, setActive, setActiveIds]);
 
   // reuse computed position
   // Compute audio ring scale from audioLevel (0-1) for 3D visualisation
-  const ringScale = 1 + (tileAudioLevel || 0) * 0.6;
-  const ringOpacity = Math.min(0.15 + (tileAudioLevel || 0) * 0.5, 0.7);
+  const ringScale = 1 + (liveAudioLevel || 0) * 0.6;
+  const ringOpacity = Math.min(0.15 + (liveAudioLevel || 0) * 0.5, 0.7);
   const ringColor = muted ? '#666' : (active === idx ? '#FFD700' : '#3ABFF8');
 
   return (
     <>
-      <VRReactVNCViewer
+      <VRNoVNCViewer
         ref={vncRef}
         instanceId={inst.id}
         onConnect={handleVNCConnect}
@@ -273,6 +421,14 @@ export default function VRScene({ onExit }) {
     stopVideoRecording,
   } = useVideoRecorder(exportFormat);
 
+  // Declared BEFORE any hook that lists them in a dependency array. A deps
+  // array is evaluated during render, so when these consts lived at the
+  // bottom of the component the read hit the temporal dead zone and threw on
+  // the very first render — with no error boundary above, React 18 unmounted
+  // the entire root: the "blank white screen" on every headset and desktop.
+  const cols = Math.ceil(Math.sqrt(instances.length || 1));
+  const rows = Math.ceil((instances.length || 1) / cols);
+
   // Feed tile snapshot into the recorder each time volumes/active change
   useEffect(() => {
     if (!perfRecording) return;
@@ -311,19 +467,21 @@ export default function VRScene({ onExit }) {
       }
     };
   }, [sharedAudioCtx]);
+  // Trigger, grip, B and pinch belong to the pointer (vnc-laser-input above):
+  // trigger = left click, grip/B = right click. They must not double as keys —
+  // the old trigger->Enter mapping meant every click also typed Enter.
   const defaultControllerMap = {
     abuttondown: 'F1',
-    bbuttondown: 'F2',
     xbuttondown: 'F3',
     ybuttondown: 'F4',
-    triggerdown: 'Enter',
     abuttonup: 'F1',
-    bbuttonup: 'F2',
     xbuttonup: 'F3',
     ybuttonup: 'F4',
-    triggerup: 'Enter',
-    pinchstarted: 'Enter',
-    pinchended: 'Enter',
+  };
+  const sanitizeControllerMap = (m) => {
+    const out = { ...m };
+    VNC_LASER_RESERVED.forEach((ev) => delete out[ev]);
+    return out;
   };
   const defaultKeyboardMap = {
     Enter: 0xFF0D,
@@ -347,16 +505,22 @@ export default function VRScene({ onExit }) {
     F11: 0xFFC8,
     F12: 0xFFC9,
   };
-  const [controllerMap, setControllerMap] = useState(() => {
+  const [controllerMap, setControllerMapRaw] = useState(() => {
     try {
-      return {
+      return sanitizeControllerMap({
         ...defaultControllerMap,
         ...JSON.parse(localStorage.getItem('vrControllerMap') || '{}'),
-      };
+      });
     } catch {
       return defaultControllerMap;
     }
   });
+  const setControllerMap = useCallback(
+    (next) => setControllerMapRaw(
+      typeof next === 'function'
+        ? (prev) => sanitizeControllerMap(next(prev))
+        : sanitizeControllerMap(next)),
+    []);
   const [keyboardMap, setKeyboardMap] = useState(() => {
     try {
       return {
@@ -375,7 +539,7 @@ export default function VRScene({ onExit }) {
   };
 
   const saveMappings = (cMap, kMap) => {
-    const mergedController = { ...defaultControllerMap, ...cMap };
+    const mergedController = sanitizeControllerMap({ ...defaultControllerMap, ...cMap });
     const mergedKeyboard = { ...defaultKeyboardMap, ...kMap };
     setControllerMap(mergedController);
     setKeyboardMap(mergedKeyboard);
@@ -515,9 +679,6 @@ export default function VRScene({ onExit }) {
       return arr;
     });
   }, []);
-
-  const cols = Math.ceil(Math.sqrt(instances.length || 1));
-  const rows = Math.ceil((instances.length || 1) / cols);
 
   return (
     <div className="w-full h-full relative">
@@ -746,6 +907,7 @@ export default function VRScene({ onExit }) {
             laser-controls
             raycaster="objects: .tile"
             cursor="fuse: false"
+            vnc-laser-input=""
           ></a-entity>
           <VRToast message={toast} />
         </a-entity>

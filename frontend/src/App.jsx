@@ -10,6 +10,47 @@ import ControlsHelpModal from './components/ControlsHelpModal';
 import AppLoadingOverlay from "./components/AppLoadingOverlay";
 
 const VRScene = lazy(() => import(/* webpackChunkName: "vr" */ "./VRScene"));
+
+/**
+ * Contain VR crashes. Without a boundary, one render-time throw inside the
+ * lazy VRScene unmounts the entire React root — the user saw a bare white
+ * page with no way back, on a headset, with the controllers dead. The
+ * fallback keeps the app alive and hands back an exit.
+ */
+class VRErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("VR scene crashed", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen bg-black gap-4">
+          <div className="text-red-400 font-mono text-lg">VR scene failed</div>
+          <div className="text-gray-400 font-mono text-xs max-w-lg text-center break-all">
+            {String(this.state.error && this.state.error.message)}
+          </div>
+          <button
+            onClick={() => { this.setState({ error: null }); this.props.onExit(); }}
+            className="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2 rounded"
+          >
+            Exit VR
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 const QualityDashboard = lazy(() => import(/* webpackChunkName: "dashboard" */ "./components/QualityDashboard"));
 
 
@@ -272,13 +313,15 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <Suspense fallback={
-              <div className="flex items-center justify-center h-screen bg-black">
-                <div className="text-white text-lg" style={{ color: '#0055BF' }}>Loading VR Scene…</div>
-              </div>
-            }>
-              <VRScene onExit={() => setVrMode(false)} />
-            </Suspense>
+            <VRErrorBoundary onExit={() => setVrMode(false)}>
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-screen bg-black">
+                  <div className="text-white text-lg" style={{ color: '#0055BF' }}>Loading VR Scene…</div>
+                </div>
+              }>
+                <VRScene onExit={() => setVrMode(false)} />
+              </Suspense>
+            </VRErrorBoundary>
           </motion.div>
         )}
       </AnimatePresence>
