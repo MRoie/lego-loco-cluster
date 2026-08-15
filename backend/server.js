@@ -611,9 +611,18 @@ app.get("/api/instances", async (req, res) => {
  * @route GET /api/instances/live
  * @returns {Object} Detailed discovery metadata and instances
  */
-app.get("/api/instances/live", (req, res) => {
+app.get("/api/instances/live", async (req, res) => {
   try {
     const status = instanceManager.getDiscoveryStatus();
+    // Same guestNetwork decoration as /api/instances — the grid cards read
+    // THIS endpoint, and without the decoration the click-to-copy join
+    // address silently never rendered. The 15s cache makes this free.
+    if (Array.isArray(status.instances)) {
+      status.instances = await Promise.all(status.instances.map(async (instance) => ({
+        ...instance,
+        guestNetwork: await fetchGuestNetwork(instance),
+      })));
+    }
     res.json(status);
   } catch (e) {
     logger.error("Live instances error", {
@@ -1179,6 +1188,38 @@ app.post("/api/instances/scale", criticalRateLimit, validate({
   }
 });
 
+// Desired capacity for the grid. /api/status only reports pods that exist, so
+// the frontend cannot tell an intentionally-empty slot from a crashed pod —
+// spec.replicas is the source of truth for how many tiles should be live.
+// Kept as its own endpoint because VRScene consumes /api/status as a flat
+// id->status map and changing that shape would break it.
+//
+// Cached like fetchInstanceStatus: the overlay polls this continuously and
+// spec.replicas only changes when someone scales. Errors are cached too, so a
+// broken k8s API is not re-dialled on every poll.
+let capacityCache = null;
+const CAPACITY_TTL_MS = 5_000;
+
+app.get("/api/instances/capacity", async (req, res) => {
+  if (capacityCache && Date.now() - capacityCache.at < CAPACITY_TTL_MS) {
+    return res.json(capacityCache.value);
+  }
+
+  // Any failure degrades to desired:null with HTTP 200 — capacity decorates
+  // the grid, and the frontend renders null as "unknown" rather than erroring.
+  let value = { desired: null, max: EMULATOR_MAX_REPLICAS };
+  try {
+    if (instanceManager.kubernetesDiscovery?.k8sAppsApi) {
+      const { replicas } = await readEmulatorReplicas();
+      value = { desired: replicas, max: EMULATOR_MAX_REPLICAS };
+    }
+  } catch (e) {
+    logger.warn("Failed to read emulator capacity", { error: e.message });
+  }
+  capacityCache = { at: Date.now(), value };
+  res.json(value);
+});
+
 // Get recovery status and attempts
 app.get("/api/quality/recovery-status", (req, res) => {
   try {
@@ -1397,6 +1438,17 @@ app.get("/api/benchmark/live", async (req, res) => {
                 guestLink: h.guest_network?.carrier === 1,
                 vncAvailable: h.video?.vnc_available || false,
                 audioRunning: h.audio?.pulse_running || false,
+                uptimeSeconds: h.uptime_seconds ?? null,
+                diskPresent: h.disk?.present ?? null,
+                // PCem reports whether the raw-PCM tap port is actually
+                // listening, which is stronger evidence of working audio than
+                // a live daemon; the QEMU flavor only exposes pulse_running.
+                audioOk: h.audio?.pcm_available ?? h.audio?.pulse_running ?? false,
+                // SDL titles can run long ("PCem v17 - 86Box - ..."); 60 chars
+                // is plenty for the overlay column without bloating the poll.
+                windowTitle: typeof h.pcem?.window_title === "string"
+                  ? h.pcem.window_title.slice(0, 60)
+                  : null,
               });
             } catch (e) {
               resolve({ id: instance.id, instanceId: instance.id, host, healthy: false, error: "parse_error", latency });

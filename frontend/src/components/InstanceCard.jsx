@@ -5,13 +5,13 @@ import useWebRTC from '../hooks/useWebRTC';
 import usePCMAudio from '../hooks/usePCMAudio';
 import useInstanceRecorder from '../hooks/useInstanceRecorder';
 import AudioSinkSelector from './AudioSinkSelector';
-import QualityIndicator from './QualityIndicator';
 
 /**
  * Individual instance card component for the 3x3 grid
- * Styled to match LEGO Loco character cards with red borders, yellow accents, and cream backgrounds
- * Now includes full audio controls: volume slider, mute toggle, audio level meter,
- * and per-instance WebRTC stream recording.
+ * The card is almost entirely screen: a ~24px strip holds the status dot, the
+ * join address and the fullscreen/restart buttons; audio controls (volume,
+ * mute, level meter, per-instance recording) collapse behind a chevron so the
+ * VNC canvas gets the space. LEGO aesthetic kept, but on a slim border.
  *
  * Props:
  * - instance: instance object with id, status, provisioned, etc.
@@ -44,7 +44,7 @@ function JoinAddress({ guestNetwork }) {
   return (
     <button
       onClick={copy}
-      className={`mt-1 block w-full text-left font-mono text-[11px] leading-tight ${
+      className={`min-w-0 truncate text-left font-mono text-[11px] leading-none ${
         live ? 'text-blue-700 hover:text-blue-900' : 'text-gray-400 hover:text-gray-600'
       }`}
       title={live
@@ -90,6 +90,22 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
   const [volume, setVolumeState] = useState(1);
   const [muted, setMuted] = useState(true);
   const [restarting, setRestarting] = useState(false);
+
+  // Audio/record controls hide behind a chevron so the screen gets the card.
+  // Collapsed by default; the choice is per-card and survives reloads via
+  // localStorage (guarded — private-mode Safari throws on access).
+  const controlsKey = `cardControls:${instance.id}`;
+  const [controlsOpen, setControlsOpen] = useState(() => {
+    try { return localStorage.getItem(controlsKey) === '1'; } catch { return false; }
+  });
+  const toggleControls = (e) => {
+    e.stopPropagation();
+    setControlsOpen((open) => {
+      const next = !open;
+      try { localStorage.setItem(controlsKey, next ? '1' : '0'); } catch { /* non-fatal */ }
+      return next;
+    });
+  };
 
   // Restart = delete the pod; the StatefulSet brings it back with the same
   // ordinal, disk and DNS name. Discovery then walks it not-ready -> ready on
@@ -241,7 +257,7 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
       className={`
         relative transition-all duration-300 cursor-pointer overflow-hidden
         ${isActive
-          ? 'lego-card ring-4 ring-blue-400 ring-offset-2 ring-offset-green-500'
+          ? 'lego-card ring-2 ring-blue-400 ring-offset-1 ring-offset-green-500'
           : 'lego-card'
         }
         ${!instance.provisioned ? 'opacity-90' : ''}
@@ -250,35 +266,63 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
       whileTap={{ scale: 0.98 }}
       layout
     >
-      {/* Header with instance ID and status - styled like LEGO character card name plate */}
-      <div className="relative bg-gradient-to-b from-yellow-200 to-yellow-100 border-b-4 border-red-700 shadow-inner" style={{ zIndex: 2 }}>
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="lego-name-plate px-3 py-2 bg-white border-3 border-gray-500 rounded-lg shadow-lg">
-              <span className="text-sm font-bold text-black lego-text tracking-wide uppercase">
-                {instance.name || instance.id}
-              </span>
-              <JoinAddress guestNetwork={instance.guestNetwork} />
-            </div>
-            <div className="flex items-center space-x-2">
-              <div
-                className={`w-5 h-5 rounded ${getStatusColor(instance.status)} border-3 border-black/30 shadow-sm`}
-                title={instance.health?.details || getStatusText(instance.status, instance.provisioned)}
-              />
-              {/* Quality Indicator - compact display */}
-              {instance.provisioned && (
-                <QualityIndicator instanceId={instance.id} compact={true} />
-              )}
-            </div>
+      {/* Slim strip above the screen: status dot + join address on the left,
+          chevron/fullscreen/restart on the right. Everything else lives behind
+          the chevron — the VNC canvas is the point of the card, not the chrome.
+          The instance name is deliberately absent; it lives in the benchmark
+          table, and the join address identifies the card well enough. */}
+      <div className="relative bg-yellow-100 border-b-2 border-red-700" style={{ zIndex: 2 }}>
+        <div className="flex items-center gap-1.5 px-1.5 min-h-[24px]">
+          <div
+            className={`w-2.5 h-2.5 shrink-0 rounded-full ${getStatusColor(instance.status)} border border-black/20`}
+            title={instance.health?.details || getStatusText(instance.status, instance.provisioned)}
+          />
+          <JoinAddress guestNetwork={instance.guestNetwork} />
+          <div className="ml-auto flex items-center shrink-0">
+            <button
+              onClick={toggleControls}
+              className="px-1 text-xs leading-none text-gray-600 hover:text-black"
+              title={controlsOpen ? 'Hide audio/record controls' : 'Show audio/record controls'}
+              aria-expanded={controlsOpen}
+            >
+              {controlsOpen ? '▾' : '▸'}
+            </button>
+            {instance.provisioned && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onFullscreen) onFullscreen();
+                }}
+                className="px-1 text-xs leading-none text-gray-600 hover:text-black"
+                title="Fullscreen control (or double-click card)"
+              >
+                ⛶
+              </button>
+            )}
+            {instance.provisioned && (
+              <button
+                onClick={handleRestart}
+                disabled={restarting}
+                className={`px-1 text-xs leading-none ${
+                  restarting ? 'text-gray-400 cursor-wait' : 'text-gray-600 hover:text-black'
+                }`}
+                title={restarting ? 'Restarting…' : 'Restart this machine (rebuilds the pod)'}
+              >
+                {restarting ? '…' : '⟳'}
+              </button>
+            )}
           </div>
+        </div>
 
-          {/* Audio controls row */}
-          <div className="flex flex-col gap-1.5">
-            {/* Mute toggle + Volume slider + Record + Fullscreen */}
-            <div className="flex items-center gap-2">
+        {/* Collapsible controls: mute, volume, record, level meter, sink picker.
+            Rendered only while open — the level-meter effect already guards on
+            levelRef being unmounted. */}
+        {controlsOpen && (
+          <div className="flex flex-col gap-1 px-1.5 pb-1.5">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); resumePcm(); }}
-                className={`lego-mini-button text-xs font-bold shadow-lg ${
+                className={`lego-mini-button text-xs font-bold ${
                   muted
                     ? 'bg-gray-400 border-gray-600 text-white'
                     : 'bg-green-500 border-green-700 text-white'
@@ -297,13 +341,13 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
                 onChange={(e) => setVolumeState(parseFloat(e.target.value))}
                 onClick={(e) => e.stopPropagation()}
                 className="flex-1 h-1.5 accent-yellow-400"
-                aria-label={`Volume for ${instance.name || instance.id}`}
+                aria-label={`Volume for ${instance.id}`}
                 title={`Volume: ${Math.round(volume * 100)}%`}
               />
               <span className="text-xs font-bold text-black w-8 text-right">{Math.round(volume * 100)}%</span>
               <button
                 onClick={(e) => { e.stopPropagation(); recording ? stopRecording() : startRecording(); }}
-                className={`lego-mini-button text-xs font-bold shadow-lg ${
+                className={`lego-mini-button text-xs font-bold ${
                   recording
                     ? 'bg-red-500 border-red-700 text-white animate-pulse'
                     : 'bg-blue-500 border-blue-700 text-white'
@@ -313,35 +357,9 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
               >
                 {recording ? '⏹' : '⏺'}
               </button>
-              {instance.provisioned && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onFullscreen) onFullscreen();
-                  }}
-                  className="lego-mini-button bg-green-600 border-green-800 hover:bg-green-500 text-white shadow-lg"
-                  title="Fullscreen control (or double-click card)"
-                >
-                  ⛶
-                </button>
-              )}
-              {instance.provisioned && (
-                <button
-                  onClick={handleRestart}
-                  disabled={restarting}
-                  className={`lego-mini-button text-white shadow-lg ${
-                    restarting
-                      ? 'bg-gray-500 border-gray-700 cursor-wait'
-                      : 'bg-orange-600 border-orange-800 hover:bg-orange-500'
-                  }`}
-                  title={restarting ? 'Restarting…' : 'Restart this machine (rebuilds the pod)'}
-                >
-                  {restarting ? '…' : '⟳'}
-                </button>
-              )}
             </div>
             {/* Audio level meter */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-600">🎵</span>
               <div className="flex-1 h-1.5 bg-gray-300 rounded-full overflow-hidden">
                 <div
@@ -353,7 +371,7 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
               <AudioSinkSelector mediaRef={videoRef} />
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* VNC Content Area - styled like the character portrait area */}
@@ -440,7 +458,7 @@ export default function InstanceCard({ instance, isActive, onClick, onFullscreen
       {/* Active indicator overlay - enhanced for LEGO style */}
       {isActive && (
         <motion.div
-          className="absolute inset-0 border-4 border-blue-400 rounded-lg pointer-events-none"
+          className="absolute inset-0 border-2 border-blue-400 rounded-lg pointer-events-none"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           layoutId="activeCardBorder"

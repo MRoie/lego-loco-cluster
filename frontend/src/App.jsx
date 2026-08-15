@@ -79,6 +79,9 @@ export default function App() {
   // inline error pinned to the slot it happened on (e.g. the 409 at capacity).
   const [provisioningSlot, setProvisioningSlot] = useState(null);
   const [launchError, setLaunchError] = useState(null);
+  // {desired, max} from the backend — how many instances the StatefulSet
+  // actually owns, as opposed to how many discovery can currently see.
+  const [capacity, setCapacity] = useState(null);
 
   // Enter fullscreen control mode for an instance
   const enterFullscreen = useCallback((instance) => {
@@ -112,6 +115,30 @@ export default function App() {
       setProvisioningSlot(null);
     }
   }, [provisioningSlot]);
+
+  // Poll capacity alongside instance discovery. During a rolling restart
+  // discovery briefly reports fewer instances than the StatefulSet desires,
+  // and the missing ones used to render as clickable "Empty Slot" cards whose
+  // launch could only 409 ("grid is full"). Knowing the desired count lets
+  // those slots render as honest "Starting..." placeholders instead. A failed
+  // fetch clears capacity to null, which falls back to trusting discovery
+  // alone — the old behaviour.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCapacity = async () => {
+      try {
+        const res = await fetch('/api/instances/capacity');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = await res.json();
+        if (!cancelled) setCapacity(body);
+      } catch {
+        if (!cancelled) setCapacity(null);
+      }
+    };
+    fetchCapacity();
+    const id = setInterval(fetchCapacity, 5000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
 
   // Global Escape key to exit fullscreen
   useEffect(() => {
@@ -214,6 +241,16 @@ export default function App() {
 
   const gridInstances = createDemoInstances();
 
+  // Honest empties. Of the 9 - filled null slots, the first `starting` are
+  // already owned by the StatefulSet (desired > what discovery sees, i.e. a
+  // rolling restart) and must not offer a launch; only the slots beyond the
+  // desired count are genuinely launchable:
+  //   starting   = max(0, desired - filled)
+  //   launchable = max(0, 9 - desired)  — exactly the nulls left over.
+  const filledSlots = gridInstances.filter(Boolean).length;
+  const desiredCount = capacity?.desired ?? filledSlots;
+  const startingSlots = Math.max(0, desiredCount - filledSlots);
+
   return (
     <div className="min-h-screen lego-background text-black relative">
       {/* Initial-load overlay (progressive loading, concept from #74) */}
@@ -302,6 +339,26 @@ export default function App() {
                         <p className="text-sm font-bold lego-text mb-1 text-gray-700">Provisioning...</p>
                         <p className="text-xs lego-text text-gray-600">
                           Booting a new instance — this takes a few minutes
+                        </p>
+                      </div>
+                    </motion.div>
+                  ) : index < filledSlots + startingSlots ? (
+                    /* A slot the StatefulSet already owns but discovery has
+                       not reported yet (rolling restart). Deliberately not
+                       clickable: launching here would only 409 against a grid
+                       that is fuller than it currently looks. */
+                    <motion.div
+                      className="w-full h-full lego-empty-slot flex items-center justify-center text-gray-600"
+                      animate={{ opacity: [0.45, 0.85, 0.45] }}
+                      transition={{ repeat: Infinity, duration: 2.4, ease: 'easeInOut' }}
+                    >
+                      <div className="text-center">
+                        <div className="w-16 h-16 border-3 border-gray-400 rounded-lg mx-auto mb-3 flex items-center justify-center bg-white/50">
+                          <span className="text-3xl text-gray-500">⏳</span>
+                        </div>
+                        <p className="text-sm font-bold lego-text mb-1 text-gray-700">Starting...</p>
+                        <p className="text-xs lego-text text-gray-600">
+                          Instance is coming up — nothing to do
                         </p>
                       </div>
                     </motion.div>
