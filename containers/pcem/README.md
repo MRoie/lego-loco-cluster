@@ -430,6 +430,26 @@ TCP/IP with an explicit address does not care, but Microsoft Networking will.
 
 ### Fixed, but worth knowing about
 
+**The VXLAN mesh once trusted a boot-time replica count.** `mesh_vxlan_peers`
+iterated `0..EMULATOR_REPLICAS-1` with the env frozen at pod start, so a pod
+born at replicas=4 meshed ordinals 0-3 forever no matter how far the fleet
+scaled. Measured consequence at the scale to nine: guests 4-6 could reach the
+DHCP server (their own flood lists covered pod 0) but every reply flooded
+only toward the original four pods — a one-way mesh, no leases, machines
+stuck at "SEARCHING FOR GAMES". The loop now resolves every possible ordinal
+(0..GUEST_MAX_ORDINAL) every 30s and prunes flood entries whose pod IP no
+longer belongs, so it heals itself across scale-ups, restarts and pod-IP
+churn. Nine-guest verification after the fix: 9/9 leases, 9 unique NetBIOS
+names, 27/27 ICMP, cross-mesh L2 ping pod8->guest0 3/3.
+
+**Nine emulators need honest CPU requests.** A request is a scheduling claim,
+not a speed setting: at 1000m, nine pods plus ~3 cores of everything else
+cannot fit an 8-core node, and lowering the request in the template deadlocks
+under OrderedReady — the roll waits for the Pending pod, which waits for CPU
+that only the roll can free. Values now request 500m (the 2-core limit still
+lets each pod burst); measured speeds with all nine running: 87-102%.
+
+
 **The in-game pointer and the scrollbars fell to one config, together.**
 `GUEST_RESOLUTION=1024,768` puts the guest at the framebuffer's own size, so
 the pointer mapping is the identity and the world view fills the screen

@@ -609,38 +609,58 @@ start_guest_dhcp() {
 # own. Nothing logged, and `ip link` showed a perfectly healthy vxlan device.
 mesh_vxlan_peers() {
   local svc="${EMULATOR_SERVICE_NAME:-}" ns="${POD_NAMESPACE:-default}"
-  local replicas="${EMULATOR_REPLICAS:-0}" i peer ip
+  local i peer ip
   [ -n "$svc" ] || return 0
   set +e
   local -A announced=()
   while :; do
+    # Resolve every POSSIBLE ordinal, not EMULATOR_REPLICAS' worth: that env is
+    # frozen at pod boot, so a pod born at replicas=4 would mesh ordinals 0-3
+    # forever no matter how far the fleet scaled. Measured consequence of the
+    # old loop: after a scale to 9, guests 4-6 could reach the DHCP server but
+    # its replies flooded only toward the original four pods — a one-way mesh,
+    # no leases, machines invisible to the LAN. Ordinals that do not exist
+    # simply fail to resolve; GUEST_MAX_ORDINAL bounds the DNS chatter.
+    local -A desired=()
     i=0
-    while [ "$i" -lt "$replicas" ]; do
+    while [ "$i" -le "${GUEST_MAX_ORDINAL:-15}" ]; do
       peer="${svc}-${i}.${svc}.${ns}.svc.cluster.local"
       ip="$(getent hosts "$peer" 2>/dev/null | awk '{print $1; exit}')" || ip=""
       if [ -n "$ip" ] && [ "$ip" != "${POD_IP:-}" ]; then
-        # `append`, and dedupe by reading the table back. The all-zeros entry is
-        # a *list* of head-end destinations, so `bridge fdb replace` on it fails
-        # with "Operation not supported" — append is the only verb it takes, and
-        # appending blindly every 30s would pile up a duplicate per pass.
-        if ! bridge fdb show dev "vxlan${VXLAN_ID}" self 2>/dev/null |
-             grep -q "^00:00:00:00:00:00 dst ${ip} "; then
-          if bridge fdb append 00:00:00:00:00:00 dev "vxlan${VXLAN_ID}" dst "$ip" 2>/dev/null; then
-            log_ok "VXLAN peer ${svc}-${i} at ${ip}"
-          else
-            log_warn "could not add VXLAN head-end entry for ${svc}-${i} (${ip})"
-          fi
-        fi
-        announced["peer-$i"]=""
-      elif [ -z "$ip" ] && [ "${announced[peer-$i]:-}" != "1" ]; then
-        log_warn "VXLAN peer ${svc}-${i} does not resolve yet — retrying every 30s"
-        announced["peer-$i"]=1
+        desired["$ip"]="${svc}-${i}"
       fi
       i=$((i + 1))
     done
+
+    # Add what is missing...
+    local have
+    for ip in "${!desired[@]}"; do
+      have="$(bridge fdb show dev "vxlan${VXLAN_ID}" self 2>/dev/null | grep -c "^00:00:00:00:00:00 dst ${ip} ")"
+      if [ "${have:-0}" = "0" ]; then
+        if bridge fdb append 00:00:00:00:00:00 dev "vxlan${VXLAN_ID}" dst "$ip" 2>/dev/null; then
+          [ "${announced[$ip]:-}" = "1" ] || log_ok "VXLAN peer ${desired[$ip]} at ${ip}"
+          announced["$ip"]=1
+        fi
+      fi
+    done
+
+    # ...and prune what no longer belongs. A restarted peer keeps its ordinal
+    # but changes pod IP; without pruning, floods keep going to the dead
+    # address too, and the FDB grows a graveyard.
+    while read -r line; do
+      ip="$(printf '%s' "$line" | awk '{for (j=1;j<NF;j++) if ($j=="dst") print $(j+1)}')"
+      [ -n "$ip" ] || continue
+      if [ -z "${desired[$ip]:-}" ]; then
+        bridge fdb del 00:00:00:00:00:00 dev "vxlan${VXLAN_ID}" dst "$ip" 2>/dev/null &&
+          log_warn "VXLAN peer ${ip} gone — pruned from the flood list"
+        unset "announced[$ip]"
+      fi
+    done < <(bridge fdb show dev "vxlan${VXLAN_ID}" self 2>/dev/null | grep "^00:00:00:00:00:00 dst ")
+
     sleep 30
   done
 }
+
 
 # net_type and pcap_device live in PCem's GLOBAL config ($HOME/.pcem/pcem.cfg),
 # not in the machine config passed to --config. Getting this wrong is silent:

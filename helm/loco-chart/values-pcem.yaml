@@ -21,10 +21,12 @@
 #     QEMU flavor uses — but each Windows guest still needs its NE2000 driver
 #     and a static IP installed before LEGO LOCO multiplayer will work.
 
-# 4 = the 2x2 test. Each PCem pod pins ~1 core to hold real-time speed —
-# scale against cores, not memory. Ordinals self-provision: names, reserved
-# IPs (.10+N) and the VXLAN mesh are all functions of the ordinal.
-replicas: 4
+# 9 = the full 3x3 grid. Each PCem pod wants ~1 core to hold real-time speed;
+# on an 8-core host nine of them contend, so expect emulated speed in the
+# 80-95% band while all nine run — boots take longer, the games run slightly
+# slow, nothing breaks. Ordinals self-provision: names, reserved IPs (.10+N)
+# and the VXLAN mesh are all functions of the ordinal.
+replicas: 9
 
 emulator:
   flavor: pcem
@@ -81,7 +83,12 @@ emulator:
 
   resources:
     requests:
-      cpu: "1"
+      # 500m: the request is a scheduling claim, not a speed setting. This
+      # 8-core node carries ~3 cores of non-emulator requests (backend,
+      # frontend, vr, kube-system), so nine emulators only fit under
+      # 9x + 3050m <= 8000m — measured, with pod 7 Pending at 700m to prove
+      # it. The 2-core limit still lets each pod burst to real-time speed.
+      cpu: "500m"
       memory: "1Gi"
     limits:
       cpu: "2"
