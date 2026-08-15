@@ -156,7 +156,7 @@ function positionForIndex(i, cols, rows) {
   return { x: x * 1.55, y: y * 1.15 };
 }
 
-function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio, muted, audioLevel, onAudioLevel, wallZ }) {
+function VRTile({ inst, idx, active, setActive, setActiveIds, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio, muted, audioLevel, onAudioLevel, layout }) {
   const vncRef = useRef(null);
   const planeRef = useRef(null);
   const textureRef = useRef(null);
@@ -168,7 +168,6 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   // to the session's own clock — so a rAF-driven refresh freezes the moment
   // the headset takes over. That was "video stuck in VR, fluid on the web".
   const { videoRef: rtcVideoRef, audioLevel: tileAudioLevel } = useWebRTC(inst.id);
-  const pos = positionForIndex(idx, cols, rows);
   // Guest audio: raw PCM over /proxy/audio/<id>/ into an AudioWorklet.
   // createContext: false — all tiles must share VRScene's one AudioContext
   // (the VR listener is synced to it), so wait for it instead of making one.
@@ -178,7 +177,7 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   // stream is live; the effect rebuilds onto the worklet source when it is.
   const { setVolume, resumeContext } = useSpatialAudio(
     rtcVideoRef,
-    [pos.x, pos.y + 1.5, wallZ],
+    layout.audio,
     { mono: monoAudio, sourceNode: pcm.sourceNode },
     sharedAudioCtx,
   );
@@ -309,10 +308,11 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
           if (el) el.classList.add('tile');
         }}
         vnc-canvas-refresh=""
-        position={`${pos.x} ${pos.y} ${active === idx ? 0.25 : 0}`}
+        position={`${layout.x} ${layout.y} ${layout.z}`}
+        rotation={`0 ${layout.rotY} 0`}
         geometry="primitive: plane; width: 1.2; height: 0.9"
         material={`color: ${active === idx ? '#FFD700' : '#F5F5DC'}; side: double`}
-        scale={active === idx ? '1.08 1.08 1' : '1 1 1'}
+        scale={`${layout.scale} ${layout.scale} 1`}
         onClick={handleClick}
       >
         {/* LEGO-style border for VR tiles */}
@@ -420,6 +420,14 @@ export default function VRScene({ onExit }) {
   // Sync the AudioContext listener with the VR camera rig position
   useVRAudioListener(sharedAudioCtx);
 
+  // Declared ABOVE every hook that lists them in a dependency array — a deps
+  // array is evaluated during render, and this file has now produced the
+  // use-before-declaration white screen TWICE (the second time in the very
+  // commit whose comment warned about the first). If you add a hook that
+  // needs cols/rows, it goes BELOW this line.
+  const cols = Math.ceil(Math.sqrt(instances.length || 1));
+  const rows = Math.ceil((instances.length || 1) / cols);
+
   // Where the screen wall sits and how big it is. The reviewer's complaint
   // was concrete: too far, no way to move or resize, and overlap once
   // scaled. Distance and scale are user-adjustable and remembered; overlap
@@ -436,11 +444,106 @@ export default function VRScene({ onExit }) {
   useEffect(() => { localStorage.setItem('vrWallZ', String(wallZ)); }, [wallZ]);
   useEffect(() => { localStorage.setItem('vrWallScale', String(wallScale)); }, [wallScale]);
 
+  // Layout system. Two arrangements and one override:
+  //  - grid: the flat wall (rows x cols) ahead of the user
+  //  - radial: all tiles ring the user at equal angles — maximum spatial-audio
+  //    separation, the stick spins the ring instead of walking a flat wall
+  //  - focus: the ACTIVE tile detaches to ~1.1m in front at full readable
+  //    height. This is the answer to "zoomed in enough to read means the
+  //    bottom third of the grid is out of view" — instead of zooming the
+  //    whole wall, pull the one screen you care about out of it, and put it
+  //    back with the same button.
+  const [layoutMode, setLayoutMode] = useState(() =>
+    localStorage.getItem('vrLayoutMode') === 'radial' ? 'radial' : 'grid');
+  const [focused, setFocused] = useState(false);
+  const [ringAngle, setRingAngle] = useState(0);
+  const [radialR, setRadialR] = useState(2.2);
+  useEffect(() => { localStorage.setItem('vrLayoutMode', layoutMode); }, [layoutMode]);
+
+  // Everything about where a tile sits, in WALL-LOCAL terms, plus the world
+  // position its audio should pan from. One function so the tiles, the
+  // spatial audio and the focus override can never disagree.
+  const tileLayout = useCallback((idx) => {
+    const wall = layoutMode === 'radial'
+      ? { x: 0, y: 1.5, z: 0.6, s: 1 }
+      : { x: 0, y: 1.5, z: wallZ, s: wallScale };
+
+    if (focused && idx === active) {
+      // World target: dead ahead of the head, slightly below eye line.
+      const w = { x: 0, y: 1.55, z: -0.55 };
+      return {
+        x: (w.x - wall.x) / wall.s,
+        y: (w.y - wall.y) / wall.s,
+        z: (w.z - wall.z) / wall.s,
+        rotY: 0,
+        scale: 2.0 / wall.s,
+        audio: [w.x, w.y, w.z],
+      };
+    }
+
+    if (layoutMode === 'radial') {
+      const n = Math.max(instances.length, 1);
+      const theta = ((idx * 360) / n + ringAngle) * (Math.PI / 180);
+      const x = radialR * Math.sin(theta);
+      const z = -radialR * Math.cos(theta);
+      return {
+        x, y: 0, z,
+        rotY: -((idx * 360) / n + ringAngle),
+        scale: active === idx ? 1.08 : 1,
+        audio: [wall.x + x, wall.y, wall.z + z],
+      };
+    }
+
+    const pos = positionForIndex(idx, cols, rows);
+    return {
+      x: pos.x, y: pos.y, z: active === idx ? 0.25 : 0,
+      rotY: 0,
+      scale: active === idx ? 1.08 : 1,
+      audio: [pos.x * wall.s, wall.y + pos.y * wall.s, wall.z],
+    };
+  }, [layoutMode, focused, active, ringAngle, radialR, wallZ, wallScale, instances.length, cols, rows]);
+
+  // The stick handler is registered once; it reads the current mode through a
+  // ref so switching modes does not tear down and re-add controller listeners.
+  // Declared ABOVE every hook that closes over it — this file already earned
+  // one white-screen from a use-before-declaration in a deps array.
+  const layoutModeRef = useRef(layoutMode);
+  useEffect(() => { layoutModeRef.current = layoutMode; }, [layoutMode]);
+
+  // A = focus toggle, X = layout mode, on either hand.
+  useEffect(() => {
+    const controllers = ['leftController', 'rightController']
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+    if (!controllers.length) return undefined;
+    const onA = () => setFocused((f) => !f);
+    const onX = () => { setFocused(false); setLayoutMode((m) => (m === 'grid' ? 'radial' : 'grid')); };
+    controllers.forEach((c) => {
+      c.addEventListener('abuttondown', onA);
+      c.addEventListener('xbuttondown', onX);
+    });
+    return () => controllers.forEach((c) => {
+      c.removeEventListener('abuttondown', onA);
+      c.removeEventListener('xbuttondown', onX);
+    });
+  }, []);
+
   useEffect(() => {
     const left = document.getElementById('leftController');
     if (!left) return undefined;
     const onStick = (e) => {
       const { x, y } = e.detail || {};
+      if (layoutModeRef.current === 'radial') {
+        // In the ring, the stick is a lazy susan: left/right spins the tiles
+        // around you, fwd/back breathes the ring radius.
+        if (typeof x === 'number' && Math.abs(x) > 0.25) {
+          setRingAngle((a) => a + 2.4 * x);
+        }
+        if (typeof y === 'number' && Math.abs(y) > 0.25) {
+          setRadialR((r) => Math.min(4.0, Math.max(1.2, r + 0.04 * y)));
+        }
+        return;
+      }
       if (typeof y === 'number' && Math.abs(y) > 0.25) {
         // Push forward (stick up, negative y) to push the wall away.
         setWallZ((z) => Math.min(-1.2, Math.max(-4.5, z + (y > 0 ? 0.04 : -0.04) * Math.abs(y))));
@@ -452,6 +555,7 @@ export default function VRScene({ onExit }) {
     left.addEventListener('thumbstickmoved', onStick);
     return () => left.removeEventListener('thumbstickmoved', onStick);
   }, []);
+
 
   // Unlock audio from INSIDE immersive mode. The DOM "Enable Audio" button
   // does not exist once the headset takes over, so a session that never
@@ -478,19 +582,6 @@ export default function VRScene({ onExit }) {
     };
   }, [handleAudioResume]);
 
-  // Feed the camera-locked HUD. Plain attribute writes — the entity lives
-  // outside React's render on purpose, so headset pose changes never
-  // re-render the tree.
-  useEffect(() => {
-    const hud = document.getElementById('vrHud');
-    if (!hud) return;
-    const activeInst = instances[active];
-    hud.setAttribute('text', 'value',
-      `tile ${active + 1}/${instances.length} ${activeInst ? activeInst.id : ''}` +
-      ` | vnc ${connectedVNCs.size}/${instances.length}` +
-      ` | audio ${audioResumed ? 'on' : 'press trigger'}` +
-      ` | wall ${Math.abs(wallZ).toFixed(1)}m x${wallScale.toFixed(2)} (L-stick)`);
-  }, [active, instances, connectedVNCs, audioResumed, wallZ, wallScale]);
 
   // Performance recorder for spatial audio metrics
   const {
@@ -507,13 +598,6 @@ export default function VRScene({ onExit }) {
     stopVideoRecording,
   } = useVideoRecorder(exportFormat);
 
-  // Declared BEFORE any hook that lists them in a dependency array. A deps
-  // array is evaluated during render, so when these consts lived at the
-  // bottom of the component the read hit the temporal dead zone and threw on
-  // the very first render — with no error boundary above, React 18 unmounted
-  // the entire root: the "blank white screen" on every headset and desktop.
-  const cols = Math.ceil(Math.sqrt(instances.length || 1));
-  const rows = Math.ceil((instances.length || 1) / cols);
 
   // Feed tile snapshot into the recorder each time volumes/active change
   useEffect(() => {
@@ -554,19 +638,19 @@ export default function VRScene({ onExit }) {
     };
   }, [sharedAudioCtx]);
   // Trigger, grip, B and pinch belong to the pointer (vnc-laser-input above):
-  // trigger = left click, grip/B = right click. They must not double as keys —
-  // the old trigger->Enter mapping meant every click also typed Enter.
+  // trigger = left click, grip/B = right click. A and X belong to layout:
+  // A pulls the active screen out to you / puts it back, X flips grid<->radial.
+  // None of them may double as keys — the old trigger->Enter mapping meant
+  // every click also typed Enter.
+  const LAYOUT_RESERVED = ['abuttondown', 'abuttonup', 'xbuttondown', 'xbuttonup'];
   const defaultControllerMap = {
-    abuttondown: 'F1',
-    xbuttondown: 'F3',
     ybuttondown: 'F4',
-    abuttonup: 'F1',
-    xbuttonup: 'F3',
     ybuttonup: 'F4',
   };
   const sanitizeControllerMap = (m) => {
     const out = { ...m };
     VNC_LASER_RESERVED.forEach((ev) => delete out[ev]);
+    LAYOUT_RESERVED.forEach((ev) => delete out[ev]);
     return out;
   };
   const defaultKeyboardMap = {
@@ -947,21 +1031,19 @@ export default function VRScene({ onExit }) {
             nothing could ever be moved. */}
         <a-entity
           id="tileWall"
-          position={`0 1.5 ${wallZ}`}
-          scale={`${wallScale} ${wallScale} 1`}
+          position={layoutMode === 'radial' ? '0 1.5 0.6' : `0 1.5 ${wallZ}`}
+          scale={layoutMode === 'radial' ? '1 1 1' : `${wallScale} ${wallScale} 1`}
         >
           {instances.map((inst, idx) => (
             <VRTile
               key={inst.id}
-              wallZ={wallZ}
+              layout={tileLayout(idx)}
               inst={inst}
               idx={idx}
               active={active}
               setActive={setActive}
               setActiveIds={setActiveIds}
               activeIds={activeIds}
-              cols={cols}
-              rows={rows}
               status={status[inst.id]}
               volume={volumes[idx] || 1}
               ambientVolume={ambientVolume}
@@ -1020,13 +1102,6 @@ export default function VRScene({ onExit }) {
             wasd-controls
             cursor="rayOrigin: mouse"
           >
-            {/* In-headset HUD: the DOM overlays do not exist in immersive
-                mode, which read as "no stats". Locked to the camera. */}
-            <a-entity
-              position="0 -0.42 -0.9"
-              text="value: ; align: center; color: #9be7a1; width: 1.6"
-              id="vrHud"
-            ></a-entity>
           </a-entity>
           
           <a-entity
