@@ -91,6 +91,18 @@ emulator:
       cpu: "500m"
       memory: "1Gi"
     limits:
+      # The 2-core cpu limit is NOT the stutter culprit and stays: cgroup v2
+      # cpu.stat on the node (the real per-container scopes under
+      # kubelet-kubepods-burstable.slice — NOT /sys/fs/cgroup inside the pod,
+      # which is the kind node's root cgroup) showed nr_throttled=0 and
+      # throttled_usec=0 on all nine pods over their entire lifetime
+      # (~22-24k enforcement periods each), including windows where guest
+      # speed dipped to 44-56%. The dips are fair-share starvation at the
+      # NODE level: the kind container competes with the desktop session at
+      # equal cpu.weight and got only ~5.8 of 8 cores under load (pod PSI
+      # "some" ~30%). That is fixed on the host, not in this chart:
+      #   docker update --cpu-shares 4096 loco-control-plane
+      # (re-run if the kind container is ever recreated).
       cpu: "2"
       memory: "2Gi"
 
@@ -109,6 +121,13 @@ emulator:
     # screen-grabber alternative does not survive Kubernetes — see
     # containers/pcem/README.md before changing this.
     VNC_BACKEND: "xvnc"
+    # Cap Xvnc's update rate at 30 fps (TigerVNC defaults to 60). Measured on
+    # the 9-pod fleet: nine Xvnc at 60 fps burn ~0.4-0.5 core fleet-wide in
+    # framebuffer update-compare work, on a node where PCem itself is starved
+    # (each pod got 0.62-0.67 of the ~1 core it needs). Halving the rate
+    # returns ~0.2-0.25 core to the emulators; a 30 fps cap is invisible for
+    # a Win98 desktop whose game logic runs in the guest regardless.
+    XVNC_FRAMERATE: "30"
     # Direct/tablet-style pointing: the guest cursor goes exactly where the
     # client points, rather than being nudged by relative motion.
     PCEM_POINTER_MODE: "absolute"

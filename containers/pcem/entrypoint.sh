@@ -14,6 +14,10 @@ set -euo pipefail
 : "${VNC_PORT:=5901}"
 : "${VNC_PASSWORD:=}"
 : "${VNC_BACKEND:=xvnc}"   # xvnc (TigerVNC, RFB-native) | x11vnc (Xvfb + screen grabber)
+: "${XVNC_FRAMERATE:=60}"  # Xvnc -FrameRate cap; 60 is TigerVNC's own default.
+                           # Nine Xvnc at 60 cost ~0.4-0.5 core fleet-wide in
+                           # update-compare work on an already-contended node;
+                           # the chart drops this to 30 (see values-pcem.yaml).
 : "${HEALTH_PORT:=8080}"
 
 # Guest audio: a private PulseAudio daemon with a null sink for PCem's OpenAL
@@ -1047,6 +1051,7 @@ start_display() {
     Xvnc "$DISPLAY" \
         -geometry "${SCREEN_WIDTH}x${SCREEN_HEIGHT}" -depth "${SCREEN_DEPTH}" \
         -rfbport "$VNC_PORT" -interface 0.0.0.0 \
+        -FrameRate "$XVNC_FRAMERATE" \
         -AlwaysShared -AcceptKeyEvents -AcceptPointerEvents -AcceptSetDesktopSize=0 \
         -desktop "loco-pcem" \
         "${auth[@]}" >"${RUN_DIR}/xvnc.log" 2>&1 &
