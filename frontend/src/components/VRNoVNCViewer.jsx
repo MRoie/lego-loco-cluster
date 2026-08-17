@@ -39,23 +39,34 @@ const VRNoVNCViewer = forwardRef(({ instanceId, onConnect, onDisconnect }, ref) 
     sendKey: (key, pressed) => {
       if (rfbRef.current && connected) {
         try {
-          // Use NoVNC's sendKey method
-          const keySym = getKeySymbol({ key, code: key });
-          if (keySym > 0) {
-            rfbRef.current.sendKey(keySym, 'Key' + key, pressed);
+          // VRScene passes raw X11 keysyms (numbers); accept those directly.
+          // The old code assumed a string and re-mapped it, so a numeric
+          // keysym fell through every lookup and became a silent no-op —
+          // controller-to-keyboard input never reached the guest.
+          if (typeof key === 'number') {
+            rfbRef.current.sendKey(key, null, !!pressed);
+          } else {
+            const keySym = getKeySymbol({ key, code: key });
+            if (keySym > 0) {
+              rfbRef.current.sendKey(keySym, 'Key' + key, !!pressed);
+            }
           }
-          console.log(`VR NoVNC: Send key ${key} ${pressed ? 'down' : 'up'}`);
         } catch (error) {
           console.error('Error sending VR key event:', error);
         }
       }
     },
     sendMouse: (x, y, mask) => {
-      if (rfbRef.current && connected) {
+      if (rfbRef.current && connected && RFB) {
         try {
-          // Use NoVNC's sendPointerEvent method
-          rfbRef.current.sendPointerEvent(x, y, mask);
-          console.log(`VR NoVNC: Send mouse ${x},${y} mask:${mask}`);
+          // noVNC 1.7 has no public pointer API — the sendPointerEvent this
+          // used to call does not exist, and its TypeError was swallowed by
+          // this very try/catch, which is why VR clicks went nowhere while
+          // logging "sent". Use the protocol-level builder the library itself
+          // uses internally: framebuffer-absolute coordinates, no DOM events,
+          // no throttling.
+          RFB.messages.pointerEvent(
+            rfbRef.current._sock, Math.round(x), Math.round(y), mask & 0xff);
         } catch (error) {
           console.error('Error sending VR pointer event:', error);
         }
@@ -66,7 +77,7 @@ const VRNoVNCViewer = forwardRef(({ instanceId, onConnect, onDisconnect }, ref) 
         rfbRef.current.disconnect();
       }
     }
-  }), [connected, connecting]);
+  }), [connected, connecting, RFB]);
 
   // Key symbol mapping for VR compatibility
   const getKeySymbol = (event) => {

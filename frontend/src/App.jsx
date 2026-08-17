@@ -6,9 +6,51 @@ import DiscoveryStatus from "./components/DiscoveryStatus";
 import BenchmarkOverlay from "./components/BenchmarkOverlay";
 import FullscreenViewer from "./components/FullscreenViewer";
 import useProgressiveLoading from "./hooks/useProgressiveLoading";
+import ControlsHelpModal from './components/ControlsHelpModal';
 import AppLoadingOverlay from "./components/AppLoadingOverlay";
 
 const VRScene = lazy(() => import(/* webpackChunkName: "vr" */ "./VRScene"));
+
+/**
+ * Contain VR crashes. Without a boundary, one render-time throw inside the
+ * lazy VRScene unmounts the entire React root — the user saw a bare white
+ * page with no way back, on a headset, with the controllers dead. The
+ * fallback keeps the app alive and hands back an exit.
+ */
+class VRErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("VR scene crashed", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-screen bg-black gap-4">
+          <div className="text-red-400 font-mono text-lg">VR scene failed</div>
+          <div className="text-gray-400 font-mono text-xs max-w-lg text-center break-all">
+            {String(this.state.error && this.state.error.message)}
+          </div>
+          <button
+            onClick={() => { this.setState({ error: null }); this.props.onExit(); }}
+            className="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2 rounded"
+          >
+            Exit VR
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 const QualityDashboard = lazy(() => import(/* webpackChunkName: "dashboard" */ "./components/QualityDashboard"));
 
 
@@ -33,6 +75,13 @@ export default function App() {
   const [focused, setFocused] = useState(null);
   const [showOnlyProvisioned, setShowOnlyProvisioned] = useState(false);
   const [fullscreenInstance, setFullscreenInstance] = useState(null);
+  // Empty-slot launch: which grid slot is provisioning (null = none), and an
+  // inline error pinned to the slot it happened on (e.g. the 409 at capacity).
+  const [provisioningSlot, setProvisioningSlot] = useState(null);
+  const [launchError, setLaunchError] = useState(null);
+  // {desired, max} from the backend — how many instances the StatefulSet
+  // actually owns, as opposed to how many discovery can currently see.
+  const [capacity, setCapacity] = useState(null);
 
   // Enter fullscreen control mode for an instance
   const enterFullscreen = useCallback((instance) => {
@@ -42,6 +91,53 @@ export default function App() {
   // Exit fullscreen control mode
   const exitFullscreen = useCallback(() => {
     setFullscreenInstance(null);
+  }, []);
+
+  // Clicking an empty slot scales the emulator StatefulSet up by one. The
+  // slot stays in "Provisioning..." for ~20s after the POST succeeds so the
+  // discovery polling has time to replace it with a real card (the new pod
+  // then shows the usual booting/health states for the ~4-5 min PCem boot).
+  const launchInstance = useCallback(async (slotIndex) => {
+    if (provisioningSlot !== null) return; // one launch in flight at a time
+    setLaunchError(null);
+    setProvisioningSlot(slotIndex);
+    try {
+      const res = await fetch('/api/instances/launch', { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLaunchError({ slot: slotIndex, message: body.error || `Launch failed (HTTP ${res.status})` });
+        setProvisioningSlot(null);
+        return;
+      }
+      setTimeout(() => setProvisioningSlot(null), 20000);
+    } catch (err) {
+      setLaunchError({ slot: slotIndex, message: err.message || 'Launch request failed' });
+      setProvisioningSlot(null);
+    }
+  }, [provisioningSlot]);
+
+  // Poll capacity alongside instance discovery. During a rolling restart
+  // discovery briefly reports fewer instances than the StatefulSet desires,
+  // and the missing ones used to render as clickable "Empty Slot" cards whose
+  // launch could only 409 ("grid is full"). Knowing the desired count lets
+  // those slots render as honest "Starting..." placeholders instead. A failed
+  // fetch clears capacity to null, which falls back to trusting discovery
+  // alone — the old behaviour.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCapacity = async () => {
+      try {
+        const res = await fetch('/api/instances/capacity');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = await res.json();
+        if (!cancelled) setCapacity(body);
+      } catch {
+        if (!cancelled) setCapacity(null);
+      }
+    };
+    fetchCapacity();
+    const id = setInterval(fetchCapacity, 5000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   // Global Escape key to exit fullscreen
@@ -145,6 +241,16 @@ export default function App() {
 
   const gridInstances = createDemoInstances();
 
+  // Honest empties. Of the 9 - filled null slots, the first `starting` are
+  // already owned by the StatefulSet (desired > what discovery sees, i.e. a
+  // rolling restart) and must not offer a launch; only the slots beyond the
+  // desired count are genuinely launchable:
+  //   starting   = max(0, desired - filled)
+  //   launchable = max(0, 9 - desired)  — exactly the nulls left over.
+  const filledSlots = gridInstances.filter(Boolean).length;
+  const desiredCount = capacity?.desired ?? filledSlots;
+  const startingSlots = Math.max(0, desiredCount - filledSlots);
+
   return (
     <div className="min-h-screen lego-background text-black relative">
       {/* Initial-load overlay (progressive loading, concept from #74) */}
@@ -175,6 +281,8 @@ export default function App() {
                   📊 BENCH
                 </button>
               )}
+              {/* Controls cheat-sheet (was painted on every tile) */}
+              <ControlsHelpModal />
               {/* Discovery Status */}
               <DiscoveryStatus status={discoveryStatus} />
               {/* VR Button */}
@@ -218,14 +326,51 @@ export default function App() {
                       }}
                       onFullscreen={() => enterFullscreen(instance)}
                     />
+                  ) : provisioningSlot === index ? (
+                    <motion.div className="w-full h-full lego-empty-slot flex items-center justify-center text-gray-600 lego-shimmer">
+                      <div className="text-center">
+                        <motion.div
+                          className="w-16 h-16 border-3 border-blue-500 rounded-lg mx-auto mb-3 flex items-center justify-center bg-white/50"
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+                        >
+                          <span className="text-3xl text-blue-600">⟳</span>
+                        </motion.div>
+                        <p className="text-sm font-bold lego-text mb-1 text-gray-700">Provisioning...</p>
+                        <p className="text-xs lego-text text-gray-600">
+                          Booting a new instance — this takes a few minutes
+                        </p>
+                      </div>
+                    </motion.div>
+                  ) : index < filledSlots + startingSlots ? (
+                    /* A slot the StatefulSet already owns but discovery has
+                       not reported yet (rolling restart). Deliberately not
+                       clickable: launching here would only 409 against a grid
+                       that is fuller than it currently looks. */
+                    <motion.div
+                      className="w-full h-full lego-empty-slot flex items-center justify-center text-gray-600"
+                      animate={{ opacity: [0.45, 0.85, 0.45] }}
+                      transition={{ repeat: Infinity, duration: 2.4, ease: 'easeInOut' }}
+                    >
+                      <div className="text-center">
+                        <div className="w-16 h-16 border-3 border-gray-400 rounded-lg mx-auto mb-3 flex items-center justify-center bg-white/50">
+                          <span className="text-3xl text-gray-500">⏳</span>
+                        </div>
+                        <p className="text-sm font-bold lego-text mb-1 text-gray-700">Starting...</p>
+                        <p className="text-xs lego-text text-gray-600">
+                          Instance is coming up — nothing to do
+                        </p>
+                      </div>
+                    </motion.div>
                   ) : (
                     <motion.div
-                      className="w-full h-full lego-empty-slot flex items-center justify-center text-gray-600 lego-shimmer cursor-pointer"
-                      whileHover={{
+                      className={`w-full h-full lego-empty-slot flex items-center justify-center text-gray-600 lego-shimmer ${provisioningSlot === null ? 'cursor-pointer' : 'cursor-default'}`}
+                      whileHover={provisioningSlot === null ? {
                         scale: 1.02,
                         y: -2
-                      }}
-                      whileTap={{ scale: 0.98 }}
+                      } : {}}
+                      whileTap={provisioningSlot === null ? { scale: 0.98 } : {}}
+                      onClick={() => launchInstance(index)}
                     >
                       <div className="text-center">
                         <motion.div
@@ -238,6 +383,9 @@ export default function App() {
                         <p className="text-xs lego-text text-gray-600">
                           {showOnlyProvisioned ? 'No provisioned instance' : 'Available for deployment'}
                         </p>
+                        {launchError && launchError.slot === index && (
+                          <p className="text-xs lego-text text-red-600 mt-1">{launchError.message}</p>
+                        )}
                       </div>
                     </motion.div>
                   )}
@@ -269,13 +417,15 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <Suspense fallback={
-              <div className="flex items-center justify-center h-screen bg-black">
-                <div className="text-white text-lg" style={{ color: '#0055BF' }}>Loading VR Scene…</div>
-              </div>
-            }>
-              <VRScene onExit={() => setVrMode(false)} />
-            </Suspense>
+            <VRErrorBoundary onExit={() => setVrMode(false)}>
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-screen bg-black">
+                  <div className="text-white text-lg" style={{ color: '#0055BF' }}>Loading VR Scene…</div>
+                </div>
+              }>
+                <VRScene onExit={() => setVrMode(false)} />
+              </Suspense>
+            </VRErrorBoundary>
           </motion.div>
         )}
       </AnimatePresence>

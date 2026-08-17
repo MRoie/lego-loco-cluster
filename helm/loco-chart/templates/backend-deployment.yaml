@@ -40,6 +40,9 @@ spec:
           value: "{{ include "loco.fullname" . }}-emulator"
         - name: DISCOVERY_MODE
           value: "kubernetes-endpoints"
+        # Port the emulator pods expose raw guest PCM on (audio WS bridge)
+        - name: EMULATOR_AUDIO_PORT
+          value: {{ .Values.emulator.audioPort | default 5902 | quote }}
         {{- if .Values.backend.env }}
         {{- range $key, $value := .Values.backend.env }}
         - name: {{ $key }}

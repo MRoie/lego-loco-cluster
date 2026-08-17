@@ -55,6 +55,17 @@ export default function BenchmarkOverlay({ visible = true, onToggle }) {
     return 'text-red-400';
   };
 
+  // Compact uptime ("13m", "2h07", "3d05") — the point is spotting a pod
+  // that quietly restarted, so minute precision is enough.
+  const formatUptime = (secs) => {
+    if (secs == null) return '--';
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h${String(mins % 60).padStart(2, '0')}`;
+    return `${Math.floor(hours / 24)}d${String(hours % 24).padStart(2, '0')}`;
+  };
+
   return (
     <AnimatePresence>
       <motion.div
@@ -100,8 +111,9 @@ export default function BenchmarkOverlay({ visible = true, onToggle }) {
               className="bg-black/85 backdrop-blur-sm border-x border-b border-green-500/30 rounded-b-lg overflow-hidden"
             >
               {/* Header row */}
-              <div className="grid grid-cols-9 gap-1 px-3 py-1 text-[10px] font-mono text-gray-500 border-b border-gray-700/50">
+              <div className="grid grid-cols-12 gap-1 px-3 py-1 text-[10px] font-mono text-gray-500 border-b border-gray-700/50">
                 <span>INSTANCE</span>
+                <span>LAN IP</span>
                 <span>STATUS</span>
                 <span>FPS</span>
                 <span>LATENCY</span>
@@ -110,23 +122,60 @@ export default function BenchmarkOverlay({ visible = true, onToggle }) {
                 <span>QEMU</span>
                 <span>DISPLAY</span>
                 <span>NETWORK</span>
+                <span>AUDIO</span>
+                <span>UP</span>
               </div>
 
               {/* Instance rows */}
               {instances.map((inst, i) => (
                 <div
                   key={inst.id || i}
-                  className="grid grid-cols-9 gap-1 px-3 py-0.5 text-[11px] font-mono border-b border-gray-800/50 hover:bg-green-900/10"
+                  className="grid grid-cols-12 gap-1 px-3 py-0.5 text-[11px] font-mono border-b border-gray-800/50 hover:bg-green-900/10"
                 >
-                  <span className="text-blue-300 truncate" title={inst.id}>
+                  {/* Window title and disk state ride in the tooltip: they
+                      matter when a guest is stuck, but not enough to spend
+                      two more columns on. */}
+                  <span
+                    className="text-blue-300 truncate"
+                    title={[
+                      inst.id,
+                      inst.windowTitle ? `window: ${inst.windowTitle}` : null,
+                      inst.diskPresent != null
+                        ? `disk: ${inst.diskPresent ? 'present' : 'MISSING'}`
+                        : null,
+                    ].filter(Boolean).join('\n')}
+                  >
                     emu-{inst.instanceId ?? i}
+                  </span>
+                  {/* The address a player types into LEGO LOCO's TCP/IP join
+                      box to join this instance. Dimmed when the guest's link
+                      has no carrier: the address is right, it just cannot
+                      answer yet, which is worth distinguishing from wrong. */}
+                  <span
+                    className={inst.guestLink ? 'text-cyan-300 truncate' : 'text-gray-600 truncate'}
+                    title={inst.guestIp
+                      ? (inst.guestLink
+                          ? `${inst.guestIp} — LOCO join address for this instance`
+                          : `${inst.guestIp} — guest link has no carrier, cannot be reached yet`)
+                      : 'no guest LAN'}
+                  >
+                    {inst.guestIp || '--'}
                   </span>
                   <span className={inst.healthy ? 'text-green-400' : 'text-red-400'}>
                     {inst.healthy ? 'OK' : 'ERR'}
                   </span>
-                  <span className={getFpsColor(inst.fps || 0)}>
-                    {inst.fps || 0}
-                  </span>
+                  {/* PCem reports no frame rate — for it the meaningful
+                      number is whether it is holding real-time speed. */}
+                  {inst.speedPercent != null && !inst.fps ? (
+                    <span
+                      className={inst.speedPercent >= 90 ? 'text-green-400' : 'text-yellow-400'}
+                      title="emulated CPU speed vs. real time"
+                    >
+                      {inst.speedPercent}%
+                    </span>
+                  ) : (
+                    <span className={getFpsColor(inst.fps || 0)}>{inst.fps || 0}</span>
+                  )}
                   <span className={getLatColor(inst.latency || 0)}>
                     {inst.latency ? `${inst.latency.toFixed(0)}ms` : '--'}
                   </span>
@@ -139,12 +188,20 @@ export default function BenchmarkOverlay({ visible = true, onToggle }) {
                   <span>{inst.qemuHealthy ? '✅' : '❌'}</span>
                   <span>{inst.displayActive ? '✅' : '❌'}</span>
                   <span>{inst.networkOk ? '✅' : '❌'}</span>
+                  {/* audioOk is the enriched name; audioRunning is what older
+                      backend builds emit — accept either so a stale backend
+                      doesn't show every instance as mute. */}
+                  <span>{(inst.audioOk ?? inst.audioRunning) ? '✅' : '❌'}</span>
+                  <span className="text-gray-300" title="time since the emulator started">
+                    {formatUptime(inst.uptimeSeconds)}
+                  </span>
                 </div>
               ))}
 
               {/* Summary row */}
-              <div className="grid grid-cols-9 gap-1 px-3 py-1 text-[11px] font-mono bg-gray-900/60 border-t border-green-500/20">
+              <div className="grid grid-cols-12 gap-1 px-3 py-1 text-[11px] font-mono bg-gray-900/60 border-t border-green-500/20">
                 <span className="text-white font-bold">TOTAL</span>
+                <span />
                 <span className="text-gray-400">{summary.healthyCount || 0}/{instances.length}</span>
                 <span className={getFpsColor(summary.avgFps || 0)}>
                   avg {summary.avgFps || 0}
@@ -158,11 +215,12 @@ export default function BenchmarkOverlay({ visible = true, onToggle }) {
                 <span className="text-gray-300">
                   avg {summary.avgMemory ? `${summary.avgMemory.toFixed(1)}%` : '--'}
                 </span>
-                <span colSpan={3} className="text-gray-500">
+                {/* colSpan is a table attribute and was inert in this CSS
+                    grid; col-span-5 actually stretches the clock across the
+                    QEMU/DISPLAY/NETWORK/AUDIO/UP columns. */}
+                <span className="col-span-5 text-gray-500">
                   {new Date().toLocaleTimeString()}
                 </span>
-                <span />
-                <span />
               </div>
 
               {/* Pass/fail criteria bar */}

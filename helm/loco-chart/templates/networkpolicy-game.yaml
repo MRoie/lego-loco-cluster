@@ -17,7 +17,10 @@ spec:
     - Egress
 
   ingress:
-    # Backend and kubelet health probes — VNC (5901) and health (8080)
+    # Backend and kubelet health probes — VNC (5901), guest audio PCM
+    # (audioPort, default 5902) and health (8080). Without the audio port the
+    # backend's /proxy/audio bridge dials, hangs, and the browser just never
+    # hears anything — nothing logs a denial.
     - from:
         - podSelector:
             matchLabels:
@@ -25,6 +28,8 @@ spec:
       ports:
         - protocol: TCP
           port: 5901
+        - protocol: TCP
+          port: {{ .Values.emulator.audioPort | default 5902 }}
         - protocol: TCP
           port: 8080
     - from:

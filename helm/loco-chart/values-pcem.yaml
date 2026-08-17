@@ -1,0 +1,171 @@
+# PCem emulator flavor — real Socket 7 hardware emulation instead of QEMU.
+#
+#   helm upgrade --install loco helm/loco-chart -n loco --create-namespace \
+#     -f helm/loco-chart/values-pcem.yaml
+#
+# PCem emulates a FIC VA-503+ (Super Socket 7 / VIA MVP3) with a 3dfx Voodoo3
+# 3000 and a Pentium MMX 200, and runs the Windows 98 SE + LEGO LOCO disk
+# snapshot published to GHCR. It exposes the same contract as the QEMU flavor —
+# raw RFB on 5901, HTTP health on 8080 — so the backend's VNC bridge and the
+# frontend grid pick it up with no changes.
+#
+# Trade-offs vs. the QEMU flavor, worth knowing before deploying this:
+#   * PCem's CPU core is single-threaded and there is no KVM path — it burns
+#     roughly one core per instance to hold 100% of real Pentium-MMX-200 speed.
+#     Scale replicas against cores, not against memory. (The VNC server adds
+#     only ~2% on top, since Xvnc serves the framebuffer it already owns.)
+#   * No WebRTC/GStreamer push, so instances render through the VNC path only.
+#   * Guest LAN is wired on the host side but not inside the guests. PCem's
+#     PCap backend is patched to build on Linux (SLiRP cannot carry a LAN
+#     game), and PCEM_NET_MODE=vxlan builds the same bridge+tap+VXLAN mesh the
+#     QEMU flavor uses — but each Windows guest still needs its NE2000 driver
+#     and a static IP installed before LEGO LOCO multiplayer will work.
+
+# 9 = the full 3x3 grid. Each PCem pod wants ~1 core to hold real-time speed;
+# on an 8-core host nine of them contend, so expect emulated speed in the
+# 80-95% band while all nine run — boots take longer, the games run slightly
+# slow, nothing breaks. Ordinals self-provision: names, reserved IPs (.10+N)
+# and the VXLAN mesh are all functions of the ordinal.
+replicas: 9
+
+emulator:
+  flavor: pcem
+
+  image: loco-pcem
+  tag: dev
+  imagePullPolicy: Never       # image is side-loaded into kind/minikube
+
+  servicePort: 5901            # raw RFB — backend/server.js bridges WS to this
+  healthPort: 8080
+
+  # Each pod writes through to its own copy of the disk, so no shared PVC.
+  # The entrypoint fetches the snapshot into this emptyDir on first start.
+  diskPVC: ""
+  diskReadOnly: false
+
+  # One pull per node instead of one per pod (~500 MB each).
+  snapshotCache:
+    enabled: true
+    hostPath: /var/lib/loco/snapshot-cache
+
+  # PCem has no KVM path and does no host GL — both must stay off.
+  kvm:
+    enabled: false
+  dri:
+    enabled: false
+
+  # Cold boot is genuinely slow: BIOS POST plus a real Windows 98 boot at
+  # period-accurate speed is ~2 minutes, and the first pod on a node also
+  # pulls the disk. Startup probe is sized for that; liveness/readiness stay
+  # tight afterwards.
+  probes:
+    startup:
+      enabled: true
+      path: /health
+      initialDelaySeconds: 20
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 60     # up to 10 minutes to reach a live desktop
+    liveness:
+      enabled: true
+      path: /                  # "/" = process alive; does not flap while booting
+      initialDelaySeconds: 60
+      periodSeconds: 20
+      timeoutSeconds: 10
+      failureThreshold: 3
+    readiness:
+      enabled: true
+      path: /health            # "/health" = VNC actually serving pixels
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+
+  resources:
+    requests:
+      # 500m: the request is a scheduling claim, not a speed setting. This
+      # 8-core node carries ~3 cores of non-emulator requests (backend,
+      # frontend, vr, kube-system), so nine emulators only fit under
+      # 9x + 3050m <= 8000m — measured, with pod 7 Pending at 700m to prove
+      # it. The 2-core limit still lets each pod burst to real-time speed.
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      # The 2-core cpu limit is NOT the stutter culprit and stays: cgroup v2
+      # cpu.stat on the node (the real per-container scopes under
+      # kubelet-kubepods-burstable.slice — NOT /sys/fs/cgroup inside the pod,
+      # which is the kind node's root cgroup) showed nr_throttled=0 and
+      # throttled_usec=0 on all nine pods over their entire lifetime
+      # (~22-24k enforcement periods each), including windows where guest
+      # speed dipped to 44-56%. The dips are fair-share starvation at the
+      # NODE level: the kind container competes with the desktop session at
+      # equal cpu.weight and got only ~5.8 of 8 cores under load (pod PSI
+      # "some" ~30%). That is fixed on the host, not in this chart:
+      #   docker update --cpu-shares 4096 loco-control-plane
+      # (re-run if the kind container is ever recreated).
+      cpu: "2"
+      memory: "2Gi"
+
+  env:
+    SNAPSHOT_IMAGE: "ghcr.io/mroie/lego-loco-cluster/emulator-snapshot:pcem-win98-loco-1024x768"
+    SNAPSHOT_CACHE_DIR: "/snapshot-cache"
+    DISK_NAME: "win98-loco.vhd"
+    # Board the snapshot's Windows install is bound to — see containers/pcem/README.md
+    PCEM_MODEL: "fic_va503p"
+    PCEM_GFXCARD: "v3_3000"
+    PCEM_MEM_SIZE: "65536"
+    PCEM_VNC_MOUSE: "1"
+    SCREEN_WIDTH: "1024"
+    SCREEN_HEIGHT: "768"
+    # TigerVNC's Xvnc serves RFB from the X server itself. The x11vnc
+    # screen-grabber alternative does not survive Kubernetes — see
+    # containers/pcem/README.md before changing this.
+    VNC_BACKEND: "xvnc"
+    # Cap Xvnc's update rate at 30 fps (TigerVNC defaults to 60). Measured on
+    # the 9-pod fleet: nine Xvnc at 60 fps burn ~0.4-0.5 core fleet-wide in
+    # framebuffer update-compare work, on a node where PCem itself is starved
+    # (each pod got 0.62-0.67 of the ~1 core it needs). Halving the rate
+    # returns ~0.2-0.25 core to the emulators; a 30 fps cap is invisible for
+    # a Win98 desktop whose game logic runs in the guest regardless.
+    XVNC_FRAMERATE: "30"
+    # Direct/tablet-style pointing: the guest cursor goes exactly where the
+    # client points, rather than being nudged by relative motion.
+    PCEM_POINTER_MODE: "absolute"
+    # PS/2 mouse with guest acceleration off — measured exact, not hopeful.
+    # Template-matched cursor tracking (scripts/cursor-locate.py) shows gain
+    # 1.000 on both axes in the LOCO menu AND in-world, zero drift over a
+    # five-leg path, and the cursor reaching the true screen corners — which
+    # was the original complaint. Clicks land where aimed with a 1.0s hold.
+    #
+    # The pieces have to agree: mouse_type 2 (PS/2; the driver IS installed,
+    # Class\Mouse\0001), MouseSpeed=0 delivered into the guest registry by
+    # LOCOID.REG at AUTOEXEC time, and PCEM_MOUSE_SPEED=0 telling the model to
+    # assume the 1:1 curve those two produce. An older note claimed the
+    # registry values "did not take" — that conclusion came from frame-diff
+    # measurements LOCO's animated menu had poisoned. They took.
+    PCEM_MOUSE_TYPE: "2"
+    PCEM_MOUSE_SPEED: "0"
+    # Native 1024x768 in the guest, matching the VNC framebuffer 1:1. This
+    # deletes the scaling layer: no stretch blur, and guest pixels ARE
+    # framebuffer pixels, so the pointer mapping is the identity. Written into
+    # LOCOID.REG (Config\0001\Display\Settings) and imported at AUTOEXEC
+    # time, so it applies from the first boot of each fresh disk copy.
+    GUEST_RESOLUTION: "1024,768"
+    # Costs a log line per poll and is how every pointer bug so far was found.
+    PCEM_VNC_MOUSE_DEBUG: "1"
+    # Guest LAN. The disk snapshot has the Realtek NIC driver and the Windows
+    # network client installed, so the guests come up on a shared layer 2:
+    # each pod builds a bridge + tap and meshes to its peers over VXLAN, and
+    # ordinal 0 runs DHCP. See containers/pcem/README.md.
+    PCEM_NETCARD: "rtl8029as"
+    PCEM_NET_MODE: "vxlan"
+
+# kind/minikube have no NFS server; keep art-res on a hostPath.
+storage:
+  strategy:
+    hostPath:
+      enabled: true
+      path: "/tmp/loco-art-shared"
+      permissions: "777"
+    hybrid:
+      enabled: false

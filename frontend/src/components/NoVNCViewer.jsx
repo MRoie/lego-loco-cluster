@@ -496,21 +496,10 @@ export default function NoVNCViewer({ instanceId, fullscreen = false }) {
         </div>
       )}
 
-      {/* Input Instructions — hidden in fullscreen */}
-      {!fullscreen && connected && hasControl && (
-        <div className="absolute bottom-2 left-2 bg-black bg-opacity-75 rounded-lg p-2 text-white text-xs max-w-xs">
-          <div className="font-semibold mb-1">NoVNC Controls:</div>
-          <div>• Full mouse and keyboard support via NoVNC</div>
-          <div>• Right-click context menu, function keys, special keys</div>
-          <div className="mt-2 text-yellow-400">
-            <div className="font-semibold">Release Control:</div>
-            <div>• Ctrl+Alt+R (primary)</div>
-            <div>• Ctrl+Shift+Esc</div>
-            <div>• F10 x3 (VR-friendly)</div>
-            <div>• Ctrl+Alt+Q</div>
-          </div>
-        </div>
-      )}
+      {/* The controls cheat-sheet that used to live here covered most of the
+          tile and swallowed clicks meant for the guest. It is the same text on
+          every card, so it now lives once in the header's help modal
+          (ControlsHelpModal). */}
 
       {/* No Control Overlay — hidden in fullscreen (user can just click) */}
       {!fullscreen && connected && !hasControl && (

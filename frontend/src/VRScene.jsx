@@ -3,38 +3,191 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useActive } from './ActiveContext';
 import useWebRTC from './hooks/useWebRTC';
 import useSpatialAudio from './hooks/useSpatialAudio';
+import usePCMAudio from './hooks/usePCMAudio';
 import useVRAudioListener from './hooks/useVRAudioListener';
 import usePerformanceRecorder from './hooks/usePerformanceRecorder';
 import useVideoRecorder from './hooks/useVideoRecorder';
 import { FORMAT_KEYS, EXPORT_FORMATS } from './utils/mediaExport';
-import VRReactVNCViewer from './components/VRReactVNCViewer';
+import VRNoVNCViewer from './components/VRNoVNCViewer';
 import ControlsConfig from './components/ControlsConfig';
 import VRToast from './components/VRToast';
+
+/* The controller-to-guest pointer, as one A-Frame component on the entity that
+ * owns the raycaster.
+ *
+ * Design rules, each earned the hard way:
+ *  - ONLY discrete edge events set buttons. A-Frame's cursor `click` requires
+ *    the analog trigger to cross a driver-defined threshold with down and up
+ *    on the same entity, which is exactly the "inconsistent full click" the
+ *    headset user reported. triggerdown/triggerup are unambiguous edges.
+ *  - One button mask, owned here. Left = trigger (RFB bit 0x1), right = grip
+ *    or B (bit 0x4), wheel = thumbstick pulses (bits 0x8/0x10). The guest
+ *    needs right-click; nothing else in the scene may repurpose these events.
+ *  - A release is delivered even if the ray has left the tile, at the last
+ *    known position — otherwise a press-move-release off the edge leaves the
+ *    guest with a stuck button.
+ *  - Hover streams continuously (~30 Hz) with the current mask, so the guest
+ *    cursor tracks the laser and press-move-release is a drag.
+ * The component only computes UV; the tile maps UV to framebuffer pixels,
+ * because only the tile knows its canvas.
+ */
+const VNC_LASER_RESERVED = [
+  'triggerdown', 'triggerup', 'gripdown', 'gripup',
+  'bbuttondown', 'bbuttonup', 'pinchstarted', 'pinchended',
+];
+
+if (typeof window !== 'undefined' && window.AFRAME &&
+    !window.AFRAME.components['vnc-canvas-refresh']) {
+  // noVNC repaints its canvas; THREE re-uploads only when told. A component
+  // tick runs inside A-Frame's render loop, which follows the XR session's
+  // frame clock in immersive mode — a window rAF loop does not.
+  window.AFRAME.registerComponent('vnc-canvas-refresh', {
+    tick() {
+      if (this.el.vncTexture) this.el.vncTexture.needsUpdate = true;
+    },
+  });
+}
+
+if (typeof window !== 'undefined' && window.AFRAME &&
+    !window.AFRAME.components['vnc-laser-input']) {
+  window.AFRAME.registerComponent('vnc-laser-input', {
+    init() {
+      this.mask = 0;
+      this.lastEl = null;
+      this.lastUV = null;
+      this.wheelArmed = true;
+      this.wheelTimer = null;
+      this.tick = window.AFRAME.utils.throttleTick(this.hoverTick, 33, this);
+
+      this.handlers = {
+        triggerdown: () => this.setBit(0x1, true),
+        triggerup: () => this.setBit(0x1, false),
+        pinchstarted: () => this.setBit(0x1, true),
+        pinchended: () => this.setBit(0x1, false),
+        gripdown: () => this.setBit(0x4, true),
+        gripup: () => this.setBit(0x4, false),
+        bbuttondown: () => this.setBit(0x4, true),
+        bbuttonup: () => this.setBit(0x4, false),
+        thumbstickmoved: (e) => this.wheel(e.detail && e.detail.y),
+      };
+      Object.entries(this.handlers).forEach(([ev, fn]) =>
+        this.el.addEventListener(ev, fn));
+    },
+
+    remove() {
+      Object.entries(this.handlers).forEach(([ev, fn]) =>
+        this.el.removeEventListener(ev, fn));
+      if (this.wheelTimer) clearTimeout(this.wheelTimer);
+    },
+
+    intersection() {
+      const rc = this.el.components.raycaster;
+      const hit = rc && rc.intersections && rc.intersections[0];
+      return (hit && hit.uv && hit.object && hit.object.el) ? hit : null;
+    },
+
+    setBit(bit, on) {
+      const next = on ? (this.mask | bit) : (this.mask & ~bit);
+      if (next === this.mask) return;
+      this.mask = next;
+      this.emitPointer(on);
+    },
+
+    // RFB wheel = a momentary press of button 4 (up) or 5 (down). Pulse the
+    // bit and restore, edge-triggered with hysteresis so one flick is one
+    // notch, auto-repeating while held hard over.
+    wheel(y) {
+      if (typeof y !== 'number') return;
+      const mag = Math.abs(y);
+      if (mag < 0.3) {
+        this.wheelArmed = true;
+        if (this.wheelTimer) { clearTimeout(this.wheelTimer); this.wheelTimer = null; }
+        return;
+      }
+      if (mag < 0.6 || !this.wheelArmed) return;
+      this.wheelArmed = false;
+      const bit = y < 0 ? 0x8 : 0x10;
+      const base = this.mask;
+      this.mask = base | bit;
+      this.emitPointer(true);
+      this.mask = base;
+      this.emitPointer(false);
+      this.wheelTimer = setTimeout(() => { this.wheelArmed = true; this.wheel(y); }, 150);
+    },
+
+    emitPointer(pressedEdge) {
+      const hit = this.intersection();
+      let el = this.lastEl;
+      let uv = this.lastUV;
+      if (hit) {
+        el = hit.object.el;
+        uv = { x: hit.uv.x, y: hit.uv.y };
+        this.lastEl = el;
+        this.lastUV = uv;
+      }
+      if (!el || !uv) return;
+      el.dispatchEvent(new CustomEvent('vnc-pointer', {
+        detail: { u: uv.x, v: uv.y, mask: this.mask,
+                  pressed: !!pressedEdge && this.mask !== 0 },
+      }));
+    },
+
+    hoverTick() {
+      const hit = this.intersection();
+      if (!hit) return;
+      const uv = hit.uv;
+      const moved = hit.object.el !== this.lastEl || !this.lastUV ||
+        Math.abs(uv.x - this.lastUV.x) > 0.001 ||
+        Math.abs(uv.y - this.lastUV.y) > 0.001;
+      if (moved) this.emitPointer(false);
+    },
+  });
+}
 
 function positionForIndex(i, cols, rows) {
   const x = (i % cols) - (cols - 1) / 2;
   const row = Math.floor(i / cols);
   const y = (rows - 1) / 2 - row;
-  return { x: x * 1.4, y: y * 1.0 };
+  // Positions are RELATIVE to the tile wall entity, which itself sits at
+  // standing eye height — so scaling the wall expands it around the centre
+  // of view instead of lifting it off the floor. Spacing leaves room for the
+  // active tile's pop-out without overlap, including in the 2x2 layout four
+  // instances produce.
+  return { x: x * 1.55, y: y * 1.15 };
 }
 
-function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio, muted, audioLevel, onAudioLevel }) {
+function VRTile({ inst, idx, active, setActive, setActiveIds, status, onVNCReady, volume, ambientVolume, activeIds, sharedAudioCtx, monoAudio, muted, audioLevel, onAudioLevel, layout }) {
   const vncRef = useRef(null);
   const planeRef = useRef(null);
+  const textureRef = useRef(null);
   const [textureCreated, setTextureCreated] = useState(false);
+
+  // Texture refresh lives in an A-Frame component tick (see
+  // vnc-canvas-refresh below), NOT a window requestAnimationFrame loop:
+  // window rAF stops firing inside an immersive XR session — rendering moves
+  // to the session's own clock — so a rAF-driven refresh freezes the moment
+  // the headset takes over. That was "video stuck in VR, fluid on the web".
   const { videoRef: rtcVideoRef, audioLevel: tileAudioLevel } = useWebRTC(inst.id);
-  const pos = positionForIndex(idx, cols, rows);
+  // Guest audio: raw PCM over /proxy/audio/<id>/ into an AudioWorklet.
+  // createContext: false — all tiles must share VRScene's one AudioContext
+  // (the VR listener is synced to it), so wait for it instead of making one.
+  const pcm = usePCMAudio(inst.id, sharedAudioCtx, { createContext: false });
+  // While pcm.sourceNode is null useSpatialAudio falls back to its videoRef
+  // (WebRTC) path, so tiles keep sounding exactly as before until the PCM
+  // stream is live; the effect rebuilds onto the worklet source when it is.
   const { setVolume, resumeContext } = useSpatialAudio(
     rtcVideoRef,
-    [pos.x, pos.y, -3],
-    { mono: monoAudio },
+    layout.audio,
+    { mono: monoAudio, sourceNode: pcm.sourceNode },
     sharedAudioCtx,
   );
+  // PCM meter once the guest-audio path is live, WebRTC's meter otherwise.
+  const liveAudioLevel = pcm.isReady ? pcm.audioLevel : tileAudioLevel;
 
   // Propagate audio level up to parent for per-tile meters
   useEffect(() => {
-    if (onAudioLevel) onAudioLevel(idx, tileAudioLevel);
-  }, [tileAudioLevel, idx, onAudioLevel]);
+    if (onAudioLevel) onAudioLevel(idx, liveAudioLevel);
+  }, [liveAudioLevel, idx, onAudioLevel]);
 
 
   useEffect(() => {
@@ -49,58 +202,39 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   const handleVNCConnect = (instanceId) => {
     console.log(`VR: VNC connected for ${instanceId}`);
     
-    // Get the canvas from the VNC viewer
+    // Texture the tile straight from noVNC's canvas. The old code pushed the
+    // canvas through <a-asset-item src={canvas}> — setting a DOM object as an
+    // attribute stringifies it to "[object HTMLCanvasElement]", so the
+    // material src pointed at nothing and every tile rendered black. THREE
+    // takes a canvas directly.
     const canvas = vncRef.current?.getCanvas();
     if (canvas && planeRef.current) {
-      // Create a canvas texture for A-Frame
-      const scene = document.querySelector('a-scene');
-      if (scene) {
-        // Register the canvas as a texture asset
-        const textureId = `vnc-texture-${idx}`;
-        
-        // Remove existing texture if any
-        const existingAsset = scene.querySelector(`#${textureId}`);
-        if (existingAsset) {
-          existingAsset.remove();
+      const plane = planeRef.current;
+      const THREE = window.AFRAME && window.AFRAME.THREE;
+      const applyTexture = () => {
+        const mesh = plane.getObject3D && plane.getObject3D('mesh');
+        if (!mesh || !THREE) {
+          // A-Frame may not have built the mesh yet on a fresh mount.
+          setTimeout(applyTexture, 200);
+          return;
         }
-
-        // Create new canvas asset
-        const canvasAsset = document.createElement('a-asset-item');
-        canvasAsset.setAttribute('id', textureId);
-        canvasAsset.setAttribute('src', canvas);
-        
-        // Add to assets
-        let assets = scene.querySelector('a-assets');
-        if (!assets) {
-          assets = document.createElement('a-assets');
-          scene.appendChild(assets);
+        const tex = new THREE.CanvasTexture(canvas);
+        if ('colorSpace' in tex && THREE.SRGBColorSpace) {
+          tex.colorSpace = THREE.SRGBColorSpace;
         }
-        assets.appendChild(canvasAsset);
-
-        // Apply texture to plane
-        const plane = planeRef.current;
-        plane.setAttribute('material', {
-          src: `#${textureId}`,
-          transparent: false,
-          shader: 'flat'
-        });
-
+        tex.minFilter = THREE.LinearFilter;   // NPOT canvas: no mipmaps
+        tex.generateMipmaps = false;
+        mesh.material = new THREE.MeshBasicMaterial({ map: tex });
+        mesh.material.needsUpdate = true;
+        textureRef.current = tex;
+        // Hand the texture to the vnc-canvas-refresh component on this
+        // entity, whose tick runs on the XR frame clock.
+        plane.vncTexture = tex;
         setTextureCreated(true);
-        
-        // Set up continuous texture updates
-        const updateTexture = () => {
-          if (canvas && plane.getAttribute('material')) {
-            const material = plane.components.material.material;
-            if (material && material.map) {
-              material.map.needsUpdate = true;
-            }
-          }
-          requestAnimationFrame(updateTexture);
-        };
-        updateTexture();
-      }
+      };
+      applyTexture();
     }
-    
+
     if (onVNCReady) onVNCReady(idx, vncRef.current);
   };
 
@@ -117,29 +251,47 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
   };
 
   const handleClick = () => {
+    // Selection only. The old code also fired a fake left-click at (320,240) —
+    // the centre of a screen size this guest does not even run — so merely
+    // selecting a tile clicked something random in the game.
     setActive(idx);
     setActiveIds([inst.id]);
-    
-    if (vncRef.current) {
-      const connectionState = vncRef.current.getConnectionState();
-      if (connectionState.connected) {
-        vncRef.current.sendMouse(320, 240, 1);
-        setTimeout(() => {
-          vncRef.current.sendMouse(320, 240, 0);
-        }, 100);
-      }
-    }
   };
+
+  // The laser component emits UV-space pointer events on this tile's plane;
+  // only here do UVs become framebuffer pixels, because only this tile knows
+  // its canvas. UV origin is bottom-left, framebuffer origin is top-left.
+  useEffect(() => {
+    const plane = planeRef.current;
+    if (!plane) return undefined;
+    const onPointer = (e) => {
+      const { u, v, mask, pressed } = e.detail;
+      if (pressed) {
+        setActive(idx);
+        setActiveIds([inst.id]);
+      }
+      const ref = vncRef.current;
+      if (!ref || !ref.getConnectionState().connected) return;
+      const canvas = ref.getCanvas();
+      const w = (canvas && canvas.width) || 1024;
+      const h = (canvas && canvas.height) || 768;
+      const x = Math.max(0, Math.min(w - 1, Math.round(u * (w - 1))));
+      const y = Math.max(0, Math.min(h - 1, Math.round((1 - v) * (h - 1))));
+      ref.sendMouse(x, y, mask);
+    };
+    plane.addEventListener('vnc-pointer', onPointer);
+    return () => plane.removeEventListener('vnc-pointer', onPointer);
+  }, [idx, inst.id, setActive, setActiveIds]);
 
   // reuse computed position
   // Compute audio ring scale from audioLevel (0-1) for 3D visualisation
-  const ringScale = 1 + (tileAudioLevel || 0) * 0.6;
-  const ringOpacity = Math.min(0.15 + (tileAudioLevel || 0) * 0.5, 0.7);
+  const ringScale = 1 + (liveAudioLevel || 0) * 0.6;
+  const ringOpacity = Math.min(0.15 + (liveAudioLevel || 0) * 0.5, 0.7);
   const ringColor = muted ? '#666' : (active === idx ? '#FFD700' : '#3ABFF8');
 
   return (
     <>
-      <VRReactVNCViewer
+      <VRNoVNCViewer
         ref={vncRef}
         instanceId={inst.id}
         onConnect={handleVNCConnect}
@@ -148,12 +300,19 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
       <video ref={rtcVideoRef} className="hidden" />
       
       <a-entity
-        className="tile"
-        position={`${pos.x} ${pos.y} -3`}
+        ref={(el) => {
+          planeRef.current = el;
+          // React does not reliably map className -> class on custom
+          // elements, and the controllers' raycaster filters on ".tile";
+          // if the class is missing the laser passes straight through.
+          if (el) el.classList.add('tile');
+        }}
+        vnc-canvas-refresh=""
+        position={`${layout.x} ${layout.y} ${layout.z}`}
+        rotation={`0 ${layout.rotY} 0`}
         geometry="primitive: plane; width: 1.2; height: 0.9"
         material={`color: ${active === idx ? '#FFD700' : '#F5F5DC'}; side: double`}
-        scale={active === idx ? '1.4 1.4 1' : '1 1 1'}
-        ref={planeRef}
+        scale={`${layout.scale} ${layout.scale} 1`}
         onClick={handleClick}
       >
         {/* LEGO-style border for VR tiles */}
@@ -181,7 +340,10 @@ function VRTile({ inst, idx, active, setActive, setActiveIds, cols, rows, status
           />
         )}
         
-        {status && status !== 'ready' && (
+        {/* A live texture is ground truth; never contradict it with a
+            status feed. /api/status once said "booting" forever over two
+            perfectly running, VNC-connected guests. */}
+        {status && status !== 'ready' && !textureCreated && (
           <a-text
             value={status}
             color={active === idx ? '#000000' : '#FFFFFF'}
@@ -258,6 +420,169 @@ export default function VRScene({ onExit }) {
   // Sync the AudioContext listener with the VR camera rig position
   useVRAudioListener(sharedAudioCtx);
 
+  // Declared ABOVE every hook that lists them in a dependency array — a deps
+  // array is evaluated during render, and this file has now produced the
+  // use-before-declaration white screen TWICE (the second time in the very
+  // commit whose comment warned about the first). If you add a hook that
+  // needs cols/rows, it goes BELOW this line.
+  const cols = Math.ceil(Math.sqrt(instances.length || 1));
+  const rows = Math.ceil((instances.length || 1) / cols);
+
+  // Where the screen wall sits and how big it is. The reviewer's complaint
+  // was concrete: too far, no way to move or resize, and overlap once
+  // scaled. Distance and scale are user-adjustable and remembered; overlap
+  // is prevented structurally (the active tile pops FORWARD instead of
+  // growing over its neighbours).
+  const [wallZ, setWallZ] = useState(() => {
+    const v = parseFloat(localStorage.getItem('vrWallZ'));
+    return Number.isFinite(v) ? Math.min(-1.2, Math.max(-4.5, v)) : -2.4;
+  });
+  const [wallScale, setWallScale] = useState(() => {
+    const v = parseFloat(localStorage.getItem('vrWallScale'));
+    return Number.isFinite(v) ? Math.min(2.2, Math.max(0.5, v)) : 1;
+  });
+  useEffect(() => { localStorage.setItem('vrWallZ', String(wallZ)); }, [wallZ]);
+  useEffect(() => { localStorage.setItem('vrWallScale', String(wallScale)); }, [wallScale]);
+
+  // Layout system. Two arrangements and one override:
+  //  - grid: the flat wall (rows x cols) ahead of the user
+  //  - radial: all tiles ring the user at equal angles — maximum spatial-audio
+  //    separation, the stick spins the ring instead of walking a flat wall
+  //  - focus: the ACTIVE tile detaches to ~1.1m in front at full readable
+  //    height. This is the answer to "zoomed in enough to read means the
+  //    bottom third of the grid is out of view" — instead of zooming the
+  //    whole wall, pull the one screen you care about out of it, and put it
+  //    back with the same button.
+  const [layoutMode, setLayoutMode] = useState(() =>
+    localStorage.getItem('vrLayoutMode') === 'radial' ? 'radial' : 'grid');
+  const [focused, setFocused] = useState(false);
+  const [ringAngle, setRingAngle] = useState(0);
+  const [radialR, setRadialR] = useState(2.2);
+  useEffect(() => { localStorage.setItem('vrLayoutMode', layoutMode); }, [layoutMode]);
+
+  // Everything about where a tile sits, in WALL-LOCAL terms, plus the world
+  // position its audio should pan from. One function so the tiles, the
+  // spatial audio and the focus override can never disagree.
+  const tileLayout = useCallback((idx) => {
+    const wall = layoutMode === 'radial'
+      ? { x: 0, y: 1.5, z: 0.6, s: 1 }
+      : { x: 0, y: 1.5, z: wallZ, s: wallScale };
+
+    if (focused && idx === active) {
+      // World target: dead ahead of the head, slightly below eye line.
+      const w = { x: 0, y: 1.55, z: -0.55 };
+      return {
+        x: (w.x - wall.x) / wall.s,
+        y: (w.y - wall.y) / wall.s,
+        z: (w.z - wall.z) / wall.s,
+        rotY: 0,
+        scale: 2.0 / wall.s,
+        audio: [w.x, w.y, w.z],
+      };
+    }
+
+    if (layoutMode === 'radial') {
+      const n = Math.max(instances.length, 1);
+      const theta = ((idx * 360) / n + ringAngle) * (Math.PI / 180);
+      const x = radialR * Math.sin(theta);
+      const z = -radialR * Math.cos(theta);
+      return {
+        x, y: 0, z,
+        rotY: -((idx * 360) / n + ringAngle),
+        scale: active === idx ? 1.08 : 1,
+        audio: [wall.x + x, wall.y, wall.z + z],
+      };
+    }
+
+    const pos = positionForIndex(idx, cols, rows);
+    return {
+      x: pos.x, y: pos.y, z: active === idx ? 0.25 : 0,
+      rotY: 0,
+      scale: active === idx ? 1.08 : 1,
+      audio: [pos.x * wall.s, wall.y + pos.y * wall.s, wall.z],
+    };
+  }, [layoutMode, focused, active, ringAngle, radialR, wallZ, wallScale, instances.length, cols, rows]);
+
+  // The stick handler is registered once; it reads the current mode through a
+  // ref so switching modes does not tear down and re-add controller listeners.
+  // Declared ABOVE every hook that closes over it — this file already earned
+  // one white-screen from a use-before-declaration in a deps array.
+  const layoutModeRef = useRef(layoutMode);
+  useEffect(() => { layoutModeRef.current = layoutMode; }, [layoutMode]);
+
+  // A = focus toggle, X = layout mode, on either hand.
+  useEffect(() => {
+    const controllers = ['leftController', 'rightController']
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+    if (!controllers.length) return undefined;
+    const onA = () => setFocused((f) => !f);
+    const onX = () => { setFocused(false); setLayoutMode((m) => (m === 'grid' ? 'radial' : 'grid')); };
+    controllers.forEach((c) => {
+      c.addEventListener('abuttondown', onA);
+      c.addEventListener('xbuttondown', onX);
+    });
+    return () => controllers.forEach((c) => {
+      c.removeEventListener('abuttondown', onA);
+      c.removeEventListener('xbuttondown', onX);
+    });
+  }, []);
+
+  useEffect(() => {
+    const left = document.getElementById('leftController');
+    if (!left) return undefined;
+    const onStick = (e) => {
+      const { x, y } = e.detail || {};
+      if (layoutModeRef.current === 'radial') {
+        // In the ring, the stick is a lazy susan: left/right spins the tiles
+        // around you, fwd/back breathes the ring radius.
+        if (typeof x === 'number' && Math.abs(x) > 0.25) {
+          setRingAngle((a) => a + 2.4 * x);
+        }
+        if (typeof y === 'number' && Math.abs(y) > 0.25) {
+          setRadialR((r) => Math.min(4.0, Math.max(1.2, r + 0.04 * y)));
+        }
+        return;
+      }
+      if (typeof y === 'number' && Math.abs(y) > 0.25) {
+        // Push forward (stick up, negative y) to push the wall away.
+        setWallZ((z) => Math.min(-1.2, Math.max(-4.5, z + (y > 0 ? 0.04 : -0.04) * Math.abs(y))));
+      }
+      if (typeof x === 'number' && Math.abs(x) > 0.25) {
+        setWallScale((s) => Math.min(2.2, Math.max(0.5, s * (1 + 0.02 * x))));
+      }
+    };
+    left.addEventListener('thumbstickmoved', onStick);
+    return () => left.removeEventListener('thumbstickmoved', onStick);
+  }, []);
+
+
+  // Unlock audio from INSIDE immersive mode. The DOM "Enable Audio" button
+  // does not exist once the headset takes over, so a session that never
+  // clicked it beforehand stayed silent with no way to fix it. enter-vr is a
+  // user gesture, and so is every controller button.
+  useEffect(() => {
+    const scene = document.querySelector('a-scene');
+    if (!scene) return undefined;
+    const unlock = () => { handleAudioResume(); };
+    scene.addEventListener('enter-vr', unlock);
+    const controllers = ['leftController', 'rightController']
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+    controllers.forEach((c) => {
+      c.addEventListener('triggerdown', unlock);
+      c.addEventListener('gripdown', unlock);
+    });
+    return () => {
+      scene.removeEventListener('enter-vr', unlock);
+      controllers.forEach((c) => {
+        c.removeEventListener('triggerdown', unlock);
+        c.removeEventListener('gripdown', unlock);
+      });
+    };
+  }, [handleAudioResume]);
+
+
   // Performance recorder for spatial audio metrics
   const {
     recording: perfRecording,
@@ -272,6 +597,7 @@ export default function VRScene({ onExit }) {
     startVideoRecording,
     stopVideoRecording,
   } = useVideoRecorder(exportFormat);
+
 
   // Feed tile snapshot into the recorder each time volumes/active change
   useEffect(() => {
@@ -311,19 +637,21 @@ export default function VRScene({ onExit }) {
       }
     };
   }, [sharedAudioCtx]);
+  // Trigger, grip, B and pinch belong to the pointer (vnc-laser-input above):
+  // trigger = left click, grip/B = right click. A and X belong to layout:
+  // A pulls the active screen out to you / puts it back, X flips grid<->radial.
+  // None of them may double as keys — the old trigger->Enter mapping meant
+  // every click also typed Enter.
+  const LAYOUT_RESERVED = ['abuttondown', 'abuttonup', 'xbuttondown', 'xbuttonup'];
   const defaultControllerMap = {
-    abuttondown: 'F1',
-    bbuttondown: 'F2',
-    xbuttondown: 'F3',
     ybuttondown: 'F4',
-    triggerdown: 'Enter',
-    abuttonup: 'F1',
-    bbuttonup: 'F2',
-    xbuttonup: 'F3',
     ybuttonup: 'F4',
-    triggerup: 'Enter',
-    pinchstarted: 'Enter',
-    pinchended: 'Enter',
+  };
+  const sanitizeControllerMap = (m) => {
+    const out = { ...m };
+    VNC_LASER_RESERVED.forEach((ev) => delete out[ev]);
+    LAYOUT_RESERVED.forEach((ev) => delete out[ev]);
+    return out;
   };
   const defaultKeyboardMap = {
     Enter: 0xFF0D,
@@ -347,16 +675,22 @@ export default function VRScene({ onExit }) {
     F11: 0xFFC8,
     F12: 0xFFC9,
   };
-  const [controllerMap, setControllerMap] = useState(() => {
+  const [controllerMap, setControllerMapRaw] = useState(() => {
     try {
-      return {
+      return sanitizeControllerMap({
         ...defaultControllerMap,
         ...JSON.parse(localStorage.getItem('vrControllerMap') || '{}'),
-      };
+      });
     } catch {
       return defaultControllerMap;
     }
   });
+  const setControllerMap = useCallback(
+    (next) => setControllerMapRaw(
+      typeof next === 'function'
+        ? (prev) => sanitizeControllerMap(next(prev))
+        : sanitizeControllerMap(next)),
+    []);
   const [keyboardMap, setKeyboardMap] = useState(() => {
     try {
       return {
@@ -375,7 +709,7 @@ export default function VRScene({ onExit }) {
   };
 
   const saveMappings = (cMap, kMap) => {
-    const mergedController = { ...defaultControllerMap, ...cMap };
+    const mergedController = sanitizeControllerMap({ ...defaultControllerMap, ...cMap });
     const mergedKeyboard = { ...defaultKeyboardMap, ...kMap };
     setControllerMap(mergedController);
     setKeyboardMap(mergedKeyboard);
@@ -383,20 +717,41 @@ export default function VRScene({ onExit }) {
     localStorage.setItem('vrKeyboardMap', JSON.stringify(mergedKeyboard));
   };
 
+  // Adopt a fresh instance list, growing the per-tile arrays without
+  // clobbering the volumes/mutes of tiles the user already touched. Keyed
+  // comparison by id: a changed set re-renders, an identical one is a no-op
+  // so the poll below does not churn the scene every 10 seconds.
+  const adoptInstances = useCallback((data) => {
+    setInstances((prev) => {
+      if (prev.length === data.length &&
+          prev.every((p2, i) => p2.id === data[i].id)) return prev;
+      vncRefs.current.length = data.length;
+      setVolumes((v) => Array.from({ length: data.length }, (_, i) => v[i] ?? 1));
+      setMutedTiles((m) => Array.from({ length: data.length }, (_, i) => m[i] ?? false));
+      setAudioLevels((a) => Array.from({ length: data.length }, (_, i) => a[i] ?? 0));
+      return data;
+    });
+  }, []);
+
   useEffect(() => {
-    fetch('/api/config/instances')
+    // /api/instances, NOT /api/config/instances: the latter is a static
+    // config file that lists two instances forever, while the grid uses live
+    // Kubernetes discovery. Scaling the cluster to four left the VR view
+    // stuck at two — same fossil-config failure mode as /api/status.
+    //
+    // Polled, not fetched once: an instance launched from the grid (or by a
+    // scale-up) must appear in the headset without leaving VR.
+    const load = () => fetch('/api/instances')
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data) && data.length) {
-          setInstances(data);
-          vncRefs.current = new Array(data.length);
-          setVolumes(new Array(data.length).fill(1));
-          setMutedTiles(new Array(data.length).fill(false));
-          setAudioLevels(new Array(data.length).fill(0));
+          adoptInstances(data);
         } else {
           throw new Error('no data');
         }
-      })
+      });
+    const instancesInterval = setInterval(() => { load().catch(() => {}); }, 10000);
+    load()
       .catch(() => {
         setInstances(
           Array.from({ length: 3 }, (_, i) => ({ id: `placeholder-${i}` }))
@@ -416,8 +771,8 @@ export default function VRScene({ onExit }) {
     }, 5000);
     
     fetch('/api/status').then((r) => r.json()).then(setStatus).catch(() => {});
-    return () => clearInterval(interval);
-  }, []);
+    return () => { clearInterval(interval); clearInterval(instancesInterval); };
+  }, [adoptInstances]);
 
   // Update active index when activeIds change
   useEffect(() => {
@@ -515,9 +870,6 @@ export default function VRScene({ onExit }) {
       return arr;
     });
   }, []);
-
-  const cols = Math.ceil(Math.sqrt(instances.length || 1));
-  const rows = Math.ceil((instances.length || 1) / cols);
 
   return (
     <div className="w-full h-full relative">
@@ -670,18 +1022,28 @@ export default function VRScene({ onExit }) {
         <a-assets>
         </a-assets>
         
-        <a-entity>
+        {/* The tile wall. One parent owns where the screens ARE — at eye
+            height, adjustable with the LEFT thumbstick (fwd/back = closer or
+            farther, left/right = smaller or larger), persisted per browser.
+            Scaling happens about eye height, so growing the wall does not
+            lift it away from the horizon. movement-controls on the rig was a
+            reference to a library this app has never shipped, which is why
+            nothing could ever be moved. */}
+        <a-entity
+          id="tileWall"
+          position={layoutMode === 'radial' ? '0 1.5 0.6' : `0 1.5 ${wallZ}`}
+          scale={layoutMode === 'radial' ? '1 1 1' : `${wallScale} ${wallScale} 1`}
+        >
           {instances.map((inst, idx) => (
             <VRTile
               key={inst.id}
+              layout={tileLayout(idx)}
               inst={inst}
               idx={idx}
               active={active}
               setActive={setActive}
               setActiveIds={setActiveIds}
               activeIds={activeIds}
-              cols={cols}
-              rows={rows}
               status={status[inst.id]}
               volume={volumes[idx] || 1}
               ambientVolume={ambientVolume}
@@ -695,13 +1057,16 @@ export default function VRScene({ onExit }) {
           ))}
         </a-entity>
         
-        <a-sky color="#00A651"></a-sky>
+        {/* Sky-blue sky; the green went to the baseplate below, where LEGO
+            green belongs. An all-green sphere with no horizon reads as a
+            void with no way to orient. */}
+        <a-sky color="#5C9DD6"></a-sky>
         
         {/* LEGO baseplate grid pattern in 3D space */}
         <a-entity
           geometry="primitive: plane; width: 20; height: 20"
-          material="color: #00A651; opacity: 0.8"
-          position="0 -2 -5"
+          material="color: #00A651; opacity: 1"
+          position="0 0 -5"
           rotation="-90 0 0"
         >
           {/* Grid lines for LEGO baseplate effect */}
@@ -721,17 +1086,23 @@ export default function VRScene({ onExit }) {
           ))}
         </a-entity>
         
-        <a-entity 
-          id="rig" 
-          movement-controls 
-          position="0 1.6 3"
+        {/* Rig at floor level: with local-floor XR the headset adds the
+            user's physical height, so a 1.6 here doubled it — the reviewer
+            floated ~3.3m up. The camera keeps 1.6 for DESKTOP only; in VR
+            A-Frame replaces the camera pose with the headset's. */}
+        <a-entity
+          id="rig"
+          movement-controls
+          position="0 0 0.6"
         >
           <a-entity
             camera
+            position="0 1.6 0"
             look-controls
             wasd-controls
             cursor="rayOrigin: mouse"
-          ></a-entity>
+          >
+          </a-entity>
           
           <a-entity
             id="leftController"
@@ -744,11 +1115,34 @@ export default function VRScene({ onExit }) {
             oculus-touch-controls="hand: right"
             hand-tracking-controls="hand: right"
             laser-controls
-            raycaster="objects: .tile"
+            raycaster="objects: .tile, .vr-ui"
             cursor="fuse: false"
+            vnc-laser-input=""
           ></a-entity>
           <VRToast message={toast} />
         </a-entity>
+
+        {/* The way back. Every other exit is DOM, and DOM does not exist in
+            immersive mode — the review literally could not leave VR. Laser
+            or gaze click: leave the XR session, then hand back to the grid. */}
+        <a-entity
+          position="0 0.75 -1.6"
+          ref={(el) => {
+            if (!el || el.dataset.exitWired) return;
+            el.dataset.exitWired = '1';
+            el.classList.add('vr-ui');
+            el.addEventListener('click', () => {
+              const scene = el.sceneEl;
+              try {
+                if (scene && scene.is('vr-mode')) scene.exitVR();
+              } catch { /* leaving VR is best-effort; exit regardless */ }
+              setTimeout(() => onExit && onExit(), 150);
+            });
+          }}
+          geometry="primitive: plane; width: 0.55; height: 0.16"
+          material="color: #C4281C; side: double"
+          text="value: EXIT VR; align: center; color: white; width: 2.2"
+        ></a-entity>
       </a-scene>
     </div>
   );

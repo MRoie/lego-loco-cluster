@@ -21,9 +21,16 @@ rules:
 - apiGroups: [""]
   resources: ["pods", "services", "endpoints"]
   verbs: ["get", "list", "watch"]
+# "delete" is how the restart button works: removing the pod lets the
+# StatefulSet recreate it with the same identity, disk and DNS name.
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["delete"]
+# "patch" is how the launch button works: clicking an empty slot scales the
+# emulator StatefulSet up by one replica (spec.replicas merge patch).
 - apiGroups: ["apps"]
   resources: ["statefulsets"]
-  verbs: ["get", "list", "watch"]
+  verbs: ["get", "list", "watch", "patch"]
 - apiGroups: ["discovery.k8s.io"]
   resources: ["endpointslices"]
   verbs: ["get", "list", "watch"]

@@ -469,13 +469,58 @@ app.get("/api/config/:name", (req, res) => {
 });
 
 // Simple cluster status endpoint used by the UI for boot progress
-app.get("/api/status", (req, res) => {
+/**
+ * Live per-instance status, derived from each emulator's own health endpoint.
+ *
+ * This used to serve a static config file, which meant it reported whatever
+ * was written there forever — in practice "booting" for every instance while
+ * two fully running guests served VNC. The VR scene renders this string on
+ * the tiles, so the lie was on screen continuously.
+ */
+const statusCache = new Map();
+const STATUS_TTL_MS = 5_000;
+
+function fetchInstanceStatus(instance) {
+  const cached = statusCache.get(instance.id);
+  if (cached && Date.now() - cached.at < STATUS_TTL_MS) {
+    return Promise.resolve(cached.value);
+  }
+  const host = instance.host || instance.podIP || instance.addresses?.podIP;
+  if (!host) return Promise.resolve("unknown");
+  return new Promise((resolve) => {
+    const done = (value) => {
+      statusCache.set(instance.id, { at: Date.now(), value });
+      resolve(value);
+    };
+    const req = http.get(
+      `http://${host}:${instance.healthPort || 8080}/health`,
+      { timeout: 1500 },
+      (response) => {
+        let data = "";
+        response.on("data", (chunk) => (data += chunk));
+        response.on("end", () => {
+          try {
+            const h = JSON.parse(data);
+            if (h.ready === true || h.overall_status === "healthy") return done("ready");
+            if (h.pcem?.running || h.qemu_healthy) return done("booting");
+            done("error");
+          } catch {
+            done("unknown");
+          }
+        });
+      });
+    req.on("error", () => done("unreachable"));
+    req.on("timeout", () => { req.destroy(); done("unreachable"); });
+  });
+}
+
+app.get("/api/status", async (req, res) => {
   try {
-    logger.info("Status request received");
-    const data = loadConfig("status");
-    res.json(data);
+    const instances = await instanceManager.getInstances();
+    const entries = await Promise.all(instances.map(async (i) => [i.id, await fetchInstanceStatus(i)]));
+    res.json(Object.fromEntries(entries));
   } catch (e) {
-    logger.error("Status config error", { error: e.message });
+    logger.error("Status error", { error: e.message });
     res.status(503).json({});
   }
 });
@@ -488,6 +533,54 @@ app.get("/api/status", (req, res) => {
  * @returns {Array} List of all available instances (static + auto-discovered)
  * @status 503 - Service unavailable if instance discovery fails
  */
+
+/**
+ * Each emulator publishes the address other guests reach it on — the one a
+ * player types into LEGO LOCO's TCP/IP join box to join that instance's game.
+ * It is a DHCP reservation keyed on the guest MAC, so it is stable across
+ * restarts and knowable before the guest has finished booting.
+ *
+ * Cached, because /api/instances is polled continuously by every open tab and
+ * this value changes about as often as the pod does. A failed probe caches a
+ * null so one unreachable instance cannot stall the list on every poll.
+ */
+const GUEST_NETWORK_TTL_MS = 15_000;
+const guestNetworkCache = new Map();
+
+function fetchGuestNetwork(instance) {
+  const cached = guestNetworkCache.get(instance.id);
+  if (cached && Date.now() - cached.at < GUEST_NETWORK_TTL_MS) {
+    return Promise.resolve(cached.value);
+  }
+
+  const host = instance.host || instance.podIP || instance.addresses?.podIP;
+  if (!host) return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    const done = (value) => {
+      guestNetworkCache.set(instance.id, { at: Date.now(), value });
+      resolve(value);
+    };
+    const url = `http://${host}:${instance.healthPort || 8080}/health`;
+    // Short timeout on purpose: this decorates the response, it must never be
+    // the reason the instance list is slow.
+    const req = http.get(url, { timeout: 1500 }, (response) => {
+      let data = "";
+      response.on("data", (chunk) => (data += chunk));
+      response.on("end", () => {
+        try {
+          const health = JSON.parse(data);
+          done(health.guest_network || null);
+        } catch {
+          done(null);
+        }
+      });
+    });
+    req.on("error", () => done(null));
+    req.on("timeout", () => { req.destroy(); done(null); });
+  });
+}
+
 app.get("/api/instances", async (req, res) => {
   try {
     logger.info("Instances request received", {
@@ -495,8 +588,12 @@ app.get("/api/instances", async (req, res) => {
       remoteAddress: req.ip || req.connection.remoteAddress
     });
     const instances = await instanceManager.getInstances();
-    logger.debug("Instances response prepared", { instanceCount: instances.length });
-    res.json(instances);
+    const decorated = await Promise.all(instances.map(async (instance) => ({
+      ...instance,
+      guestNetwork: await fetchGuestNetwork(instance),
+    })));
+    logger.debug("Instances response prepared", { instanceCount: decorated.length });
+    res.json(decorated);
   } catch (e) {
     logger.error("Instances config error", {
       error: e.message,
@@ -514,9 +611,18 @@ app.get("/api/instances", async (req, res) => {
  * @route GET /api/instances/live
  * @returns {Object} Detailed discovery metadata and instances
  */
-app.get("/api/instances/live", (req, res) => {
+app.get("/api/instances/live", async (req, res) => {
   try {
     const status = instanceManager.getDiscoveryStatus();
+    // Same guestNetwork decoration as /api/instances — the grid cards read
+    // THIS endpoint, and without the decoration the click-to-copy join
+    // address silently never rendered. The 15s cache makes this free.
+    if (Array.isArray(status.instances)) {
+      status.instances = await Promise.all(status.instances.map(async (instance) => ({
+        ...instance,
+        guestNetwork: await fetchGuestNetwork(instance),
+      })));
+    }
     res.json(status);
   } catch (e) {
     logger.error("Live instances error", {
@@ -898,6 +1004,222 @@ app.post("/api/quality/recover/:instanceId", criticalRateLimit, validate({
   }
 });
 
+// Restart a single instance by deleting its pod. The StatefulSet recreates it
+// with the same ordinal, the same PVC/disk and the same DNS name, so the
+// frontend keeps the tile and simply watches it go not-ready -> ready again.
+//
+// This is deliberately not the /api/quality/recover path: that one drives
+// StreamQualityMonitor, which is not started (see qualityMonitor.start() at
+// the bottom of this file), so it 404s on every instance.
+app.post("/api/instances/:instanceId/restart", criticalRateLimit, async (req, res) => {
+  const instanceId = req.params.instanceId;
+  try {
+    const instance = await instanceManager.getInstanceById(instanceId);
+    if (!instance) {
+      return res.status(404).json({ error: `Instance ${instanceId} not found` });
+    }
+
+    const podName = instance.podName || instance.kubernetes?.targetRef?.name;
+    const namespace = instance.kubernetes?.namespace ||
+      instanceManager.kubernetesDiscovery?.getNamespace?.();
+
+    if (!podName || !namespace) {
+      return res.status(409).json({
+        error: "Instance has no pod to restart",
+        detail: "Restart requires Kubernetes discovery; static instances cannot be restarted."
+      });
+    }
+
+    const k8sApi = instanceManager.kubernetesDiscovery?.k8sApi;
+    if (!k8sApi) {
+      return res.status(503).json({ error: "Kubernetes API unavailable" });
+    }
+
+    logger.info("Restarting instance", { instanceId, podName, namespace });
+    await k8sApi.deleteNamespacedPod({ name: podName, namespace });
+
+    // Drop the discovery cache so the tile reflects the new pod promptly
+    // instead of showing the deleted one as ready for up to a cache TTL.
+    instanceManager.cachedInstances = null;
+    instanceManager.lastDiscoveryTime = null;
+
+    res.json({
+      message: `Restarting ${instanceId}`,
+      instanceId,
+      podName,
+      namespace
+    });
+  } catch (e) {
+    const status = e?.statusCode || e?.response?.statusCode;
+    logger.error("Failed to restart instance", { instanceId, error: e.message, status });
+    if (status === 403) {
+      return res.status(403).json({
+        error: "Not permitted to delete pods",
+        detail: "The backend ServiceAccount needs delete on pods (see helm/loco-chart/templates/rbac.yaml)."
+      });
+    }
+    res.status(500).json({ error: "Failed to restart instance", detail: e.message });
+  }
+});
+
+// ---- Launch / scale: empty-slot provisioning ----
+//
+// The dashboard grid is a fixed 3x3, so nine replicas is a hard ceiling: a
+// tenth pod would have no tile to land on.
+const EMULATOR_MAX_REPLICAS = 9;
+
+// The StatefulSet name is deliberately not hardcoded: prefer an explicit env
+// override, then derive it the way discovery maps a pod to its parent (pod
+// name minus the "-<ordinal>" suffix), and only then fall back to the
+// headless-service name, which matches the StatefulSet name in the Helm chart.
+function resolveEmulatorStatefulSetName() {
+  if (process.env.EMULATOR_STATEFULSET_NAME) {
+    return process.env.EMULATOR_STATEFULSET_NAME;
+  }
+  for (const inst of instanceManager.cachedInstances || []) {
+    const podName = inst.podName || inst.kubernetes?.targetRef?.name;
+    if (podName && /-\d+$/.test(podName)) {
+      return podName.replace(/-\d+$/, '');
+    }
+  }
+  return instanceManager.kubernetesDiscovery?.serviceName || 'loco-loco-emulator';
+}
+
+async function readEmulatorReplicas() {
+  const discovery = instanceManager.kubernetesDiscovery;
+  const namespace = discovery.getNamespace();
+  const name = resolveEmulatorStatefulSetName();
+  const response = await discovery.k8sAppsApi.readNamespacedStatefulSet({ name, namespace });
+  // Handle both old (response.body) and new (response directly) client formats
+  const body = response?.body || response;
+  return { name, namespace, replicas: body?.spec?.replicas ?? 0 };
+}
+
+// Patch spec.replicas on the emulator StatefulSet and drop the discovery
+// cache the way the restart endpoint does, so the grid reflects the change
+// promptly instead of after a cache TTL.
+async function scaleEmulatorStatefulSet(replicas) {
+  const discovery = instanceManager.kubernetesDiscovery;
+  const namespace = discovery.getNamespace();
+  const name = resolveEmulatorStatefulSetName();
+
+  // client-node v1 requires the patch content type via header middleware; a
+  // merge patch is enough for a single scalar field.
+  const k8s = discovery.k8s;
+  const patchOptions = k8s?.setHeaderOptions && k8s?.PatchStrategy
+    ? k8s.setHeaderOptions('Content-Type', k8s.PatchStrategy.MergePatch)
+    : undefined;
+
+  await discovery.k8sAppsApi.patchNamespacedStatefulSet(
+    { name, namespace, body: { spec: { replicas } } },
+    patchOptions
+  );
+
+  instanceManager.cachedInstances = null;
+  instanceManager.lastDiscoveryTime = null;
+
+  return { name, namespace, replicas };
+}
+
+function sendScaleError(res, e, action) {
+  const status = e?.statusCode || e?.response?.statusCode;
+  logger.error(`Failed to ${action}`, { error: e.message, status });
+  if (status === 403) {
+    return res.status(403).json({
+      error: "Not permitted to patch statefulsets",
+      detail: "The backend ServiceAccount needs patch on statefulsets (see helm/loco-chart/templates/rbac.yaml)."
+    });
+  }
+  return res.status(500).json({ error: `Failed to ${action}`, detail: e.message });
+}
+
+// Boot a new instance by scaling the emulator StatefulSet up by one. Each pod
+// self-provisions its identity (name, IP) from its ordinal, so "launch" is
+// nothing more than replicas+1 — discovery then surfaces the new pod as a
+// booting tile on the grid.
+app.post("/api/instances/launch", criticalRateLimit, async (req, res) => {
+  try {
+    if (!instanceManager.kubernetesDiscovery?.k8sAppsApi) {
+      return res.status(503).json({ error: "Kubernetes API unavailable" });
+    }
+
+    const { name, namespace, replicas } = await readEmulatorReplicas();
+    if (replicas >= EMULATOR_MAX_REPLICAS) {
+      return res.status(409).json({
+        error: `All ${EMULATOR_MAX_REPLICAS} slots are in use — the 3x3 grid is full`,
+        replicas
+      });
+    }
+
+    const desired = replicas + 1;
+    await scaleEmulatorStatefulSet(desired);
+    logger.info("Launching new emulator instance", { statefulSet: name, namespace, replicas: desired });
+    res.json({
+      message: `Launching instance ${desired - 1} (${desired}/${EMULATOR_MAX_REPLICAS} slots)`,
+      replicas: desired
+    });
+  } catch (e) {
+    sendScaleError(res, e, "launch instance");
+  }
+});
+
+// Explicit scale control for operators — same mechanics as launch, but the
+// caller picks the replica count (1..9; 0 would kill the whole grid).
+app.post("/api/instances/scale", criticalRateLimit, validate({
+  body: { replicas: { type: 'number', required: true } }
+}), async (req, res) => {
+  try {
+    if (!instanceManager.kubernetesDiscovery?.k8sAppsApi) {
+      return res.status(503).json({ error: "Kubernetes API unavailable" });
+    }
+
+    const replicas = req.body.replicas;
+    if (!Number.isInteger(replicas) || replicas < 1 || replicas > EMULATOR_MAX_REPLICAS) {
+      return res.status(400).json({
+        error: `replicas must be an integer between 1 and ${EMULATOR_MAX_REPLICAS}`
+      });
+    }
+
+    const { name, namespace } = await scaleEmulatorStatefulSet(replicas);
+    logger.info("Scaled emulator StatefulSet", { statefulSet: name, namespace, replicas });
+    res.json({ message: `Scaled ${name} to ${replicas} replicas`, replicas });
+  } catch (e) {
+    sendScaleError(res, e, "scale instances");
+  }
+});
+
+// Desired capacity for the grid. /api/status only reports pods that exist, so
+// the frontend cannot tell an intentionally-empty slot from a crashed pod —
+// spec.replicas is the source of truth for how many tiles should be live.
+// Kept as its own endpoint because VRScene consumes /api/status as a flat
+// id->status map and changing that shape would break it.
+//
+// Cached like fetchInstanceStatus: the overlay polls this continuously and
+// spec.replicas only changes when someone scales. Errors are cached too, so a
+// broken k8s API is not re-dialled on every poll.
+let capacityCache = null;
+const CAPACITY_TTL_MS = 5_000;
+
+app.get("/api/instances/capacity", async (req, res) => {
+  if (capacityCache && Date.now() - capacityCache.at < CAPACITY_TTL_MS) {
+    return res.json(capacityCache.value);
+  }
+
+  // Any failure degrades to desired:null with HTTP 200 — capacity decorates
+  // the grid, and the frontend renders null as "unknown" rather than erroring.
+  let value = { desired: null, max: EMULATOR_MAX_REPLICAS };
+  try {
+    if (instanceManager.kubernetesDiscovery?.k8sAppsApi) {
+      const { replicas } = await readEmulatorReplicas();
+      value = { desired: replicas, max: EMULATOR_MAX_REPLICAS };
+    }
+  } catch (e) {
+    logger.warn("Failed to read emulator capacity", { error: e.message });
+  }
+  capacityCache = { at: Date.now(), value };
+  res.json(value);
+});
+
 // Get recovery status and attempts
 app.get("/api/quality/recovery-status", (req, res) => {
   try {
@@ -1088,20 +1410,45 @@ app.get("/api/benchmark/live", async (req, res) => {
             const latency = Date.now() - t0;
             try {
               const h = JSON.parse(data);
+              // Two emulator flavors publish health here and they do not agree
+              // on field names. Reading only QEMU's shape made every PCem
+              // instance show up as ERR with three red crosses while it was
+              // running perfectly — the columns were reporting the absence of
+              // a field, not the state of the machine. Accept either.
               resolve({
                 id: instance.id,
                 instanceId: instance.instanceId || instance.id,
                 host,
-                healthy: h.overall_status === "healthy",
+                emulator: h.emulator || "qemu",
+                healthy: h.overall_status === "healthy" || h.ready === true,
                 fps: h.video?.estimated_frame_rate || 0,
+                // PCem has no frame-rate meter; what matters for it is whether
+                // it is holding real-time speed against the emulated Pentium.
+                speedPercent: h.video?.emulated_speed_percent ?? null,
                 latency,
                 cpu: h.performance?.cpu_usage || 0,
                 memory: h.performance?.memory_usage || 0,
-                qemuHealthy: h.qemu_healthy || false,
-                displayActive: h.video?.display_active || false,
-                networkOk: (h.network?.bridge_up && h.network?.tap_up) || false,
+                qemuHealthy: h.qemu_healthy || h.pcem?.running || false,
+                displayActive: h.video?.display_active || h.video?.vnc_available || false,
+                networkOk: (h.network?.bridge_up && h.network?.tap_up) ||
+                  h.guest_network?.carrier === 1 || false,
+                // The address other guests reach this one on — what a player
+                // types into LEGO LOCO's TCP/IP join box.
+                guestIp: h.guest_network?.ip || null,
+                guestLink: h.guest_network?.carrier === 1,
                 vncAvailable: h.video?.vnc_available || false,
                 audioRunning: h.audio?.pulse_running || false,
+                uptimeSeconds: h.uptime_seconds ?? null,
+                diskPresent: h.disk?.present ?? null,
+                // PCem reports whether the raw-PCM tap port is actually
+                // listening, which is stronger evidence of working audio than
+                // a live daemon; the QEMU flavor only exposes pulse_running.
+                audioOk: h.audio?.pcm_available ?? h.audio?.pulse_running ?? false,
+                // SDL titles can run long ("PCem v17 - 86Box - ..."); 60 chars
+                // is plenty for the overlay column without bloating the poll.
+                windowTitle: typeof h.pcem?.window_title === "string"
+                  ? h.pcem.window_title.slice(0, 60)
+                  : null,
               });
             } catch (e) {
               resolve({ id: instance.id, instanceId: instance.id, host, healthy: false, error: "parse_error", latency });
@@ -1296,6 +1643,11 @@ function createVNCBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
 
   // Create TCP connection to VNC server
   const tcpSocket = net.createConnection(port, host);
+  // Pointer events are tiny writes on an interactive path; Nagle would hold
+  // them for the previous segment's ACK. In-cluster the RTT makes that ~free,
+  // but a headset on the LAN talks through this exact socket — and Node 18's
+  // net.createConnection defaults noDelay to false.
+  tcpSocket.setNoDelay(true);
 
   // TCP connection timeout (10 seconds)
   const connectionTimeout = setTimeout(() => {
@@ -1437,11 +1789,123 @@ function createVNCBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
   tcpSocket.setTimeout(30000); // 30 second idle timeout
 }
 
+// Port every emulator pod exposes raw guest PCM on (PulseAudio's
+// module-simple-protocol-tcp, started by the PCem entrypoint). One knob, not
+// per-instance: all instances run the same container.
+const EMULATOR_AUDIO_PORT = parseInt(process.env.EMULATOR_AUDIO_PORT || '5902', 10);
+const EMULATOR_AUDIO_RATE = parseInt(process.env.EMULATOR_AUDIO_RATE || '48000', 10);
+
+/**
+ * Create a one-way TCP->WebSocket bridge for guest audio.
+ *
+ * Mirrors createVNCBridge but strictly server-to-client: the upstream is a
+ * headerless s16le PCM stream (48 kHz stereo) from the pod's PulseAudio tap,
+ * and the browser has nothing to say back. The first frame sent is a single
+ * JSON text message describing the format so the client never has to guess;
+ * everything after it is binary PCM.
+ *
+ * @param {WebSocket} ws - WebSocket connection from client
+ * @param {string} targetUrl - VNC target ("host:port") — only the host is used;
+ *                             audio always lives on EMULATOR_AUDIO_PORT
+ * @param {string} instanceId - Instance identifier for logging
+ * @param {string} traceId - Distributed trace identifier
+ */
+function createAudioBridge(ws, targetUrl, instanceId, traceId = 'unknown') {
+  const logCtx = { instanceId, traceId };
+
+  // Reuse the instance's VNC target for the host; the PCM port is fixed.
+  let host;
+  if (targetUrl.includes('://')) {
+    host = url.parse(targetUrl).hostname;
+  } else {
+    host = targetUrl.split(':')[0] || 'localhost';
+  }
+  const port = EMULATOR_AUDIO_PORT;
+
+  logger.info("Creating audio bridge", { ...logCtx, host, port });
+
+  let connectionClosed = false;
+  const cleanupConnection = (reason = 'unknown') => {
+    if (connectionClosed) return;
+    connectionClosed = true;
+    logger.info("Audio connection cleanup", { ...logCtx, reason });
+    if (tcpSocket && !tcpSocket.destroyed) {
+      tcpSocket.destroy();
+    }
+    if (ws.readyState === ws.OPEN) {
+      ws.close();
+    }
+  };
+
+  const tcpSocket = net.createConnection(port, host);
+  // Audio chunks are small and continuous; Nagle would batch them into
+  // bursty, later-arriving segments for no bandwidth win worth having.
+  tcpSocket.setNoDelay(true);
+
+  const connectionTimeout = setTimeout(() => {
+    logger.error("Audio TCP connection timeout", { ...logCtx, timeoutMs: 10000 });
+    cleanupConnection('tcp_timeout');
+  }, 10000);
+
+  tcpSocket.on('connect', () => {
+    clearTimeout(connectionTimeout);
+    logger.info("Audio TCP connected", { ...logCtx, host, port });
+    // One text frame up front so the client can configure its player before
+    // the first PCM bytes land. The stream itself is headerless.
+    if (ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'format',
+        rate: EMULATOR_AUDIO_RATE,
+        channels: 2,
+        format: 's16le',
+      }));
+    }
+  });
+
+  tcpSocket.on('data', (data) => {
+    if (connectionClosed || ws.readyState !== ws.OPEN) return;
+    // Latency-shedding: if the client isn't draining (slow network, tab in
+    // the background), DROP the chunk rather than queue it. Buffered PCM is
+    // pure added latency — it can never be played "later", only late — so
+    // the queue must never be allowed to accumulate.
+    if (ws.bufferedAmount > 65536) return;
+    ws.send(data);
+  });
+
+  tcpSocket.on('error', (err) => {
+    logger.error("Audio TCP socket error", { ...logCtx, error: err.message, code: err.code, host, port });
+    cleanupConnection('tcp_error');
+  });
+
+  tcpSocket.on('close', () => cleanupConnection('tcp_closed'));
+
+  // One-way bridge: the client has no business writing PCM back. Swallow
+  // anything that does arrive (application-level pings included) rather than
+  // feeding it to the PulseAudio socket.
+  ws.on('message', () => {});
+
+  ws.on('close', (code, reason) => {
+    logger.info("Audio WebSocket closed", { ...logCtx, code, reason: reason?.toString() });
+    cleanupConnection('ws_closed');
+  });
+
+  ws.on('error', (err) => {
+    logger.error("Audio WebSocket error", { ...logCtx, error: err.message });
+    cleanupConnection('ws_error');
+  });
+}
+
 // --- WebSocket Support for VNC ---
 // VNC WebSocket server for handling VNC connections
 const vncWss = new WebSocketServer({ noServer: true });
 vncWss.on("error", (err) => {
   logger.error("VNC WebSocket server error", { error: err.message });
+});
+
+// Guest audio WebSocket server (one-way PCM out of the emulator pods)
+const audioWss = new WebSocketServer({ noServer: true });
+audioWss.on("error", (err) => {
+  logger.error("Audio WebSocket server error", { error: err.message });
 });
 
 // WebSocket server for active focus updates
@@ -1454,6 +1918,28 @@ const signalWss = new WebSocketServer({ noServer: true });
 signalWss.on("error", (err) => {
   logger.error("Signal WebSocket server error", { error: err.message });
 });
+
+// --- Loco Lens (M5Stack watch) WebSocket + REST ---
+const { registerWatchRoutes, handleLensConnection } = require("./routes/watch");
+const lensWss = new WebSocketServer({ noServer: true });
+lensWss.on("error", (err) => logger.error("Lens WebSocket server error", { error: err.message }));
+
+// Resolve an instance id to a VNC endpoint for the lens bridge. Uses a static
+// registry (LENS_INSTANCES) when set — for the no-cluster case (Android/Termux,
+// compose, single host) — otherwise the k8s instance-target path.
+const { InstanceResolver } = require("./services/instanceResolver");
+const k8sVncResolver = async (instanceId) => {
+  const target = await getInstanceTarget(instanceId); // "host:port" or a URL
+  if (!target) return null;
+  const [host, portStr] = String(target).replace(/^.*\/\//, "").split(":");
+  return { host, port: parseInt(portStr, 10) || 5901 };
+};
+const lensResolver = new InstanceResolver({ k8sResolver: k8sVncResolver });
+logger.info("Lens instance resolver", { mode: lensResolver.mode, staticInstances: lensResolver.listStaticInstances() });
+async function lensInstanceResolver(instanceId) {
+  return lensResolver.resolve(instanceId);
+}
+registerWatchRoutes(app, {});
 
 // Active peer connections keyed by ID for WebRTC signaling
 const peers = new Map();
@@ -1633,6 +2119,34 @@ activeWss.on("connection", (ws) => {
 server.on("upgrade", (req, socket, head) => {
   logger.debug("WebSocket upgrade request", { url: req.url });
 
+  // Guest audio: /proxy/audio/:instanceId — tested BEFORE the VNC match so a
+  // future loosening of that pattern can never shadow this one. nginx already
+  // forwards all of /proxy/ with upgrade headers, so no config change there.
+  const audioMatch = req.url.match(/^\/proxy\/audio\/([^\/\?]+)/);
+  if (audioMatch) {
+    const instanceId = audioMatch[1];
+    const query = url.parse(req.url, true).query;
+    const traceId = query.traceId || `gen-${Date.now()}`;
+
+    logger.info("Audio Upgrade Request", { instanceId, traceId, url: req.url });
+
+    getInstanceTarget(instanceId).then(target => {
+      if (target) {
+        audioWss.handleUpgrade(req, socket, head, (ws) => {
+          createAudioBridge(ws, target, instanceId, traceId);
+        });
+      } else {
+        logger.error("Audio WebSocket proxy: Unknown instance", { instanceId });
+        socket.destroy();
+      }
+    }).catch(error => {
+      logger.error("Audio WebSocket proxy error", { instanceId, error: error.message });
+      socket.destroy();
+    });
+
+    return;
+  }
+
   // Match VNC proxy URLs
   // /proxy/vnc/:instanceId?traceId=...
   const vncMatch = req.url.match(/^\/proxy\/vnc\/([^\/\?]+)/);
@@ -1660,6 +2174,15 @@ server.on("upgrade", (req, socket, head) => {
       socket.destroy();
     });
 
+    return;
+  }
+
+  // Loco Lens WebSocket (M5Stack watch): /ws/lens/:instanceId
+  const lensMatch = req.url.match(/^\/ws\/lens\/([^\/\?]+)/);
+  if (lensMatch) {
+    lensWss.handleUpgrade(req, socket, head, (ws) => {
+      handleLensConnection(ws, decodeURIComponent(lensMatch[1]), lensInstanceResolver);
+    });
     return;
   }
 
