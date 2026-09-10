@@ -34,13 +34,43 @@ function resolveInstance(id) {
   };
 }
 
+function viewportFor(frame) {
+  const scale = Math.min(WIDTH / frame.width, HEIGHT / frame.height);
+  const width = Math.max(1, Math.round(frame.width * scale));
+  const height = Math.max(1, Math.round(frame.height * scale));
+  return {
+    x: Math.floor((WIDTH - width) / 2),
+    y: Math.floor((HEIGHT - height) / 2),
+    width,
+    height,
+  };
+}
+
 async function encodeFrame(frame) {
-  return sharp(frame.pixels, {
+  const viewport = viewportFor(frame);
+  const jpeg = await sharp(frame.pixels, {
     raw: { width: frame.width, height: frame.height, channels: frame.channels },
   })
-    .resize(WIDTH, HEIGHT, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+    .resize(viewport.width, viewport.height, { fit: 'fill', kernel: sharp.kernel.lanczos3 })
+    .extend({
+      top: viewport.y,
+      bottom: HEIGHT - viewport.y - viewport.height,
+      left: viewport.x,
+      right: WIDTH - viewport.x - viewport.width,
+      background: { r: 255, g: 255, b: 255 },
+    })
     .jpeg({ quality: JPEG_QUALITY, chromaSubsampling: '4:4:4' })
     .toBuffer();
+  return { jpeg, viewport };
+}
+
+function panelToFramebuffer(frame, xNorm, yNorm) {
+  const v = viewportFor(frame);
+  const px = clamp01(xNorm) * (WIDTH - 1);
+  const py = clamp01(yNorm) * (HEIGHT - 1);
+  const fx = (px - v.x) / Math.max(1, v.width - 1);
+  const fy = (py - v.y) / Math.max(1, v.height - 1);
+  return { x: clamp01(fx), y: clamp01(fy) };
 }
 
 const app = express();
@@ -94,13 +124,16 @@ async function attachClient(ws, initialId) {
 
     encoding = true;
     try {
-      const jpeg = await encodeFrame(frame);
+      const { jpeg, viewport } = await encodeFrame(frame);
       if (ws.readyState === ws.OPEN) ws.send(jpeg, { binary: true });
       sendJson({
         type: 'frame.meta',
         instanceId: currentId,
         sourceAgeMs: frame.ageMs,
         encodedAt: Date.now(),
+        sourceWidth: frame.width,
+        sourceHeight: frame.height,
+        viewport,
       });
     } catch (e) {
       sendJson({ type: 'error', error: `frame encode failed: ${e.message}` });
@@ -109,9 +142,12 @@ async function attachClient(ws, initialId) {
     }
   }
 
-  function pointer(x, y, buttons) {
+  function pointerFromPanel(x, y, buttons) {
     if (!fb) return;
-    fb.sendPointer(Number(x), Number(y), Number(buttons || 0));
+    const frame = fb.getFrame();
+    if (!frame) return;
+    const p = panelToFramebuffer(frame, x, y);
+    fb.sendPointer(p.x, p.y, Number(buttons || 0));
   }
 
   if (!(await selectInstance(initialId))) {
@@ -143,14 +179,14 @@ async function attachClient(ws, initialId) {
         await sendFreshFrame();
         break;
       case 'pointer':
-        pointer(clamp01(msg.x), clamp01(msg.y), msg.buttons || 0);
+        pointerFromPanel(msg.x, msg.y, msg.buttons || 0);
         break;
       case 'click': {
         const x = clamp01(msg.x);
         const y = clamp01(msg.y);
-        pointer(x, y, 1);
-        // LOCO is happier with deliberate mouse holds than ultra-short clicks.
-        setTimeout(() => pointer(x, y, 0), 180);
+        pointerFromPanel(x, y, 1);
+        // LEGO Loco is more reliable with a deliberate hold than a tiny click.
+        setTimeout(() => pointerFromPanel(x, y, 0), 180);
         break;
       }
       case 'instance.select':
