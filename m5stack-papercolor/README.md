@@ -29,11 +29,14 @@ queue. The firmware therefore follows this loop:
 
 1. request `frame.request`;
 2. receive the newest framebuffer snapshot;
-3. draw it and wait for the physical panel refresh to finish;
-4. immediately request the next newest frame.
+3. draw it;
+4. request the next newest frame only after that draw/refresh path returns.
 
-The displayed image is therefore always the newest frame available at the instant
-a refresh cycle begins.
+The displayed image is therefore always the newest frame available when a new
+panel update starts. Hardware bring-up should confirm whether the current M5GFX
+PaperColor driver blocks through the physical BUSY interval; if not, we will gate
+`frame.request` explicitly on EPD busy/`waitDisplay()` before calling the pacing
+behaviour verified.
 
 ## Hardware
 
@@ -42,12 +45,16 @@ Target: **M5Stack PaperColor C151** (ESP32-S3, 600×400 six-colour E Ink, Wi-Fi)
 PaperColor itself has **no built-in touchscreen**. The firmware supports:
 
 - built-in BtnA / BtnB / BtnC as prev instance / inspect-click / next instance;
-- an optional 4" capacitive overlay using a **GT911** controller on Port A I²C
-  (SDA GPIO2, SCL GPIO3). Addresses `0x5D` and `0x14` are probed.
+- an optional 4" capacitive overlay using a **GT911** controller on external
+  HY2.0-4P Port A I²C. PaperColor exposes **G4/G5** on that port (yellow/white);
+  the firmware uses G4 as SDA and G5 as SCL. Addresses `0x5D` and `0x14` are
+  probed.
 
 The touch overlay is optional; the device is fully usable with the three buttons.
-If fitting an overlay, choose one whose active area matches the 600×400 panel and
-wire 3V3/GND/SDA/SCL. INT/RST are not required by this simple polling driver.
+Port A exposes **5V**, so use a touch-controller board whose power and I/O levels
+are compatible, or add the appropriate regulator/level shifting. Do not connect a
+bare 3.3V-only touch IC directly to the 5V power pin. INT/RST are not required by
+the simple polling driver in this first version.
 
 ## Layout
 
@@ -103,6 +110,10 @@ Binary messages are JPEG snapshots, already resized to exactly 600×400.
 
 ## Firmware
 
+The PlatformIO environment follows M5Stack's current PaperColor example
+(`espressif32 @ 6.12.0`, `esp32s3box`, 16 MB partition, QIO/OPI PSRAM, and the
+M5Unified/M5GFX/M5PM1 libraries).
+
 ```bash
 cd m5stack-papercolor/firmware
 pio run
@@ -137,12 +148,12 @@ refresh. This is useful for deliberate navigation/inspection, not twitch gamepla
 ## Next hardware-validation steps
 
 1. Flash firmware and confirm M5Unified detects `board_M5PaperColor` and reports
-   `600x400`.
-2. Measure real full-refresh duration on this unit.
+   `600x400` in landscape.
+2. Measure real full-refresh duration and confirm the exact M5GFX busy/wait
+   semantics; add an explicit BUSY wait if `drawJpg()` returns early.
 3. Photograph the six-colour conversion against the browser/VNC reference.
-4. Fit/probe the GT911 overlay, then calibrate X/Y orientation if necessary.
+4. Fit/probe the GT911 overlay, then calibrate X/Y orientation and raw range.
 5. Run the gateway against a live PCem instance and measure tap → VNC injection and
    snapshot-age-at-refresh-start separately.
 
-Sources: M5Stack PaperColor documentation and current M5Unified support for
-`board_M5PaperColor`.
+Sources: M5Stack PaperColor documentation and current M5Unified/M5GFX support.
