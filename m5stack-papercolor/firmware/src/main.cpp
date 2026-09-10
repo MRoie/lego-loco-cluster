@@ -19,9 +19,10 @@ static char gInstance[32] = "instance-0";
 static int gInstanceCount = 9;
 static int gInstanceIndex = 0;
 
-// PaperColor Port A pins in current M5Unified board table.
-static constexpr int I2C_SDA = 2;
-static constexpr int I2C_SCL = 3;
+// PaperColor HY2.0-4P Port A: yellow=G4 (SDA), white=G5 (SCL).
+// G2/G3 are the onboard system/audio I2C bus and must not be used here.
+static constexpr int I2C_SDA = 4;
+static constexpr int I2C_SCL = 5;
 
 // Optional GT911 touch overlay. Both common addresses are supported.
 static uint8_t gtAddr = 0;
@@ -165,9 +166,8 @@ static void onWs(WStype_t type, uint8_t* payload, size_t len) {
       break;
 
     case WStype_BIN:
-      // The gateway always sends a 600x400 JPEG. drawJpg() blocks through the
-      // display driver's transfer/refresh path; only after it returns do we ask
-      // for a newer frame, so snapshots never queue behind the slow E Ink panel.
+      // The gateway always sends a 600x400 JPEG. We request the next snapshot
+      // only after drawJpg returns, so snapshots never build a stale queue.
       if (len > 3 && payload[0] == 0xFF && payload[1] == 0xD8) {
         M5.Display.drawJpg(payload, len, 0, 0, M5.Display.width(), M5.Display.height());
       }
@@ -201,15 +201,11 @@ static void pollControls() {
   int x = 0, y = 0;
   bool pressed = false;
   if (readGt911(x, y, pressed)) {
-    // Most 600x400 overlays report panel-space coordinates. Clamp here so a
-    // slightly larger raw range still maps safely to the game framebuffer.
     float nx = constrain(x / 599.0f, 0.0f, 1.0f);
     float ny = constrain(y / 399.0f, 0.0f, 1.0f);
 
     if (pressed) {
-      if (!touchDown) {
-        touchDown = true;
-      }
+      if (!touchDown) touchDown = true;
       if (abs(x - lastTouchX) + abs(y - lastTouchY) > 3) {
         sendPointer(nx, ny, 0);
         lastTouchX = x;
@@ -296,7 +292,6 @@ void loop() {
   uint32_t now = millis();
   if (wsConnected && !frameRequested && now - lastRequestAt > 1000) requestFrame();
 
-  // If a frame request gets lost, retry rather than leaving the paper frozen.
   if (wsConnected && frameRequested && now - lastRequestAt > 10000) {
     frameRequested = false;
     requestFrame();
